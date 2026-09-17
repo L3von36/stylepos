@@ -411,6 +411,14 @@ class _CartTile extends StatelessWidget {
       ),
       child: Row(
         children: [
+          ProductThumb(
+            image: item.product.image,
+            size: 40,
+            radius: AppRadius.sm,
+            icon: Icons.checkroom_rounded,
+            iconSize: 20,
+          ),
+          const SizedBox(width: AppSpace.s2),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,

@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../models/product.dart';
 import '../../services/barcode.dart';
+import '../../services/images.dart';
 import '../../services/label_service.dart';
 import '../../services/receipt_service.dart';
 import '../../state/catalog.dart';
@@ -28,6 +29,12 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
   late List<ProductVariant> _variants;
   final Set<int> _removedIds = {};
 
+  // Product photo: `_image` is the pending value, `_oldImage` the one
+  // currently stored in the DB (deleted on save after being replaced).
+  String? _image;
+  String? _oldImage;
+  bool _pickingImage = false;
+
   bool get _isNew => widget.product == null;
 
   @override
@@ -39,6 +46,8 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
     _description = TextEditingController(text: p?.description ?? '');
     _lowStock = TextEditingController(text: (p?.lowStock ?? 5).toString());
     _categoryId = p?.categoryId;
+    _image = p?.image;
+    _oldImage = p?.image;
     _variants = p == null
         ? [ProductVariant(productId: 0, sku: '')]
         : List.of(p.variants);
@@ -51,6 +60,23 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
     _description.dispose();
     _lowStock.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickPhoto() async {
+    if (_pickingImage) return;
+    setState(() => _pickingImage = true);
+    final rel = await ProductImages.pick(context);
+    if (!mounted) return;
+    setState(() {
+      _pickingImage = false;
+      if (rel != null) _image = rel;
+    });
+  }
+
+  Future<void> _removePhoto() async {
+    // Keep the stored file until save so cancelling the editor
+    // leaves the product untouched.
+    setState(() => _image = null);
   }
 
   String _autoSku(String base) {
@@ -469,10 +495,17 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
       barcode: _barcode.text.trim().isEmpty ? null : _barcode.text.trim(),
       description: _description.text.trim().isEmpty ? null : _description.text.trim(),
       lowStock: int.tryParse(_lowStock.text) ?? settings.lowStockDefault,
+      image: _image,
+      clearImage: _image == null,
       variants: _variants,
     );
 
     await catalog.saveProduct(product, removeVariantIds: _removedIds.toList());
+    // Clean up the replaced photo file (if any) after a successful save.
+    final replaced = _oldImage;
+    if (replaced != null && replaced != _image) {
+      await ProductImages.delete(replaced);
+    }
     if (mounted) Navigator.pop(context);
   }
 
@@ -513,6 +546,86 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
                   icon: Icons.edit_note_outlined,
                   title: 'Product details',
                   children: [
+                    // --- photo picker ---
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Stack(
+                          children: [
+                            ProductThumb(
+                              image: _image,
+                              size: 88,
+                              radius: AppRadius.md,
+                              icon: Icons.add_photo_alternate_outlined,
+                              iconSize: 30,
+                            ),
+                            if (_pickingImage)
+                              const Positioned.fill(
+                                child: ColoredBox(
+                                  color: Color(0x66FFFFFF),
+                                  child: Center(
+                                    child: SizedBox(
+                                      width: 22,
+                                      height: 22,
+                                      child: CircularProgressIndicator(strokeWidth: 2),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(width: AppSpace.s4),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('Product photo',
+                                  style: TextStyle(
+                                      fontFamily: 'Carlito',
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w700,
+                                      color: AppColors.ink)),
+                              const SizedBox(height: 2),
+                              const Text(
+                                'Shows on the sell screen so staff spot items faster.',
+                                style: TextStyle(
+                                    fontFamily: 'Carlito',
+                                    fontSize: 12,
+                                    color: AppColors.muted,
+                                    height: 1.35),
+                              ),
+                              const SizedBox(height: AppSpace.s2),
+                              Row(
+                                children: [
+                                  OutlinedButton.icon(
+                                    onPressed: _pickPhoto,
+                                    icon: Icon(
+                                        _image == null
+                                            ? Icons.add_a_photo_outlined
+                                            : Icons.swap_horiz_rounded,
+                                        size: 17),
+                                    label: Text(_image == null
+                                        ? 'Add photo'
+                                        : 'Replace'),
+                                  ),
+                                  if (_image != null) ...[
+                                    const SizedBox(width: AppSpace.s2),
+                                    TextButton.icon(
+                                      onPressed: _removePhoto,
+                                      icon: const Icon(Icons.delete_outline,
+                                          size: 17, color: AppColors.danger),
+                                      label: const Text('Remove',
+                                          style: TextStyle(color: AppColors.danger)),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpace.s4),
                     TextField(
                       controller: _name,
                       decoration: const InputDecoration(

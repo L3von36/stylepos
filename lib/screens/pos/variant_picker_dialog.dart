@@ -21,14 +21,12 @@ class VariantPickerDialog extends StatelessWidget {
       actionsPadding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
       title: Row(
         children: [
-          Container(
-            width: 34,
-            height: 34,
-            decoration: BoxDecoration(
-              color: AppColors.primarySoft,
-              borderRadius: BorderRadius.circular(AppRadius.sm),
-            ),
-            child: const Icon(Icons.checkroom_rounded, size: 19, color: AppColors.primary),
+          ProductThumb(
+            image: product.image,
+            size: 34,
+            radius: AppRadius.sm,
+            icon: Icons.checkroom_rounded,
+            iconSize: 19,
           ),
           const SizedBox(width: AppSpace.s3),
           Expanded(child: Text(product.name, overflow: TextOverflow.ellipsis)),

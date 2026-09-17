@@ -37,8 +37,14 @@ class DB {
 
     _instance = await openDatabase(
       dbPath,
-      version: 1,
+      version: 2,
       onConfigure: (db) => db.execute('PRAGMA foreign_keys = ON'),
+      onUpgrade: (db, oldVersion, newVersion) async {
+        // v2: product photos (relative filename inside the app images dir).
+        if (oldVersion < 2) {
+          await db.execute('ALTER TABLE products ADD COLUMN image TEXT');
+        }
+      },
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE users (
@@ -64,6 +70,7 @@ class DB {
             name TEXT NOT NULL,
             category_id INTEGER,
             barcode TEXT,
+            image TEXT,
             description TEXT,
             low_stock INTEGER NOT NULL DEFAULT 5,
             archived INTEGER NOT NULL DEFAULT 0,

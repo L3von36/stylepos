@@ -209,30 +209,28 @@ class _PosScreenState extends State<PosScreen> {
       }
       return Scaffold(
         backgroundColor: Colors.transparent,
-        floatingActionButton: FloatingActionButton.extended(
-          onPressed: () => showModalBottomSheet(
-            context: context,
-            isScrollControlled: true,
-            backgroundColor: Colors.white,
-            shape: const RoundedRectangleBorder(
-              // M3 modal bottom sheet: extra-large top corners
-              borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.xl)),
-            ),
-            builder: (_) => SizedBox(
-              height: MediaQuery.of(context).size.height * 0.78,
-              child: const CartPanel(scrollable: false),
-            ),
-          ),
-          icon: const Icon(Icons.shopping_cart_outlined, size: 21),
-          label: Consumer<CartProvider>(
-            builder: (context, cart, _) => Text(cart.isEmpty
-                ? (cart.heldCount > 0 ? 'Cart · ${cart.heldCount} held' : 'Cart')
-                : '${cart.itemCount} item${cart.itemCount == 1 ? '' : 's'}'),
-          ),
-        ),
         body: grid,
+        // Always-visible cart bar (commerce pattern): total + item count
+        // stay reachable with one thumb while the cashier scrolls products.
+        bottomNavigationBar: _MobileCartBar(onOpen: _openCartSheet),
       );
     });
+  }
+
+  void _openCartSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        // M3 modal bottom sheet: extra-large top corners
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.xl)),
+      ),
+      builder: (_) => SizedBox(
+        height: MediaQuery.of(context).size.height * 0.78,
+        child: const CartPanel(scrollable: false),
+      ),
+    );
   }
 
   Widget _buildCatalogArea(
@@ -323,7 +321,7 @@ class _PosScreenState extends State<PosScreen> {
                       : 'Add products under the Products tab to start selling.',
                 )
               : GridView.builder(
-                  padding: const EdgeInsets.only(bottom: 88),
+                  padding: const EdgeInsets.only(bottom: AppSpace.s4),
                   gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
                     maxCrossAxisExtent: 200,
                     mainAxisSpacing: 12,
@@ -483,23 +481,13 @@ class _ProductCardState extends State<_ProductCard> {
                 Expanded(
                   child: Stack(
                     children: [
-                      Container(
-                        width: double.infinity,
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: [
-                              AppColors.primarySoft,
-                              AppColors.primarySoft.withValues(alpha: 0.55),
-                            ],
-                          ),
-                          borderRadius: BorderRadius.circular(AppRadius.sm),
-                        ),
-                        child: Icon(
-                          _iconFor(p),
-                          size: 34,
-                          color: AppColors.primary.withValues(alpha: 0.75),
+                      // Garment photo (falls back to a branded icon tile).
+                      Positioned.fill(
+                        child: ProductThumb(
+                          image: p.image,
+                          radius: AppRadius.sm,
+                          icon: _iconFor(p),
+                          iconSize: 34,
                         ),
                       ),
                       if (out)
@@ -589,5 +577,157 @@ class _ProductCardState extends State<_ProductCard> {
       return Icons.watch_outlined;
     }
     return Icons.checkroom_rounded;
+  }
+}
+
+/// Fixed bottom cart summary for phones — the standard commerce pattern.
+/// Slides in when the first item is added, bumps its badge on every
+/// add, and shows the running total so the cashier always knows the
+/// amount before opening the cart.
+class _MobileCartBar extends StatelessWidget {
+  final VoidCallback onOpen;
+  const _MobileCartBar({required this.onOpen});
+
+  @override
+  Widget build(BuildContext context) {
+    final cart = context.watch<CartProvider>();
+    final settings = context.watch<AppSettings>();
+    final visible = cart.isNotEmpty || cart.heldCount > 0;
+    final bottomPad = MediaQuery.paddingOf(context).bottom;
+
+    return ClipRect(
+      child: AnimatedContainer(
+        duration: AppMotion.normal,
+        curve: AppMotion.emphasized,
+        height: visible ? 64 + bottomPad : 0,
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          border: Border(top: BorderSide(color: AppColors.borderSoft)),
+          boxShadow: [
+            BoxShadow(color: Color(0x140F172A), blurRadius: 12, offset: Offset(0, -4)),
+          ],
+        ),
+        // Slide the row down while collapsing so nothing pokes out.
+        child: AnimatedSlide(
+          duration: AppMotion.normal,
+          curve: AppMotion.emphasized,
+          offset: visible ? Offset.zero : const Offset(0, 1),
+          child: Padding(
+            padding: EdgeInsets.only(bottom: bottomPad),
+            child: InkWell(
+              onTap: visible ? onOpen : null,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: AppSpace.s4),
+                child: Row(
+                  children: [
+                    // cart icon with animated count badge
+                    TweenAnimationBuilder<double>(
+                      key: ValueKey(cart.itemCount),
+                      tween: Tween(begin: 1.25, end: 1),
+                      duration: AppMotion.normal,
+                      curve: Curves.easeOutCubic,
+                      builder: (context, scale, child) =>
+                          Transform.scale(scale: scale, child: child),
+                      child: Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          Container(
+                            width: 40,
+                            height: 40,
+                            decoration: BoxDecoration(
+                              color: AppColors.primarySoft,
+                              borderRadius: BorderRadius.circular(AppRadius.md),
+                            ),
+                            child: const Icon(Icons.shopping_cart_outlined,
+                                size: 20, color: AppColors.primary),
+                          ),
+                          if (cart.itemCount > 0)
+                            Positioned(
+                              top: -5,
+                              right: -5,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 5, vertical: 1),
+                                constraints:
+                                    const BoxConstraints(minWidth: 18),
+                                decoration: BoxDecoration(
+                                  color: AppColors.primary,
+                                  borderRadius:
+                                      BorderRadius.circular(AppRadius.pill),
+                                  border: Border.all(color: Colors.white, width: 1.5),
+                                ),
+                                alignment: Alignment.center,
+                                child: Text(
+                                  '${cart.itemCount}',
+                                  style: const TextStyle(
+                                      fontFamily: 'Carlito',
+                                      fontSize: 10.5,
+                                      fontWeight: FontWeight.w700,
+                                      color: Colors.white),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: AppSpace.s3),
+                    Expanded(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            cart.isNotEmpty
+                                ? '${cart.itemCount} item${cart.itemCount == 1 ? '' : 's'} in cart'
+                                : '${cart.heldCount} sale${cart.heldCount == 1 ? '' : 's'} held',
+                            style: const TextStyle(
+                                fontFamily: 'Carlito',
+                                fontSize: 12.5,
+                                color: AppColors.muted),
+                          ),
+                          Text(
+                            cart.isNotEmpty
+                                ? '${settings.currencySymbol} ${cart.total(settings.taxRate).toStringAsFixed(2)}'
+                                : 'Tap to review',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                                fontFamily: 'Carlito',
+                                fontSize: 15.5,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.primaryDark),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: AppSpace.s4, vertical: AppSpace.s2 + 1),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary,
+                        borderRadius: BorderRadius.circular(AppRadius.pill),
+                      ),
+                      child: const Row(
+                        children: [
+                          Text('View cart',
+                              style: TextStyle(
+                                  fontFamily: 'Carlito',
+                                  fontSize: 13.5,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.white)),
+                          SizedBox(width: AppSpace.s1),
+                          Icon(Icons.expand_less_rounded,
+                              size: 18, color: Colors.white),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }

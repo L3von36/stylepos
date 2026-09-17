@@ -1,4 +1,8 @@
+import 'dart:io' show File;
+
 import 'package:flutter/material.dart';
+
+import '../services/images.dart';
 
 /// StylePOS design system — built on the Material Design 3 (2021) spec.
 ///
@@ -799,4 +803,63 @@ class QtyStepper extends StatelessWidget {
           child: Icon(icon, size: 16, color: AppColors.muted),
         ),
       );
+}
+
+/// Product photo thumbnail with a graceful branded fallback.
+///
+/// Pass [size] for a fixed square, or leave it null to expand to the
+/// parent's bounded constraints (e.g. inside an Expanded grid tile).
+class ProductThumb extends StatelessWidget {
+  final String? image; // relative filename from the product row
+  final double? size;
+  final IconData icon;
+  final double iconSize;
+  final double radius;
+
+  const ProductThumb({
+    super.key,
+    required this.image,
+    this.size,
+    this.icon = Icons.checkroom_rounded,
+    this.iconSize = 24,
+    this.radius = AppRadius.sm,
+  });
+
+  Widget _fallback() => Container(
+        width: size,
+        height: size,
+        alignment: Alignment.center,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              AppColors.primarySoft,
+              Color(0xFFE0E7FF),
+            ],
+          ),
+        ),
+        child: Icon(icon, size: iconSize, color: AppColors.primary.withValues(alpha: 0.7)),
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    final name = image?.trim() ?? '';
+    if (name.isEmpty) {
+      return ClipRRect(borderRadius: BorderRadius.circular(radius), child: _fallback());
+    }
+    final dpr = MediaQuery.devicePixelRatioOf(context);
+    final decodeWidth = ((size ?? 320) * dpr).round().clamp(64, 1600);
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(radius),
+      child: Image.file(
+        File(ProductImages.path(name)),
+        width: size,
+        height: size,
+        fit: BoxFit.cover,
+        cacheWidth: decodeWidth,
+        errorBuilder: (_, _, _) => _fallback(),
+      ),
+    );
+  }
 }

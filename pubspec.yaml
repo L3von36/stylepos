@@ -1,7 +1,7 @@
 name: stylepos
 description: "StylePOS - an offline-first point-of-sale app for clothing shops, built with Flutter (Android + Windows)."
 publish_to: 'none'
-version: 1.3.0+4
+version: 1.4.0+5
 
 environment:
   sdk: ^3.13.3
@@ -35,6 +35,10 @@ dependencies:
 
   # Camera barcode scanning on Android/iOS (hardware scanners use keyboard input)
   mobile_scanner: ^7.0.1
+
+  # Product photos: camera/gallery on phones, file dialog on desktop
+  image_picker: ^1.1.2
+  file_selector: ^1.0.3
 
 dev_dependencies:
   flutter_test:

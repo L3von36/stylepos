@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import 'screens/home_shell.dart';
 import 'screens/login_screen.dart';
+import 'services/images.dart';
 import 'state/auth.dart';
 import 'state/cart.dart';
 import 'state/catalog.dart';
@@ -24,7 +25,7 @@ Future<void> main() async {
   final nav = NavProvider();
 
   // Load persisted settings + session before showing UI.
-  await Future.wait([settings.load(), auth.init()]);
+  await Future.wait([settings.load(), auth.init(), ProductImages.init()]);
   // First-run bootstrapping of the starter catalog.
   await catalog.reload();
   await customers.reload();

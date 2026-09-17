@@ -97,6 +97,7 @@ class Product {
   final String name;
   final int? categoryId;
   final String? barcode;
+  final String? image; // relative filename inside the app images dir
   final String? description;
   final int lowStock;
   final bool archived;
@@ -108,6 +109,7 @@ class Product {
     required this.name,
     this.categoryId,
     this.barcode,
+    this.image,
     this.description,
     this.lowStock = 5,
     this.archived = false,
@@ -136,6 +138,8 @@ class Product {
     String? name,
     int? categoryId,
     String? barcode,
+    String? image,
+    bool clearImage = false,
     String? description,
     int? lowStock,
     bool? archived,
@@ -147,6 +151,7 @@ class Product {
       name: name ?? this.name,
       categoryId: categoryId ?? this.categoryId,
       barcode: barcode ?? this.barcode,
+      image: clearImage ? null : (image ?? this.image),
       description: description ?? this.description,
       lowStock: lowStock ?? this.lowStock,
       archived: archived ?? this.archived,
@@ -160,6 +165,7 @@ class Product {
         name: m['name'] as String,
         categoryId: m['category_id'] as int?,
         barcode: m['barcode'] as String?,
+        image: m['image'] as String?,
         description: m['description'] as String?,
         lowStock: m['low_stock'] as int? ?? 5,
         archived: (m['archived'] as int? ?? 0) == 1,
@@ -171,6 +177,7 @@ class Product {
         'name': name,
         'category_id': categoryId,
         'barcode': barcode,
+        'image': image,
         'description': description,
         'low_stock': lowStock,
         'archived': archived ? 1 : 0,

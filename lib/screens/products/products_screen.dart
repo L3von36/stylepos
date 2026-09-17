@@ -226,14 +226,12 @@ class _ProductTile extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: AppSpace.s4, vertical: AppSpace.s3),
           child: Row(
             children: [
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: AppColors.primarySoft,
-                  borderRadius: BorderRadius.circular(AppRadius.md),
-                ),
-                child: Icon(Icons.checkroom_rounded, color: AppColors.primary, size: 22),
+              ProductThumb(
+                image: product.image,
+                size: 44,
+                radius: AppRadius.md,
+                icon: Icons.checkroom_rounded,
+                iconSize: 22,
               ),
               const SizedBox(width: AppSpace.s3),
               Expanded(
