@@ -11,9 +11,12 @@ import 'images.dart';
 
 const _uuid = Uuid();
 
-/// The four catalog tables mirrored to the cloud in Phase 1.
-/// Sales history sync comes in Phase 2 and is intentionally out of scope.
+/// The four catalog tables mirrored to the cloud since Phase 1.
 const kSyncTables = ['categories', 'products', 'variants', 'customers'];
+
+/// Sales history tables mirrored to the cloud (Phase 2). Append-only:
+/// refunds are a status change, so no tombstone column is needed.
+const kSalesTables = ['sales', 'sale_items', 'stock_movements'];
 
 /// How the sync engine talks to the cloud. The real implementation uses
 /// Supabase (PostgREST + Storage); tests plug in an in-memory fake.
@@ -29,6 +32,10 @@ abstract class CloudGateway {
 
   /// Downloads a product photo; null when unavailable.
   Future<List<int>?> downloadProductPhoto(String storagePath);
+
+  /// Cloud staff profiles (app_users) for the given auth ids — used to
+  /// attribute pulled sales to the right cashier name on this device.
+  Future<List<Map<String, dynamic>>> fetchAppUsersByIds(List<String> ids);
 }
 
 /// Supabase-backed gateway (REST + Storage).
@@ -82,6 +89,20 @@ class SupabaseGateway implements CloudGateway {
       return null;
     }
   }
+
+  @override
+  Future<List<Map<String, dynamic>>> fetchAppUsersByIds(
+      List<String> ids) async {
+    if (ids.isEmpty) return [];
+    try {
+      return await _c
+          .from('app_users')
+          .select('id,name,email,role')
+          .inFilter('id', ids);
+    } catch (_) {
+      return [];
+    }
+  }
 }
 
 enum SyncPhase { idle, syncing, error }
@@ -122,6 +143,12 @@ class SyncService extends ChangeNotifier {
   DateTime? lastSyncAt;
   String? lastError;
 
+  /// True while a Supabase Realtime subscription is attached — the Manager
+  /// sees sales from other devices land within seconds.
+  bool realtimeLive = false;
+
+  RealtimeChannel? _channel;
+
   /// Called after a successful sync so providers reload from SQLite.
   Future<void> Function()? onSynced;
 
@@ -145,13 +172,56 @@ class SyncService extends ChangeNotifier {
         if (s.event == AuthChangeEvent.signedIn ||
             s.event == AuthChangeEvent.initialSession) {
           scheduleSync(const Duration(seconds: 2));
+          _startRealtime();
+        } else if (s.event == AuthChangeEvent.signedOut) {
+          _stopRealtime();
         }
         notifyListeners();
       });
     } catch (_) {
       // Supabase not initialised (unit tests) — manual runs still work.
     }
-    if (signedIn) scheduleSync(const Duration(seconds: 2));
+    if (signedIn) {
+      scheduleSync(const Duration(seconds: 2));
+      _startRealtime();
+    }
+  }
+
+  /// Listens for cloud row changes (sales made on another device, catalog
+  /// edits, refunds) and schedules a pull a moment later.
+  void _startRealtime() {
+    if (_channel != null) return;
+    try {
+      final client = Supabase.instance.client;
+      final ch = client.channel('stylepos-live');
+      for (final table in [...kSyncTables, ...kSalesTables, 'settings']) {
+        ch.onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: table,
+          callback: (_) => scheduleSync(const Duration(seconds: 2)),
+        );
+      }
+      ch.subscribe();
+      _channel = ch;
+      realtimeLive = true;
+      notifyListeners();
+    } catch (_) {
+      // Supabase not initialised or offline — pull-on-demand still works.
+    }
+  }
+
+  Future<void> _stopRealtime() async {
+    final ch = _channel;
+    _channel = null;
+    realtimeLive = false;
+    if (ch != null) {
+      try {
+        await Supabase.instance.client.removeChannel(ch);
+      } catch (_) {// Already gone.
+      }
+    }
+    notifyListeners();
   }
 
   @override
@@ -186,23 +256,32 @@ class SyncService extends ChangeNotifier {
       await _pushProducts();
       await _pushVariants();
       await _pushCustomers();
+      await _pushSales();
+      await _pushSaleItems();
+      await _pushMovements();
       // Pull order likewise: parents first so ids resolve.
       await _pullCategories();
       await _pullProducts();
       await _pullVariants();
       await _pullCustomers();
+      await _pullSales();
+      await _pullSaleItems();
+      await _pullMovements();
 
       // Rows that never matched anything in the cloud (created before this
       // device first synced, e.g. seed catalog) get pushed as new rows.
       // The second push round is a no-op when nothing was marked.
       final db = await _db;
-      for (final t in kSyncTables) {
+      for (final t in [...kSyncTables, ...kSalesTables]) {
         await db.execute('UPDATE $t SET dirty = 1 WHERE cloud_id IS NULL');
       }
       await _pushCategories();
       await _pushProducts();
       await _pushVariants();
       await _pushCustomers();
+      await _pushSales();
+      await _pushSaleItems();
+      await _pushMovements();
 
       lastSyncAt = DateTime.now();
       phase = SyncPhase.idle;
@@ -238,6 +317,22 @@ class SyncService extends ChangeNotifier {
 
   bool _b(dynamic v) => v == true || v == 1;
 
+  String? get _cloudUid {
+    try {
+      return Supabase.instance.client.auth.currentSession?.user.id;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// The per-device receipt prefix stored in settings (mirrors state/sales).
+  Future<String> _deviceCode() async {
+    final db = await _db;
+    final rows =
+        await db.query('settings', where: 'key = ?', whereArgs: ['device_code']);
+    return rows.isEmpty ? '' : (rows.first['value'] as String? ?? '');
+  }
+
   Future<int> _getLastPull(String table) async {
     final db = await _db;
     final rows = await db.query('settings',
@@ -272,13 +367,14 @@ class SyncService extends ChangeNotifier {
     for (final t in kSyncTables) {
       await db.execute('UPDATE $t SET dirty = 1 WHERE deleted = 0');
     }
+    for (final t in kSalesTables) {
+      await db.execute('UPDATE $t SET dirty = 1');
+    }
     await _pushCategories();
     await _pushProducts();
     await _pushVariants();
     await _pushCustomers();
   }
-
-  // ------------------------------------------------------------ PUSH
 
   Future<void> _pushCategories() async {
     final db = await _db;
@@ -422,6 +518,127 @@ class SyncService extends ChangeNotifier {
     }
   }
 
+  Future<void> _pushSales() async {
+    final db = await _db;
+    final rows = await db.query('sales', where: 'dirty = 1');
+    if (rows.isEmpty) return;
+
+    final custCloud = <int, String?>{};
+    for (final c in await db.query('customers', columns: ['id', 'cloud_id'])) {
+      custCloud[c['id'] as int] = c['cloud_id'] as String?;
+    }
+    final uid = _cloudUid;
+    final device = await _deviceCode();
+
+    final payload = <Map<String, dynamic>>[];
+    final ids = <int, String>{};
+    for (final r in rows) {
+      final cloudId = (r['cloud_id'] as String?) ?? _uuid.v4();
+      ids[r['id'] as int] = cloudId;
+      payload.add({
+        'id': cloudId,
+        'receipt_no': r['receipt_no'],
+        'device': device,
+        'customer_id': custCloud[r['customer_id'] as int?],
+        'user_id': uid,
+        'subtotal': (r['subtotal'] as num? ?? 0).toDouble(),
+        'discount': (r['discount'] as num? ?? 0).toDouble(),
+        'tax': (r['tax'] as num? ?? 0).toDouble(),
+        'total': (r['total'] as num? ?? 0).toDouble(),
+        'payment_method': r['payment_method'],
+        'amount_paid': (r['amount_paid'] as num? ?? 0).toDouble(),
+        'change_due': (r['change_due'] as num? ?? 0).toDouble(),
+        'status': r['status'],
+        'created_at': _iso(r['created_at'] as int? ?? 0),
+        'updated_at': _iso(r['updated_at'] as int? ?? 0),
+      });
+    }
+    await _gateway.upsertRows('sales', payload);
+    for (final e in ids.entries) {
+      await db.update('sales', {'dirty': 0, 'cloud_id': e.value},
+          where: 'id = ?', whereArgs: [e.key]);
+    }
+  }
+
+  Future<void> _pushSaleItems() async {
+    final db = await _db;
+    final rows = await db.query('sale_items', where: 'dirty = 1');
+    if (rows.isEmpty) return;
+
+    final saleCloud = <int, String?>{};
+    for (final s in await db.query('sales', columns: ['id', 'cloud_id'])) {
+      saleCloud[s['id'] as int] = s['cloud_id'] as String?;
+    }
+    final varCloud = <int, String?>{};
+    for (final v in await db.query('variants', columns: ['id', 'cloud_id'])) {
+      varCloud[v['id'] as int] = v['cloud_id'] as String?;
+    }
+
+    final payload = <Map<String, dynamic>>[];
+    final ids = <int, String>{};
+    for (final r in rows) {
+      final saleCloudId = saleCloud[r['sale_id'] as int];
+      if (saleCloudId == null) continue; // parent sale not synced yet
+      final cloudId = (r['cloud_id'] as String?) ?? _uuid.v4();
+      ids[r['id'] as int] = cloudId;
+      payload.add({
+        'id': cloudId,
+        'sale_id': saleCloudId,
+        'variant_id': varCloud[r['variant_id'] as int?],
+        'product_name': r['product_name'],
+        'variant_desc': r['variant_desc'],
+        'unit_price': (r['unit_price'] as num? ?? 0).toDouble(),
+        'qty': r['qty'],
+        'line_total': (r['line_total'] as num? ?? 0).toDouble(),
+        'created_at': _iso(r['updated_at'] as int? ?? 0),
+        'updated_at': _iso(r['updated_at'] as int? ?? 0),
+      });
+    }
+    if (payload.isNotEmpty) await _gateway.upsertRows('sale_items', payload);
+    for (final e in ids.entries) {
+      await db.update('sale_items', {'dirty': 0, 'cloud_id': e.value},
+          where: 'id = ?', whereArgs: [e.key]);
+    }
+  }
+
+  Future<void> _pushMovements() async {
+    final db = await _db;
+    final rows = await db.query('stock_movements', where: 'dirty = 1');
+    if (rows.isEmpty) return;
+
+    final varCloud = <int, String?>{};
+    for (final v in await db.query('variants', columns: ['id', 'cloud_id'])) {
+      varCloud[v['id'] as int] = v['cloud_id'] as String?;
+    }
+    final uid = _cloudUid;
+
+    final payload = <Map<String, dynamic>>[];
+    final ids = <int, String>{};
+    for (final r in rows) {
+      final varCloudId = varCloud[r['variant_id'] as int?];
+      if (varCloudId == null) continue; // variant unknown in the cloud
+      final cloudId = (r['cloud_id'] as String?) ?? _uuid.v4();
+      ids[r['id'] as int] = cloudId;
+      payload.add({
+        'id': cloudId,
+        'variant_id': varCloudId,
+        'qty': r['qty'],
+        'reason': r['reason'],
+        'note': r['note'],
+        'user_id': uid,
+        'created_at': _iso(r['created_at'] as int? ?? 0),
+        'updated_at': _iso(r['updated_at'] as int? ?? 0),
+      });
+    }
+    if (payload.isNotEmpty) {
+      await _gateway.upsertRows('stock_movements', payload);
+    }
+    for (final e in ids.entries) {
+      await db.update('stock_movements', {'dirty': 0, 'cloud_id': e.value},
+          where: 'id = ?', whereArgs: [e.key]);
+    }
+  }
+
   // ------------------------------------------------------------ PULL
 
   Future<void> _pullTable(
@@ -460,6 +677,18 @@ class SyncService extends ChangeNotifier {
 
   Future<void> _pullCustomers() async {
     await _pullTable('customers', (r, ts) => _mergeCustomer(r, ts));
+  }
+
+  Future<void> _pullSales() async {
+    await _pullTable('sales', (r, ts) => _mergeSale(r, ts));
+  }
+
+  Future<void> _pullSaleItems() async {
+    await _pullTable('sale_items', (r, ts) => _mergeSaleItem(r, ts));
+  }
+
+  Future<void> _pullMovements() async {
+    await _pullTable('stock_movements', (r, ts) => _mergeMovement(r, ts));
   }
 
   Future<void> _mergeCategory(Map<String, dynamic> r, int cloudTs) async {
@@ -683,6 +912,149 @@ class SyncService extends ChangeNotifier {
       'updated_at': cloudTs,
       'dirty': 0,
     }, where: 'id = ?', whereArgs: [local['id']]);
+  }
+
+  // ------------------------------------------------------------ sales merge
+
+  /// Maps a cloud user id (app_users / auth uuid) to a local staff row,
+  /// creating a shadow account (that cannot log in locally) when this is
+  /// the first sale seen from that colleague — so reports show their name.
+  Future<int> _localUserIdFor(String? cloudUid) async {
+    if (cloudUid == null || cloudUid.isEmpty) return 0;
+    final db = await _db;
+    final rows = await db.query('users',
+        where: 'cloud_id = ?', whereArgs: [cloudUid], limit: 1);
+    if (rows.isNotEmpty) return rows.first['id'] as int;
+
+    final prof = await _gateway.fetchAppUsersByIds([cloudUid]);
+    final name =
+        prof.isNotEmpty ? (prof.first['name'] as String? ?? 'Staff') : 'Staff';
+    final email = prof.isNotEmpty ? prof.first['email'] as String? : null;
+    final role = prof.isNotEmpty
+        ? (prof.first['role'] as String? ?? 'cashier')
+        : 'cashier';
+
+    if (email != null && email.isNotEmpty) {
+      final byEmail = await db.query('users',
+          where: 'email = ?', whereArgs: [email], limit: 1);
+      if (byEmail.isNotEmpty) {
+        await db.update('users', {'cloud_id': cloudUid},
+            where: 'id = ?', whereArgs: [byEmail.first['id']]);
+        return byEmail.first['id'] as int;
+      }
+    }
+    // Shadow user: empty salt/hash means no local password can ever match.
+    final id = await db.insert('users', {
+      'name': name,
+      'email': email ?? 'staff-$cloudUid@cloud.local',
+      'pass_hash': '',
+      'salt': '',
+      'role': role == 'admin' ? 'admin' : 'cashier',
+      'active': 1,
+      'created_at': _now(),
+      'cloud_id': cloudUid,
+    });
+    return id;
+  }
+
+  Future<void> _mergeSale(Map<String, dynamic> r, int cloudTs) async {
+    final db = await _db;
+    var rows = await _byCloudId('sales', r['id']);
+
+    if (rows.isEmpty) {
+      int? customerId;
+      if (r['customer_id'] != null) {
+        final c = await _byCloudId('customers', r['customer_id']);
+        if (c.isNotEmpty) customerId = c.first['id'] as int?;
+      }
+      final userId = await _localUserIdFor(r['user_id'] as String?);
+      try {
+        await db.insert('sales', {
+          'receipt_no': r['receipt_no'],
+          'customer_id': customerId,
+          'user_id': userId,
+          'subtotal': (r['subtotal'] as num? ?? 0).toDouble(),
+          'discount': (r['discount'] as num? ?? 0).toDouble(),
+          'tax': (r['tax'] as num? ?? 0).toDouble(),
+          'total': (r['total'] as num? ?? 0).toDouble(),
+          'payment_method': r['payment_method'] ?? 'cash',
+          'amount_paid': (r['amount_paid'] as num? ?? 0).toDouble(),
+          'change_due': (r['change_due'] as num? ?? 0).toDouble(),
+          'status': r['status'] ?? 'completed',
+          'created_at': _epoch(r['created_at']),
+          'cloud_id': r['id'],
+          'dirty': 0,
+          'updated_at': cloudTs,
+        });
+      } catch (_) {
+        // receipt_no UNIQUE collision (should not happen with device codes)
+      }
+      return;
+    }
+
+    final local = rows.first;
+    final localTs = local['updated_at'] as int? ?? 0;
+    if ((local['dirty'] as int? ?? 0) == 1 && localTs >= cloudTs) return;
+    if (local['status'] == r['status']) {
+      await db.update('sales', {'updated_at': cloudTs, 'dirty': 0},
+          where: 'id = ?', whereArgs: [local['id']]);
+      return;
+    }
+    // Status changed elsewhere (refund) — adopt it.
+    await db.update('sales', {
+      'status': r['status'] ?? 'completed',
+      'updated_at': cloudTs,
+      'dirty': 0,
+    }, where: 'id = ?', whereArgs: [local['id']]);
+  }
+
+  Future<void> _mergeSaleItem(Map<String, dynamic> r, int cloudTs) async {
+    final db = await _db;
+    final existing = await _byCloudId('sale_items', r['id']);
+    if (existing.isNotEmpty) return; // line items are immutable
+
+    final sale = await _byCloudId('sales', r['sale_id']);
+    if (sale.isEmpty) return; // parent sale not pulled yet; next round
+
+    int variantId = 0;
+    if (r['variant_id'] != null) {
+      final v = await _byCloudId('variants', r['variant_id']);
+      if (v.isNotEmpty) variantId = v.first['id'] as int;
+    }
+    await db.insert('sale_items', {
+      'sale_id': sale.first['id'],
+      'variant_id': variantId,
+      'product_name': r['product_name'] ?? '',
+      'variant_desc': r['variant_desc'] ?? '',
+      'unit_price': (r['unit_price'] as num? ?? 0).toDouble(),
+      'qty': r['qty'] as int? ?? 0,
+      'line_total': (r['line_total'] as num? ?? 0).toDouble(),
+      'cloud_id': r['id'],
+      'dirty': 0,
+      'updated_at': cloudTs,
+    });
+  }
+
+  Future<void> _mergeMovement(Map<String, dynamic> r, int cloudTs) async {
+    final db = await _db;
+    final existing = await _byCloudId('stock_movements', r['id']);
+    if (existing.isNotEmpty) return; // ledger rows are immutable
+
+    if (r['variant_id'] == null) return;
+    final v = await _byCloudId('variants', r['variant_id']);
+    if (v.isEmpty) return; // variant unknown here yet
+    final userId = await _localUserIdFor(r['user_id'] as String?);
+    await db.insert('stock_movements', {
+      'variant_id': v.first['id'],
+      'qty': r['qty'] as int? ?? 0,
+      'reason': r['reason'] ?? 'adjust',
+      'note': r['note'],
+      'user_id': userId,
+      'created_at': _epoch(r['created_at']),
+      'cloud_id': r['id'],
+      'dirty': 0,
+      'updated_at': cloudTs,
+    });
   }
 
   // ------------------------------------------------------------ photos

@@ -1,10 +1,28 @@
 import 'package:flutter/foundation.dart';
+import 'package:sqflite/sqflite.dart' show ConflictAlgorithm, Database;
+import 'package:uuid/uuid.dart';
 
 import '../data/database.dart';
 import '../models/sale.dart';
 import '../services/sync_service.dart';
 import 'cart.dart';
 import 'settings.dart';
+
+const _uuid = Uuid();
+
+/// Per-device receipt prefix (e.g. `K3XQ2F`) so receipts from different
+/// devices never collide in the cloud (`R-<code>-000123`).
+Future<String> _deviceCode(Database db) async {
+  final rows = await db.query('settings',
+      where: 'key = ?', whereArgs: ['device_code']);
+  final existing = rows.isEmpty ? '' : (rows.first['value'] as String? ?? '');
+  if (existing.isNotEmpty) return existing;
+  final code =
+      _uuid.v4().replaceAll('-', '').substring(0, 6).toUpperCase();
+  await db.insert('settings', {'key': 'device_code', 'value': code},
+      conflictAlgorithm: ConflictAlgorithm.replace);
+  return code;
+}
 
 /// Sales history, checkout transaction and report queries.
 class SalesProvider extends ChangeNotifier {
@@ -32,12 +50,13 @@ class SalesProvider extends ChangeNotifier {
         : 0.0;
 
     late Sale sale;
+    final deviceCode = await _deviceCode(db);
     await db.transaction((txn) async {
-      // sequential receipt number
+      // sequential receipt number (unique per device via the code prefix)
       final seqRows = await txn.query('settings',
           where: 'key = ?', whereArgs: ['receipt_seq']);
       final seq = int.tryParse(seqRows.first['value'] as String? ?? '') ?? 0;
-      final receiptNo = 'R-${(seq + 1).toString().padLeft(6, '0')}';
+      final receiptNo = 'R-$deviceCode-${(seq + 1).toString().padLeft(6, '0')}';
       await txn.update('settings', {'value': '${seq + 1}'},
           where: 'key = ?', whereArgs: ['receipt_seq']);
 
@@ -54,6 +73,9 @@ class SalesProvider extends ChangeNotifier {
         'change_due': change,
         'status': 'completed',
         'created_at': now,
+        'cloud_id': null,
+        'dirty': 1,
+        'updated_at': now,
       });
 
       for (final item in cart.items) {
@@ -65,6 +87,9 @@ class SalesProvider extends ChangeNotifier {
           'unit_price': item.variant.price,
           'qty': item.qty,
           'line_total': item.lineTotal,
+          'cloud_id': null,
+          'dirty': 1,
+          'updated_at': now,
         });
         await txn.rawUpdate(
           'UPDATE variants SET stock = MAX(stock - ?, 0), dirty = 1, updated_at = ? WHERE id = ?',
@@ -77,6 +102,9 @@ class SalesProvider extends ChangeNotifier {
           'note': receiptNo,
           'user_id': userId,
           'created_at': now,
+          'cloud_id': null,
+          'dirty': 1,
+          'updated_at': now,
         });
       }
 
@@ -156,13 +184,21 @@ class SalesProvider extends ChangeNotifier {
     return rows.map(SaleItem.fromMap).toList();
   }
 
+  /// Bumps the revision so listeners (reports, POS strip) reload — used by
+  /// the sync engine when cloud sales arrive in realtime.
+  void bump() {
+    revision++;
+    notifyListeners();
+  }
+
   /// Marks a sale refunded and restores stock. Admin-only; caller enforces.
   Future<void> refund(Sale sale, int adminId) async {
     final db = await DB.instance();
     final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
     await db.transaction((txn) async {
-      await txn.update('sales', {'status': 'refunded'},
-          where: 'id = ?', whereArgs: [sale.id]);
+      await txn.rawUpdate(
+          'UPDATE sales SET status = ?, dirty = 1, updated_at = ? WHERE id = ?',
+          ['refunded', now, sale.id]);
       final items = await txn.query('sale_items',
           where: 'sale_id = ?', whereArgs: [sale.id]);
       for (final r in items) {
@@ -178,6 +214,9 @@ class SalesProvider extends ChangeNotifier {
           'note': sale.receiptNo,
           'user_id': adminId,
           'created_at': now,
+          'cloud_id': null,
+          'dirty': 1,
+          'updated_at': now,
         });
       }
     });

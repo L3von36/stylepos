@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../services/cloud_auth.dart';
 import '../state/auth.dart';
 import '../state/settings.dart';
 import '../widgets/ui.dart';
@@ -20,10 +21,22 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _busy = false;
   String? _error;
 
+  /// 0 = staff (offline till account), 1 = cloud (sync between devices).
+  int _tab = 0;
+  final _cloudName = TextEditingController();
+  final _cloudEmail = TextEditingController();
+  final _cloudPass = TextEditingController();
+  bool _cloudObscure = true;
+  bool _cloudBusy = false;
+  String? _cloudError;
+
   @override
   void dispose() {
     _email.dispose();
     _password.dispose();
+    _cloudName.dispose();
+    _cloudEmail.dispose();
+    _cloudPass.dispose();
     super.dispose();
   }
 
@@ -47,7 +60,43 @@ class _LoginScreenState extends State<LoginScreen> {
     // On success AuthProvider notifies and _Root swaps to HomeShell.
   }
 
+  Future<void> _cloudSubmit({required bool create}) async {
+    final email = _cloudEmail.text.trim();
+    final pass = _cloudPass.text;
+    setState(() => _cloudError = null);
+    if (!email.contains('@')) {
+      setState(() => _cloudError = 'Enter a valid email.');
+      return;
+    }
+    if (pass.length < 6) {
+      setState(() => _cloudError = 'Password must be at least 6 characters.');
+      return;
+    }
+    setState(() => _cloudBusy = true);
+    final err = create
+        ? await CloudAuth.signUp(
+            email: email, password: pass, name: _cloudName.text)
+        : await CloudAuth.signIn(email: email, password: pass);
+    if (!mounted) return;
+    if (err != null) {
+      setState(() {
+        _cloudBusy = false;
+        _cloudError = err == 'confirm'
+            ? 'Account created! Check your email for a confirmation link, '
+                'then sign in here.'
+            : err;
+      });
+    }
+    // On success CloudAuth opens the local session; _Root swaps to HomeShell.
+  }
+
   void _toggleObscure() => setState(() => _obscure = !_obscure);
+
+  void _toggleCloudObscure() =>
+      setState(() => _cloudObscure = !_cloudObscure);
+
+  /// Public so the stateless form widgets can switch the tab safely.
+  void switchTab(int t) => setState(() => _tab = t);
 
   @override
   Widget build(BuildContext context) {
@@ -286,7 +335,7 @@ class _LoginForm extends StatelessWidget {
                 textAlign: TextAlign.center,
                 style: TextStyle(fontFamily: 'Carlito', fontSize: 13.5, color: AppColors.muted),
               ),
-              const SizedBox(height: AppSpace.s6),
+              const SizedBox(height: AppSpace.s5),
             ] else ...[
               Text('Welcome back', style: theme.textTheme.headlineSmall),
               const SizedBox(height: AppSpace.s2),
@@ -294,98 +343,251 @@ class _LoginForm extends StatelessWidget {
                 'Sign in to ${settings.shopName} to open the register.',
                 style: theme.textTheme.bodySmall,
               ),
-              const SizedBox(height: AppSpace.s6),
+              const SizedBox(height: AppSpace.s5),
             ],
-            TextFormField(
-              controller: state._email,
-              keyboardType: TextInputType.emailAddress,
-              textInputAction: TextInputAction.next,
-              autofocus: true,
-              decoration: const InputDecoration(
-                labelText: 'Email',
-                prefixIcon: Icon(Icons.alternate_email_rounded, size: 20),
-              ),
-              validator: (v) =>
-                  (v == null || !v.contains('@')) ? 'Enter a valid email' : null,
-            ),
-            const SizedBox(height: AppSpace.s4),
-            TextFormField(
-              controller: state._password,
-              obscureText: state._obscure,
-              onFieldSubmitted: (_) => state._submit(),
-              decoration: InputDecoration(
-                labelText: 'Password',
-                prefixIcon: const Icon(Icons.lock_outline_rounded, size: 20),
-                suffixIcon: IconButton(
-                  icon: Icon(state._obscure
-                      ? Icons.visibility_outlined
-                      : Icons.visibility_off_outlined),
-                  onPressed: state._toggleObscure,
+            SegmentedButton<int>(
+              showSelectedIcon: false,
+              segments: const [
+                ButtonSegment(
+                  value: 0,
+                  label: Text('Staff'),
+                  icon: Icon(Icons.badge_outlined, size: 18),
                 ),
-              ),
-              validator: (v) =>
-                  (v == null || v.isEmpty) ? 'Enter your password' : null,
-            ),
-            if (state._error != null) ...[
-              const SizedBox(height: AppSpace.s4),
-              Container(
-                padding: const EdgeInsets.all(AppSpace.s3),
-                decoration: BoxDecoration(
-                  color: AppColors.dangerSoft,
-                  borderRadius: BorderRadius.circular(AppRadius.sm),
+                ButtonSegment(
+                  value: 1,
+                  label: Text('Cloud'),
+                  icon: Icon(Icons.cloud_outlined, size: 18),
                 ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.error_outline_rounded,
-                        size: 18, color: AppColors.danger),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        state._error!,
-                        style: const TextStyle(
-                            fontFamily: 'Carlito', fontSize: 13, color: AppColors.danger),
-                      ),
-                    ),
-                  ],
+              ],
+              selected: {state._tab},
+              onSelectionChanged: (s) => state.switchTab(s.first),
+            ),
+            const SizedBox(height: AppSpace.s5),
+            if (state._tab == 0)
+              _StaffFields(state: state)
+            else
+              _CloudFields(state: state),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Staff (offline till) sign-in — the original email + password form.
+class _StaffFields extends StatelessWidget {
+  final _LoginScreenState state;
+  const _StaffFields({required this.state});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        TextFormField(
+          controller: state._email,
+          keyboardType: TextInputType.emailAddress,
+          textInputAction: TextInputAction.next,
+          autofocus: true,
+          decoration: const InputDecoration(
+            labelText: 'Email',
+            prefixIcon: Icon(Icons.alternate_email_rounded, size: 20),
+          ),
+          validator: (v) =>
+              (v == null || !v.contains('@')) ? 'Enter a valid email' : null,
+        ),
+        const SizedBox(height: AppSpace.s4),
+        TextFormField(
+          controller: state._password,
+          obscureText: state._obscure,
+          onFieldSubmitted: (_) => state._submit(),
+          decoration: InputDecoration(
+            labelText: 'Password',
+            prefixIcon: const Icon(Icons.lock_outline_rounded, size: 20),
+            suffixIcon: IconButton(
+              icon: Icon(state._obscure
+                  ? Icons.visibility_outlined
+                  : Icons.visibility_off_outlined),
+              onPressed: state._toggleObscure,
+            ),
+          ),
+          validator: (v) =>
+              (v == null || v.isEmpty) ? 'Enter your password' : null,
+        ),
+        if (state._error != null) ...[
+          const SizedBox(height: AppSpace.s4),
+          _ErrorBox(text: state._error!),
+        ],
+        const SizedBox(height: 20),
+        FilledButton(
+          style: FilledButton.styleFrom(minimumSize: const Size(0, 48)),
+          onPressed: state._busy ? null : state._submit,
+          child: state._busy
+              ? const SizedBox(
+                  height: 20,
+                  width: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                )
+              : const Text('Sign in'),
+        ),
+        const SizedBox(height: AppSpace.s4),
+        Container(
+          padding: const EdgeInsets.all(AppSpace.s3),
+          decoration: BoxDecoration(
+            color: AppColors.surfaceTint,
+            borderRadius: BorderRadius.circular(AppRadius.sm),
+            border: Border.all(color: AppColors.borderSoft),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.info_outline_rounded, size: 16, color: AppColors.faint),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'First run? Sign in with admin@stylepos.app / admin123, then change the password.',
+                  style: const TextStyle(
+                      fontFamily: 'Carlito', fontSize: 12, color: AppColors.muted, height: 1.35),
                 ),
               ),
             ],
-            const SizedBox(height: 20),
-            FilledButton(
-              style: FilledButton.styleFrom(minimumSize: const Size(0, 48)),
-              onPressed: state._busy ? null : state._submit,
-              child: state._busy
-                  ? const SizedBox(
-                      height: 20,
-                      width: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                    )
-                  : const Text('Sign in'),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Cloud tab — create the shop's cloud account (first account = Manager)
+/// or sign in on an additional device to pull the shared shop data.
+class _CloudFields extends StatelessWidget {
+  final _LoginScreenState state;
+  const _CloudFields({required this.state});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        TextField(
+          controller: state._cloudName,
+          textInputAction: TextInputAction.next,
+          decoration: const InputDecoration(
+            labelText: 'Your name (used once, for the staff list)',
+            prefixIcon: Icon(Icons.person_outline_rounded, size: 20),
+          ),
+        ),
+        const SizedBox(height: AppSpace.s4),
+        TextField(
+          controller: state._cloudEmail,
+          keyboardType: TextInputType.emailAddress,
+          textInputAction: TextInputAction.next,
+          decoration: const InputDecoration(
+            labelText: 'Email',
+            prefixIcon: Icon(Icons.alternate_email_rounded, size: 20),
+          ),
+        ),
+        const SizedBox(height: AppSpace.s4),
+        TextField(
+          controller: state._cloudPass,
+          obscureText: state._cloudObscure,
+          onSubmitted: (_) => state._cloudSubmit(create: false),
+          decoration: InputDecoration(
+            labelText: 'Password',
+            prefixIcon: const Icon(Icons.lock_outline_rounded, size: 20),
+            suffixIcon: IconButton(
+              icon: Icon(state._cloudObscure
+                  ? Icons.visibility_outlined
+                  : Icons.visibility_off_outlined),
+              onPressed: state._toggleCloudObscure,
             ),
-            const SizedBox(height: AppSpace.s4),
-            Container(
-              padding: const EdgeInsets.all(AppSpace.s3),
-              decoration: BoxDecoration(
-                color: AppColors.surfaceTint,
-                borderRadius: BorderRadius.circular(AppRadius.sm),
-                border: Border.all(color: AppColors.borderSoft),
+          ),
+        ),
+        if (state._cloudError != null) ...[
+          const SizedBox(height: AppSpace.s4),
+          _ErrorBox(text: state._cloudError!),
+        ],
+        const SizedBox(height: 20),
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton(
+                style: OutlinedButton.styleFrom(minimumSize: const Size(0, 48)),
+                onPressed: state._cloudBusy
+                    ? null
+                    : () => state._cloudSubmit(create: false),
+                child: const Text('Sign in'),
               ),
-              child: Row(
-                children: [
-                  const Icon(Icons.info_outline_rounded, size: 16, color: AppColors.faint),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'First run? Sign in with admin@stylepos.app / admin123, then change the password.',
-                      style: const TextStyle(
-                          fontFamily: 'Carlito', fontSize: 12, color: AppColors.muted, height: 1.35),
-                    ),
-                  ),
-                ],
+            ),
+            const SizedBox(width: AppSpace.s3),
+            Expanded(
+              child: FilledButton(
+                style: FilledButton.styleFrom(minimumSize: const Size(0, 48)),
+                onPressed: state._cloudBusy
+                    ? null
+                    : () => state._cloudSubmit(create: true),
+                child: const Text('Create account'),
               ),
             ),
           ],
         ),
+        if (state._cloudBusy) ...[
+          const SizedBox(height: AppSpace.s3),
+          const LinearProgressIndicator(),
+        ],
+        const SizedBox(height: AppSpace.s4),
+        Container(
+          padding: const EdgeInsets.all(AppSpace.s3),
+          decoration: BoxDecoration(
+            color: AppColors.surfaceTint,
+            borderRadius: BorderRadius.circular(AppRadius.sm),
+            border: Border.all(color: AppColors.borderSoft),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.cloud_upload_outlined, size: 16, color: AppColors.faint),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'New shop? Create account — the first account becomes the '
+                  'Manager. More phones or the PC? Sign in with the same '
+                  'shop account and everything syncs: products, stock, '
+                  'sales and live reports.',
+                  style: const TextStyle(
+                      fontFamily: 'Carlito', fontSize: 12, color: AppColors.muted, height: 1.35),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ErrorBox extends StatelessWidget {
+  final String text;
+  const _ErrorBox({required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(AppSpace.s3),
+      decoration: BoxDecoration(
+        color: AppColors.dangerSoft,
+        borderRadius: BorderRadius.circular(AppRadius.sm),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.error_outline_rounded, size: 18, color: AppColors.danger),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              style: const TextStyle(
+                  fontFamily: 'Carlito', fontSize: 13, color: AppColors.danger),
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../services/cloud_auth.dart';
 import '../../services/sync_service.dart';
 import '../../widgets/ui.dart';
 
-/// "Cloud sync" settings card: Supabase sign up / in / out plus a manual
-/// sync trigger and status. The cloud account is what authorizes this
-/// device to share the shop dataset (Row Level Security).
+/// "Cloud sync" settings card: status, manual sync trigger and sign-out.
+/// Account creation / sign-in lives on the landing screen's Cloud tab.
 class CloudSyncCard extends StatefulWidget {
   const CloudSyncCard({super.key});
 
@@ -15,11 +15,7 @@ class CloudSyncCard extends StatefulWidget {
 }
 
 class _CloudSyncCardState extends State<CloudSyncCard> {
-  final _email = TextEditingController();
-  final _pass = TextEditingController();
-  final _name = TextEditingController();
   bool _busy = false;
-  bool _obscure = true;
   String? _role;
 
   @override
@@ -28,114 +24,11 @@ class _CloudSyncCardState extends State<CloudSyncCard> {
     _loadRole();
   }
 
-  @override
-  void dispose() {
-    _email.dispose();
-    _pass.dispose();
-    _name.dispose();
-    super.dispose();
-  }
-
   SupabaseClient get _c => Supabase.instance.client;
 
   Future<void> _loadRole() async {
-    try {
-      final uid = _c.auth.currentSession?.user.id;
-      if (uid == null) return;
-      final row = await _c.from('app_users').select('role').eq('id', uid).maybeSingle();
-      if (mounted) setState(() => _role = row?['role'] as String?);
-    } catch (_) {
-      // Non-fatal; the role badge just stays empty.
-    }
-  }
-
-  Future<void> _toast(String msg, {bool error = false}) async {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(msg),
-      backgroundColor: error ? AppColors.danger : null,
-    ));
-  }
-
-  /// After auth: make sure a staff row exists for this login, let the very
-  /// first shop member claim the admin role, then sync.
-  Future<void> _afterAuth() async {
-    final user = _c.auth.currentUser;
-    if (user != null) {
-      final name = _name.text.trim().isNotEmpty
-          ? _name.text.trim()
-          : (user.email?.split('@').first ?? 'Staff');
-      try {
-        await _c.from('app_users').upsert(
-          {'id': user.id, 'name': name},
-          onConflict: 'id',
-          ignoreDuplicates: true,
-        );
-      } catch (_) {// Row may already exist — fine.
-      }
-      try {
-        await _c.rpc('claim_admin_if_first');
-      } catch (_) {// First admin already claimed — fine.
-      }
-    }
-    await _loadRole();
-    if (mounted) setState(() {});
-    SyncService.I.scheduleSync(const Duration(seconds: 1));
-  }
-
-  Future<void> _signUp() async {
-    setState(() => _busy = true);
-    try {
-      final res = await _c.auth.signUp(
-        email: _email.text.trim(),
-        password: _pass.text,
-      );
-      if (res.session == null) {
-        await _toast('Account created! Check your email for a confirmation '
-            'link, then sign in here.');
-      } else {
-        await _afterAuth();
-        await _toast('Welcome to the cloud! This account is the shop admin.');
-      }
-    } on AuthException catch (e) {
-      await _toast(e.message, error: true);
-    } catch (_) {
-      await _toast('Sign up failed — check your connection', error: true);
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
-  Future<void> _signIn() async {
-    setState(() => _busy = true);
-    try {
-      await _c.auth.signInWithPassword(
-        email: _email.text.trim(),
-        password: _pass.text,
-      );
-      await _afterAuth();
-      await _toast('Signed in — syncing…');
-    } on AuthException catch (e) {
-      if (e.message.toLowerCase().contains('not confirmed')) {
-        await _toast('Email not confirmed yet — click the link we sent you. '
-            '(Or disable "Confirm email" in the Supabase dashboard.)',
-            error: true);
-      } else {
-        await _toast(e.message, error: true);
-      }
-    } catch (_) {
-      await _toast('Sign in failed — check your connection', error: true);
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
-  Future<void> _signOut() async {
-    try {
-      await _c.auth.signOut();
-    } catch (_) {// Session may already be gone.
-    }
-    if (mounted) setState(() => _role = null);
+    final role = await CloudAuth.currentRole();
+    if (mounted) setState(() => _role = role);
   }
 
   String _statusLine(SyncService sync) {
@@ -166,71 +59,46 @@ class _CloudSyncCardState extends State<CloudSyncCard> {
       builder: (context, _) => SectionCard(
         icon: Icons.cloud_sync_outlined,
         title: 'Cloud sync',
-        subtitle: 'Share products, stock and customers between phone and PC',
+        subtitle: 'Share products, stock, sales and reports between devices',
         children: [
           Text(
             'Your shop data lives on this device and syncs through your '
             'Supabase cloud when there is internet. The till keeps working '
-            'normally with no internet and catches up later.',
+            'normally with no internet and catches up later.'
+            '${sync.realtimeLive ? ' Live updates are on: sales from other '
+                'devices appear here within seconds.' : ''}',
             style: TextStyle(
                 fontSize: 12.5, color: AppColors.muted, height: 1.45),
           ),
           const SizedBox(height: AppSpace.s3),
           if (!signedIn) ...[
-            TextField(
-              controller: _name,
-              decoration: const InputDecoration(
-                  labelText: 'Your name (used once, for the staff list)'),
-            ),
-            const SizedBox(height: AppSpace.s3),
-            TextField(
-              controller: _email,
-              keyboardType: TextInputType.emailAddress,
-              decoration:
-                  const InputDecoration(labelText: 'Cloud email'),
-            ),
-            const SizedBox(height: AppSpace.s3),
-            TextField(
-              controller: _pass,
-              obscureText: _obscure,
-              decoration: InputDecoration(
-                labelText: 'Cloud password',
-                suffixIcon: IconButton(
-                  icon: Icon(_obscure
-                      ? Icons.visibility_outlined
-                      : Icons.visibility_off_outlined),
-                  onPressed: () => setState(() => _obscure = !_obscure),
-                ),
+            Container(
+              padding: const EdgeInsets.all(AppSpace.s3),
+              decoration: BoxDecoration(
+                color: AppColors.surfaceTint,
+                borderRadius: BorderRadius.circular(AppRadius.sm),
+                border: Border.all(color: AppColors.borderSoft),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.info_outline_rounded,
+                      size: 16, color: AppColors.faint),
+                  const SizedBox(width: 8),
+                  const Expanded(
+                    child: Text(
+                      'Not connected. Sign out of the till, then use the '
+                      'Cloud tab on the login screen to create or open '
+                      'your shop account.',
+                      style: TextStyle(
+                          fontFamily: 'Carlito',
+                          fontSize: 12,
+                          color: AppColors.muted,
+                          height: 1.35),
+                    ),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: AppSpace.s4),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    style: OutlinedButton.styleFrom(
-                        minimumSize: const Size(0, 46)),
-                    onPressed: _busy ? null : _signIn,
-                    icon: const Icon(Icons.login, size: 18),
-                    label: const Text('Sign in'),
-                  ),
-                ),
-                const SizedBox(width: AppSpace.s3),
-                Expanded(
-                  child: FilledButton.icon(
-                    style: FilledButton.styleFrom(
-                        minimumSize: const Size(0, 46)),
-                    onPressed: _busy ? null : _signUp,
-                    icon: const Icon(Icons.person_add_alt_1, size: 18),
-                    label: const Text('Create account'),
-                  ),
-                ),
-              ],
-            ),
-            if (_busy) ...[
-              const SizedBox(height: AppSpace.s3),
-              const LinearProgressIndicator(),
-            ],
           ] else ...[
             Row(
               children: [
@@ -269,7 +137,8 @@ class _CloudSyncCardState extends State<CloudSyncCard> {
                       const SizedBox(height: 2),
                       Text(
                         '${_statusLine(sync)}'
-                        '${_role == null ? "" : "  ·  ${_role == "admin" ? "Manager" : "Sales"}"}',
+                        '${_role == null ? "" : "  ·  ${_role == "admin" ? "Manager" : "Sales"}"}'
+                        '${sync.realtimeLive ? "  ·  Live" : ""}',
                         style: TextStyle(
                             fontSize: 12,
                             color: sync.lastError != null
@@ -299,7 +168,18 @@ class _CloudSyncCardState extends State<CloudSyncCard> {
                   child: OutlinedButton.icon(
                     style: OutlinedButton.styleFrom(
                         minimumSize: const Size(0, 46)),
-                    onPressed: _busy ? null : _signOut,
+                    onPressed: _busy
+                        ? null
+                        : () async {
+                            setState(() => _busy = true);
+                            await CloudAuth.signOut();
+                            if (mounted) {
+                              setState(() {
+                                _busy = false;
+                                _role = null;
+                              });
+                            }
+                          },
                     icon: const Icon(Icons.logout, size: 18),
                     label: const Text('Sign out'),
                   ),

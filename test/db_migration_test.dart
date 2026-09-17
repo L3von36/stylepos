@@ -26,7 +26,7 @@ void main() {
     } catch (_) {}
   });
 
-  test('v1 database is upgraded to v3 and gains sync columns', () async {
+  test('v1 database is upgraded to v4 and gains sync columns', () async {
     // -- arrange: build a minimal version-1 database by hand --
     final v1 = await databaseFactory.openDatabase(
       p.join(tempDir.path, 'stylepos.db'),
@@ -74,6 +74,61 @@ void main() {
             created_at INTEGER NOT NULL
           )
         ''');
+        await db.execute('''
+          CREATE TABLE users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            email TEXT NOT NULL UNIQUE,
+            pass_hash TEXT NOT NULL,
+            salt TEXT NOT NULL,
+            role TEXT NOT NULL DEFAULT 'cashier',
+            active INTEGER NOT NULL DEFAULT 1,
+            created_at INTEGER NOT NULL
+          )
+        ''');
+        await db.execute('''
+          CREATE TABLE sales (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            receipt_no TEXT NOT NULL UNIQUE,
+            customer_id INTEGER,
+            user_id INTEGER NOT NULL,
+            subtotal REAL NOT NULL DEFAULT 0,
+            discount REAL NOT NULL DEFAULT 0,
+            tax REAL NOT NULL DEFAULT 0,
+            total REAL NOT NULL DEFAULT 0,
+            payment_method TEXT NOT NULL DEFAULT 'cash',
+            amount_paid REAL NOT NULL DEFAULT 0,
+            change_due REAL NOT NULL DEFAULT 0,
+            status TEXT NOT NULL DEFAULT 'completed',
+            created_at INTEGER NOT NULL
+          )
+        ''');
+        await db.execute('''
+          CREATE TABLE sale_items (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            sale_id INTEGER NOT NULL,
+            variant_id INTEGER NOT NULL,
+            product_name TEXT NOT NULL,
+            variant_desc TEXT NOT NULL,
+            unit_price REAL NOT NULL DEFAULT 0,
+            qty INTEGER NOT NULL DEFAULT 0,
+            line_total REAL NOT NULL DEFAULT 0
+          )
+        ''');
+        await db.execute('''
+          CREATE TABLE stock_movements (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            variant_id INTEGER NOT NULL,
+            qty INTEGER NOT NULL,
+            reason TEXT NOT NULL,
+            note TEXT,
+            user_id INTEGER,
+            created_at INTEGER NOT NULL
+          )
+        ''');
+        await db.execute('''
+          CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT)
+        ''');
         await db.insert('products', {
           'name': 'Legacy Tee',
           'low_stock': 5,
@@ -88,15 +143,24 @@ void main() {
     );
     await v1.close();
 
-    // -- act: open through the app (triggers onUpgrade 1 -> 3) --
+    // -- act: open through the app (triggers onUpgrade 1 -> 4) --
     final db = await DB.instance();
     final version = await db.getVersion();
     final cols = await db.rawQuery('PRAGMA table_info(products)');
     final colNames = cols.map((c) => c['name']).toSet();
 
     // -- assert --
-    expect(version, 3);
+    expect(version, 4);
     expect(colNames, containsAll(['image', 'cloud_id', 'dirty', 'deleted']));
+    // v4: sales tables gained their sync bookkeeping too
+    final saleCols = (await db.rawQuery('PRAGMA table_info(sales)'))
+        .map((c) => c['name'] as String)
+        .toSet();
+    expect(saleCols, containsAll(['cloud_id', 'dirty', 'updated_at']));
+    final userCols = (await db.rawQuery('PRAGMA table_info(users)'))
+        .map((c) => c['name'] as String)
+        .toSet();
+    expect(userCols, contains('cloud_id'));
     // pre-existing row survived
     final legacy = await db.query('products');
     expect(legacy.single['name'], 'Legacy Tee');

@@ -24,10 +24,12 @@ class _ReportsScreenState extends State<ReportsScreen> {
   List<({String method, int orders, double total})>? _payments;
   double? _cogs;
   int _lowStock = 0;
+  int _lastRevision = 0;
 
   @override
   void initState() {
     super.initState();
+    _lastRevision = context.read<SalesProvider>().revision;
     _load();
   }
 
@@ -68,6 +70,15 @@ class _ReportsScreenState extends State<ReportsScreen> {
   @override
   Widget build(BuildContext context) {
     final settings = context.watch<AppSettings>();
+    // Realtime: when sync lands sales from other devices, revision bumps
+    // and the whole report reloads after this frame.
+    final salesRev = context.watch<SalesProvider>().revision;
+    if (salesRev != _lastRevision) {
+      _lastRevision = salesRev;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _load();
+      });
+    }
     final today = _summaries?['today'];
     final d7 = _summaries?['7d'];
     final d30 = _summaries?['30d'];

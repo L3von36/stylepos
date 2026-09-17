@@ -4,6 +4,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:stylepos/data/database.dart';
 import 'package:stylepos/services/sync_service.dart';
+import 'package:stylepos/state/cart.dart';
+import 'package:stylepos/state/catalog.dart';
+import 'package:stylepos/state/sales.dart';
+import 'package:stylepos/state/settings.dart';
 
 /// In-memory stand-in for Supabase: stores rows per table and serves
 /// fetchUpdated/upsertRows exactly like the REST layer would.
@@ -45,6 +49,16 @@ class FakeGateway implements CloudGateway {
   @override
   Future<List<int>?> downloadProductPhoto(String storagePath) =>
       Future.value(null);
+
+  @override
+  Future<List<Map<String, dynamic>>> fetchAppUsersByIds(
+      List<String> ids) async {
+    final t = tables['app_users'] ?? {};
+    return [
+      for (final id in ids)
+        if (t[id] != null) Map<String, dynamic>.from(t[id]!),
+    ];
+  }
 
   void clear() => tables.clear();
 }
@@ -332,6 +346,195 @@ void main() {
               .first;
       expect(after['dirty'], 1);
       expect(after['cloud_id'], 'x');
+    });
+  });
+
+  group('sales sync (Phase 2)', () {
+    test('checkout stores a device-coded dirty sale and pushes everything',
+        () async {
+      final settings = AppSettings();
+      await settings.load();
+      final catalog = CatalogProvider();
+      await catalog.reload();
+      final cart = CartProvider();
+      final product = catalog.products.first;
+      expect(cart.add(product, product.variants.first), isTrue);
+      final sales = SalesProvider();
+      final sale = await sales.checkout(
+        cart: cart,
+        userId: 1,
+        paymentMethod: 'cash',
+        amountPaid: 100000,
+        settings: settings,
+      );
+
+      final dbh = await db();
+      final device = (await dbh.query('settings',
+              where: 'key = ?', whereArgs: ['device_code']))
+          .first['value'] as String;
+      expect(device.length, 6);
+      expect(sale.receiptNo, 'R-$device-000001');
+
+      final dirty = await dbh.rawQuery('''
+        SELECT
+          (SELECT COUNT(*) FROM sales WHERE dirty = 1) AS s,
+          (SELECT COUNT(*) FROM sale_items WHERE dirty = 1) AS i,
+          (SELECT COUNT(*) FROM stock_movements WHERE dirty = 1) AS m
+      ''');
+      expect(dirty.first['s'], 1);
+      expect(dirty.first['i'], 1);
+      expect(dirty.first['m'], 1);
+
+      await sync.run();
+
+      expect(cloud.tables['sales']!.length, 1);
+      final pushed = cloud.tables['sales']!.values.first;
+      expect(pushed['receipt_no'], sale.receiptNo);
+      expect(pushed['device'], device);
+      expect(pushed['status'], 'completed');
+      expect(cloud.tables['sale_items']!.length, 1);
+      final item = cloud.tables['sale_items']!.values.first;
+      expect(item['sale_id'], pushed['id']);
+      expect(item['qty'], 1);
+      expect(cloud.tables['stock_movements']!.length, 1);
+      expect(cloud.tables['stock_movements']!.values.first['qty'], -1);
+      expect(cloud.tables['stock_movements']!.values.first['note'],
+          sale.receiptNo);
+    });
+
+    test('another device pulls the sale with cashier, customer, items '
+        'and movements mapped', () async {
+      // Device A pushes its seeded catalog (adoptable by barcode/SKU/name).
+      await sync.run();
+      final varCloud = cloud.tables['variants']!.values.first;
+      final custCloud = cloud.tables['customers']!.values.first;
+      cloud.tables['app_users'] = {
+        'uid-1': {
+          'id': 'uid-1',
+          'name': 'Alice',
+          'email': 'alice@shop.test',
+          'role': 'admin',
+        },
+      };
+      final saleId = 'ssssssss-1111-2222-3333-444444444444';
+      final itemId = 'iiiiiiii-1111-2222-3333-444444444444';
+      final movId = 'mmmmmmmm-1111-2222-3333-444444444444';
+      cloud.tables['sales']![saleId] = {
+        'id': saleId,
+        'receipt_no': 'R-DEVB01-000001',
+        'device': 'DEVB01',
+        'customer_id': custCloud['id'],
+        'user_id': 'uid-1',
+        'subtotal': 850.0,
+        'discount': 0.0,
+        'tax': 0.0,
+        'total': 850.0,
+        'payment_method': 'cash',
+        'amount_paid': 1000.0,
+        'change_due': 150.0,
+        'status': 'completed',
+        'created_at': iso(_now()),
+        'updated_at': iso(_now() + 10),
+      };
+      cloud.tables['sale_items']![itemId] = {
+        'id': itemId,
+        'sale_id': saleId,
+        'variant_id': varCloud['id'],
+        'product_name': 'Classic Cotton Tee',
+        'variant_desc': 'S / Black',
+        'unit_price': 850.0,
+        'qty': 1,
+        'line_total': 850.0,
+        'created_at': iso(_now()),
+        'updated_at': iso(_now() + 10),
+      };
+      cloud.tables['stock_movements']![movId] = {
+        'id': movId,
+        'variant_id': varCloud['id'],
+        'qty': -1,
+        'reason': 'sale',
+        'note': 'R-DEVB01-000001',
+        'user_id': 'uid-1',
+        'created_at': iso(_now()),
+        'updated_at': iso(_now() + 10),
+      };
+
+      // Device B: fresh seeds, same cloud.
+      final tmpB = await Directory.systemTemp.createTemp('stylepos_sync_b2');
+      DB.closeAndReset();
+      DB.useDirectory(tmpB.path);
+      await db();
+      await sync.run();
+
+      final dbh = await db();
+      final pulled = await dbh.query('sales',
+          where: 'receipt_no = ?', whereArgs: ['R-DEVB01-000001']);
+      expect(pulled.length, 1);
+      final s = pulled.first;
+      expect(s['status'], 'completed');
+
+      // Cashier resolved to a local staff row named Alice (shadow account).
+      final alice = await dbh
+          .query('users', where: 'email = ?', whereArgs: ['alice@shop.test']);
+      expect(alice.length, 1);
+      expect(s['user_id'], alice.first['id']);
+
+      // Customer mapped onto the adopted walk-in.
+      final cust = await dbh.query('customers',
+          where: 'cloud_id = ?', whereArgs: [custCloud['id']]);
+      expect(cust, isNotEmpty);
+      expect(s['customer_id'], cust.first['id']);
+
+      // Line item and movement mapped to the adopted variant.
+      final variant = await dbh
+          .query('variants', where: 'cloud_id = ?', whereArgs: [varCloud['id']]);
+      expect(variant, isNotEmpty);
+      final items = await dbh
+          .query('sale_items', where: 'sale_id = ?', whereArgs: [s['id']]);
+      expect(items.length, 1);
+      expect(items.first['variant_id'], variant.first['id']);
+      final movs = await dbh
+          .query('stock_movements', where: 'cloud_id = ?', whereArgs: [movId]);
+      expect(movs.length, 1);
+      expect(movs.first['variant_id'], variant.first['id']);
+      tmpB.deleteSync(recursive: true);
+    });
+
+    test('a cloud refund flips the local sale to refunded', () async {
+      await sync.run();
+      final saleId = 'ssssssss-2222-3333-4444-555555555555';
+      cloud.tables['sales']![saleId] = {
+        'id': saleId,
+        'receipt_no': 'R-DEVB01-000002',
+        'device': 'DEVB01',
+        'customer_id': null,
+        'user_id': null,
+        'subtotal': 850.0,
+        'discount': 0.0,
+        'tax': 0.0,
+        'total': 850.0,
+        'payment_method': 'cash',
+        'amount_paid': 850.0,
+        'change_due': 0.0,
+        'status': 'completed',
+        'created_at': iso(_now()),
+        'updated_at': iso(_now() + 10),
+      };
+
+      await sync.run();
+      final dbh = await db();
+      var s = await dbh.query('sales', where: 'cloud_id = ?', whereArgs: [saleId]);
+      expect(s.first['status'], 'completed');
+
+      // Refunded later on the other device — a newer updated_at wins.
+      final row = Map<String, dynamic>.from(cloud.tables['sales']![saleId]!);
+      row['status'] = 'refunded';
+      row['updated_at'] = iso(_now() + 20);
+      cloud.tables['sales']![saleId] = row;
+
+      await sync.run();
+      s = await dbh.query('sales', where: 'cloud_id = ?', whereArgs: [saleId]);
+      expect(s.first['status'], 'refunded');
     });
   });
 }

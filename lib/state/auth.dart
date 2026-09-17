@@ -52,6 +52,16 @@ class AuthProvider extends ChangeNotifier {
     return null;
   }
 
+  /// Opens a local session for [u] (used when a cloud sign-in maps onto a
+  /// staff account, e.g. from the landing screen's Cloud tab).
+  Future<void> sessionAs(AppUser u) async {
+    user = u;
+    final db = await DB.instance();
+    await db.insert('settings', {'key': 'session_user_id', 'value': '${u.id}'},
+        conflictAlgorithm: ConflictAlgorithm.replace);
+    notifyListeners();
+  }
+
   Future<void> logout() async {
     final db = await DB.instance();
     await db.insert('settings', {'key': 'session_user_id', 'value': ''},

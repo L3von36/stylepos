@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'screens/home_shell.dart';
 import 'screens/login_screen.dart';
+import 'services/cloud_auth.dart';
 import 'services/cloud_config.dart';
 import 'services/images.dart';
 import 'services/sync_service.dart';
@@ -40,9 +41,11 @@ Future<void> main() async {
   try {
     await Supabase.initialize(
         url: CloudConfig.url, publishableKey: CloudConfig.publishableKey);
+    CloudAuth.auth = auth; // landing-screen cloud sign-in maps to local staff
     SyncService.I.onSynced = () async {
       await catalog.reload();
       await customers.reload();
+      sales.bump(); // reports + POS strip refresh with cloud sales
     };
     SyncService.I.start();
   } catch (_) {

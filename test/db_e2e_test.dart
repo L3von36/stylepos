@@ -85,7 +85,7 @@ void main() {
       settings: settings,
     );
 
-    expect(sale.receiptNo, 'R-000001');
+    expect(RegExp(r'^R-[A-Z0-9]{6}-000001$').hasMatch(sale.receiptNo), isTrue);
     expect(sale.total, closeTo(sale.subtotal - 10 + sale.tax, 0.01));
     expect(sale.changeDue, closeTo(100000 - sale.total, 0.01));
     expect(sale.customerName, walkIn.name);

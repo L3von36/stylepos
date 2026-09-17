@@ -45,7 +45,7 @@ class DB {
 
     _instance = await openDatabase(
       dbPath,
-      version: 3,
+      version: 4,
       onConfigure: (db) => db.execute('PRAGMA foreign_keys = ON'),
       onUpgrade: (db, oldVersion, newVersion) async {
         // v2: product photos (relative filename inside the app images dir).
@@ -75,6 +75,23 @@ class DB {
             await db.execute('UPDATE $t SET updated_at = $now');
           }
         }
+        // v4: sales history sync (Phase 2). The three sales tables gain the
+        // same sync bookkeeping; they are append-only (refunds are a status
+        // change), so no tombstone column is needed. Local staff rows link
+        // to their cloud identity so pulled sales attribute to the right
+        // cashier on every device.
+        if (oldVersion < 4) {
+          await db.execute('ALTER TABLE users ADD COLUMN cloud_id TEXT');
+          for (final t in const ['sales', 'sale_items', 'stock_movements']) {
+            await db.execute('ALTER TABLE $t ADD COLUMN cloud_id TEXT');
+            await db.execute(
+                'ALTER TABLE $t ADD COLUMN dirty INTEGER NOT NULL DEFAULT 0');
+            await db.execute(
+                'ALTER TABLE $t ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0');
+          }
+          // Keep the original order of history rows.
+          await db.execute('UPDATE sales SET updated_at = created_at');
+        }
       },
       onCreate: (db, version) async {
         await db.execute('''
@@ -86,7 +103,8 @@ class DB {
             salt TEXT NOT NULL,
             role TEXT NOT NULL DEFAULT 'cashier',
             active INTEGER NOT NULL DEFAULT 1,
-            created_at INTEGER NOT NULL
+            created_at INTEGER NOT NULL,
+            cloud_id TEXT
           )
         ''');
         await db.execute('''
@@ -166,7 +184,10 @@ class DB {
             amount_paid REAL NOT NULL DEFAULT 0,
             change_due REAL NOT NULL DEFAULT 0,
             status TEXT NOT NULL DEFAULT 'completed',
-            created_at INTEGER NOT NULL
+            created_at INTEGER NOT NULL,
+            cloud_id TEXT,
+            dirty INTEGER NOT NULL DEFAULT 0,
+            updated_at INTEGER NOT NULL DEFAULT 0
           )
         ''');
         await db.execute('CREATE INDEX idx_sales_created ON sales(created_at)');
@@ -180,7 +201,10 @@ class DB {
             variant_desc TEXT NOT NULL,
             unit_price REAL NOT NULL DEFAULT 0,
             qty INTEGER NOT NULL DEFAULT 0,
-            line_total REAL NOT NULL DEFAULT 0
+            line_total REAL NOT NULL DEFAULT 0,
+            cloud_id TEXT,
+            dirty INTEGER NOT NULL DEFAULT 0,
+            updated_at INTEGER NOT NULL DEFAULT 0
           )
         ''');
         await db.execute('CREATE INDEX idx_sale_items_sale ON sale_items(sale_id)');
@@ -192,7 +216,10 @@ class DB {
             reason TEXT NOT NULL,
             note TEXT,
             user_id INTEGER,
-            created_at INTEGER NOT NULL
+            created_at INTEGER NOT NULL,
+            cloud_id TEXT,
+            dirty INTEGER NOT NULL DEFAULT 0,
+            updated_at INTEGER NOT NULL DEFAULT 0
           )
         ''');
         await db.execute('''
