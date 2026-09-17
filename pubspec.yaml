@@ -1,7 +1,7 @@
 name: stylepos
 description: "StylePOS - an offline-first point-of-sale app for clothing shops, built with Flutter (Android + Windows)."
 publish_to: 'none'
-version: 1.4.1+6
+version: 1.5.0+7
 
 environment:
   sdk: ^3.13.3
@@ -9,7 +9,6 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  cupertino_icons: ^1.0.8
 
   # State management
   provider: ^6.1.2
