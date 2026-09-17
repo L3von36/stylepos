@@ -30,11 +30,29 @@ android {
         versionName = flutter.versionName
     }
 
+    // Permanent upload signing key, provided by CI through environment
+    // variables (GitHub Actions secrets). Absent locally -> debug signing.
+    val uploadKeystorePath = System.getenv("STYLEPOS_UPLOAD_KEYSTORE")
+
+    signingConfigs {
+        if (uploadKeystorePath != null) {
+            create("upload") {
+                storeFile = file(uploadKeystorePath)
+                storePassword = System.getenv("STYLEPOS_UPLOAD_KEY_PASSWORD")
+                keyAlias = System.getenv("STYLEPOS_UPLOAD_KEY_ALIAS") ?: "stylepos"
+                keyPassword = System.getenv("STYLEPOS_UPLOAD_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = if (uploadKeystorePath != null) {
+                signingConfigs.getByName("upload")
+            } else {
+                // Local development fallback only.
+                signingConfigs.getByName("debug")
+            }
             // Shrink Java/Kotlin bytecode and unused Android resources with R8.
             // The APK is dominated by native libraries; this trims the JVM side.
             isMinifyEnabled = true

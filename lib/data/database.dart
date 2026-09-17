@@ -13,6 +13,14 @@ import '../services/hash.dart';
 class DB {
   static Database? _instance;
 
+  /// Closes the pooled database and forgets it, so the next instance()
+  /// call reopens (and sees a replaced file). Used by backup restore.
+  static Future<void> closeAndReset() async {
+    final db = _instance;
+    _instance = null;
+    await db?.close();
+  }
+
   /// Optional override of the folder holding stylepos.db.
   /// Used by tests to run against a throwaway database.
   static String? _dirOverride;

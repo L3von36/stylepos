@@ -44,7 +44,16 @@ jobs:
       - name: Run tests
         run: flutter test
 
+      - name: Restore upload signing key
+        env:
+          STYLEPOS_UPLOAD_KEY_B64: ${{ secrets.ANDROID_UPLOAD_KEY_B64 }}
+        run: echo -n "$STYLEPOS_UPLOAD_KEY_B64" | base64 -d > "$RUNNER_TEMP/stylepos-upload.keystore"
+
       - name: Build release APKs (per-ABI split + obfuscated)
+        env:
+          STYLEPOS_UPLOAD_KEYSTORE: ${{ runner.temp }}/stylepos-upload.keystore
+          STYLEPOS_UPLOAD_KEY_PASSWORD: ${{ secrets.ANDROID_UPLOAD_KEY_PASSWORD }}
+          STYLEPOS_UPLOAD_KEY_ALIAS: ${{ secrets.ANDROID_UPLOAD_KEY_ALIAS }}
         run: >-
           flutter build apk --release --split-per-abi
           --obfuscate --split-debug-info=build/app/debug-symbols/android

@@ -1,6 +1,13 @@
-import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'dart:io' show File, Platform, exit;
 
+import 'package:file_picker/file_picker.dart';
+import 'package:file_selector/file_selector.dart';
+import 'package:flutter/material.dart';
+import 'package:path/path.dart' as p;
+import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
+
+import '../../services/backup_service.dart';
 import '../../state/auth.dart';
 import '../../state/settings.dart';
 import '../../widgets/ui.dart';
@@ -15,6 +22,7 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
+  bool _busy = false;
   late final TextEditingController _shopName;
   late final TextEditingController _address;
   late final TextEditingController _phone;
@@ -66,6 +74,111 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (mounted) {
       ScaffoldMessenger.of(context)
           .showSnackBar(const SnackBar(content: Text('Settings saved')));
+    }
+  }
+
+  Future<void> _toast(String msg, {bool error = false}) async {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(msg),
+      backgroundColor: error ? AppColors.danger : null,
+    ));
+  }
+
+  /// Creates the backup zip, then shares it (phones) or saves it (desktop).
+  Future<void> _exportBackup() async {
+    setState(() => _busy = true);
+    try {
+      final path = await BackupService.createBackup();
+      if (!mounted) return;
+      if (Platform.isAndroid || Platform.isIOS) {
+        await SharePlus.instance.share(ShareParams(
+          files: [XFile(path, mimeType: 'application/zip')],
+          subject: 'StylePOS backup',
+          text: 'StylePOS shop backup — keep this file somewhere safe.',
+        ));
+      } else {
+        final loc = await getSaveLocation(suggestedName: p.basename(path));
+        if (loc != null) {
+          await File(path).copy(loc.path);
+          if (mounted) _toast('Backup saved');
+        }
+      }
+    } on BackupException catch (e) {
+      await _toast(e.message, error: true);
+    } catch (_) {
+      await _toast('Backup failed — please try again', error: true);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  /// Picks a backup file, confirms, then replaces all shop data on this
+  /// device. Prompts for an app restart afterwards.
+  Future<void> _restoreBackup() async {
+    String? picked;
+    if (Platform.isAndroid || Platform.isIOS) {
+      final res = await FilePicker.platform.pickFiles(type: FileType.any);
+      picked = res?.files.single.path;
+    } else {
+      final f = await openFile(acceptedTypeGroups: const [
+        XTypeGroup(
+            label: 'StylePOS backup', extensions: ['stylepos', 'zip']),
+      ]);
+      picked = f?.path;
+    }
+    if (picked == null || !mounted) return;
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Restore this backup?'),
+        content: const Text(
+            'Everything currently on this device — products, sales, '
+            'customers and photos — will be REPLACED by the backup. '
+            'This cannot be undone.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel')),
+          FilledButton(
+              style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.danger,
+                  foregroundColor: Colors.white),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Replace everything')),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+
+    setState(() => _busy = true);
+    try {
+      await BackupService.restoreBackup(picked);
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Restore complete'),
+          content: const Text(
+              'Your shop data was restored. Close and reopen StylePOS '
+              'now to finish.'),
+          actions: [
+            FilledButton(
+              onPressed: () => exit(0),
+              child: const Text('Close StylePOS'),
+            ),
+          ],
+        ),
+      );
+    } on BackupException catch (e) {
+      await _toast(e.message, error: true);
+    } catch (_) {
+      await _toast('Restore failed — the backup file may be damaged',
+          error: true);
+    } finally {
+      if (mounted) setState(() => _busy = false);
     }
   }
 
@@ -214,6 +327,60 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       MaterialPageRoute(builder: (_) => const UsersScreen())),
                 ),
               ),
+
+              const SizedBox(height: AppSpace.s4),
+
+              // --- backup & restore ---
+              SectionCard(
+                icon: Icons.backup_outlined,
+                title: 'Backup & restore',
+                subtitle:
+                    'One file with your whole shop — database + product photos',
+                children: [
+                  Text(
+                    'Export a backup and keep it away from this device '
+                    '(WhatsApp to yourself, email, USB, Google Drive). '
+                    'If this phone is ever lost or replaced, Restore puts '
+                    'everything back. Make a fresh backup at least weekly.',
+                    style: TextStyle(
+                        fontSize: 12.5,
+                        color: AppColors.muted,
+                        height: 1.45),
+                  ),
+                  const SizedBox(height: AppSpace.s3),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: FilledButton.icon(
+                          style: FilledButton.styleFrom(
+                              minimumSize: const Size(0, 46)),
+                          onPressed: _busy ? null : _exportBackup,
+                          icon: const Icon(Icons.file_upload_outlined,
+                              size: 18),
+                          label: const Text('Export backup'),
+                        ),
+                      ),
+                      const SizedBox(width: AppSpace.s3),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            minimumSize: const Size(0, 46),
+                            foregroundColor: AppColors.danger,
+                          ),
+                          onPressed: _busy ? null : _restoreBackup,
+                          icon: const Icon(Icons.restore_outlined, size: 18),
+                          label: const Text('Restore'),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (_busy) ...[
+                    const SizedBox(height: AppSpace.s3),
+                    const LinearProgressIndicator(),
+                  ],
+                ],
+              ),
+              const SizedBox(height: AppSpace.s4),
 
               // --- about ---
               Card(
