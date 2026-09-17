@@ -11,6 +11,7 @@ import '../../services/backup_service.dart';
 import '../../state/auth.dart';
 import '../../state/settings.dart';
 import '../../widgets/ui.dart';
+import 'cloud_sync_card.dart';
 import 'users_screen.dart';
 
 /// Shop settings (admin): profile, currency, tax, loyalty.
@@ -327,6 +328,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       MaterialPageRoute(builder: (_) => const UsersScreen())),
                 ),
               ),
+
+              const SizedBox(height: AppSpace.s4),
+
+              // --- cloud sync ---
+              const CloudSyncCard(),
 
               const SizedBox(height: AppSpace.s4),
 

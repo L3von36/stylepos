@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'screens/home_shell.dart';
 import 'screens/login_screen.dart';
+import 'services/cloud_config.dart';
 import 'services/images.dart';
+import 'services/sync_service.dart';
 import 'state/auth.dart';
 import 'state/cart.dart';
 import 'state/catalog.dart';
@@ -31,6 +34,20 @@ Future<void> main() async {
   await customers.reload();
   // Restore any sales parked (held) before the app last closed.
   await cart.loadHeld();
+
+  // Cloud sync (Supabase): offline-safe — failing to reach the cloud
+  // must never stop the POS, so init is best-effort.
+  try {
+    await Supabase.initialize(
+        url: CloudConfig.url, publishableKey: CloudConfig.publishableKey);
+    SyncService.I.onSynced = () async {
+      await catalog.reload();
+      await customers.reload();
+    };
+    SyncService.I.start();
+  } catch (_) {
+    // No network / Supabase unreachable — the app stays fully offline.
+  }
 
   runApp(StylePosApp(
     settings: settings,

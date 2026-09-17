@@ -1,7 +1,7 @@
 name: stylepos
 description: "StylePOS - an offline-first point-of-sale app for clothing shops, built with Flutter (Android + Windows)."
 publish_to: 'none'
-version: 1.6.0+8
+version: 1.7.0+9
 
 environment:
   sdk: ^3.13.3
@@ -43,6 +43,10 @@ dependencies:
   # Product photos: camera/gallery on phones, file dialog on desktop
   image_picker: ^1.1.2
   file_selector: ^1.0.3
+
+  # Cloud sync (Supabase): auth + database mirror + photo storage
+  supabase_flutter: ^2.9.0
+  uuid: ^4.5.1
 
 dev_dependencies:
   flutter_test:

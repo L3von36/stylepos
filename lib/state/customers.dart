@@ -1,7 +1,13 @@
 import 'package:flutter/foundation.dart';
+import 'package:uuid/uuid.dart';
 
 import '../data/database.dart';
 import '../models/customer.dart';
+import '../services/sync_service.dart';
+
+const _uuid = Uuid();
+
+int _now() => DateTime.now().millisecondsSinceEpoch ~/ 1000;
 
 class CustomersProvider extends ChangeNotifier {
   List<Customer> customers = [];
@@ -12,7 +18,8 @@ class CustomersProvider extends ChangeNotifier {
     notifyListeners();
     try {
       final db = await DB.instance();
-      final rows = await db.query('customers', orderBy: 'name');
+      final rows = await db.query('customers',
+          where: 'deleted = 0', orderBy: 'name');
       customers = rows.map(Customer.fromMap).toList();
     } finally {
       loading = false;
@@ -23,24 +30,30 @@ class CustomersProvider extends ChangeNotifier {
   Future<void> save(Customer c) async {
     final db = await DB.instance();
     if (c.id == null) {
-      await db.insert('customers', c.toMap());
+      final m = c.toMap();
+      m['cloud_id'] = _uuid.v4();
+      m['dirty'] = 1;
+      m['updated_at'] = _now();
+      await db.insert('customers', m);
     } else {
-      await db.update('customers', c.toMap(),
-          where: 'id = ?', whereArgs: [c.id]);
+      await db.update('customers', {
+        ...c.toMap(),
+        'dirty': 1,
+        'updated_at': _now(),
+      }, where: 'id = ?', whereArgs: [c.id]);
     }
     await reload();
+    SyncService.I.scheduleSync();
   }
 
-  /// Returns null on success, or an error (e.g. customer has sales history).
+  /// Soft-deletes the customer (tombstone) so sales history joins stay
+  /// intact and the deletion propagates to the other devices on sync.
   Future<String?> delete(Customer c) async {
     final db = await DB.instance();
-    final used = await db.query('sales',
-        where: 'customer_id = ?', whereArgs: [c.id], limit: 1);
-    if (used.isNotEmpty) {
-      return 'Cannot delete: this customer has sales history. Edit instead.';
-    }
-    await db.delete('customers', where: 'id = ?', whereArgs: [c.id]);
+    await db.update('customers', {'deleted': 1, 'dirty': 1, 'updated_at': _now()},
+        where: 'id = ?', whereArgs: [c.id]);
     await reload();
+    SyncService.I.scheduleSync();
     return null;
   }
 

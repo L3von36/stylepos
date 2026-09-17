@@ -26,11 +26,17 @@ void main() {
     } catch (_) {}
   });
 
-  test('v1 database is upgraded to v2 and gains products.image', () async {
+  test('v1 database is upgraded to v3 and gains sync columns', () async {
     // -- arrange: build a minimal version-1 database by hand --
     final v1 = await databaseFactory.openDatabase(
       p.join(tempDir.path, 'stylepos.db'),
       options: OpenDatabaseOptions(version: 1, onCreate: (db, _) async {
+        await db.execute('''
+          CREATE TABLE categories (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL UNIQUE
+          )
+        ''');
         await db.execute('''
           CREATE TABLE products (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -43,29 +49,64 @@ void main() {
             created_at INTEGER NOT NULL
           )
         ''');
+        await db.execute('''
+          CREATE TABLE variants (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            product_id INTEGER NOT NULL,
+            size TEXT NOT NULL DEFAULT '',
+            color TEXT NOT NULL DEFAULT '',
+            sku TEXT NOT NULL,
+            barcode TEXT,
+            price REAL NOT NULL DEFAULT 0,
+            cost REAL NOT NULL DEFAULT 0,
+            stock INTEGER NOT NULL DEFAULT 0,
+            archived INTEGER NOT NULL DEFAULT 0
+          )
+        ''');
+        await db.execute('''
+          CREATE TABLE customers (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            phone TEXT,
+            email TEXT,
+            notes TEXT,
+            points INTEGER NOT NULL DEFAULT 0,
+            created_at INTEGER NOT NULL
+          )
+        ''');
         await db.insert('products', {
           'name': 'Legacy Tee',
           'low_stock': 5,
           'archived': 0,
           'created_at': 1700000000,
         });
+        await db.insert('customers', {
+          'name': 'Legacy Customer',
+          'created_at': 1700000000,
+        });
       }),
     );
     await v1.close();
 
-    // -- act: open through the app (triggers onUpgrade 1 -> 2) --
+    // -- act: open through the app (triggers onUpgrade 1 -> 3) --
     final db = await DB.instance();
     final version = await db.getVersion();
     final cols = await db.rawQuery('PRAGMA table_info(products)');
     final colNames = cols.map((c) => c['name']).toSet();
 
     // -- assert --
-    expect(version, 2);
-    expect(colNames, contains('image'));
+    expect(version, 3);
+    expect(colNames, containsAll(['image', 'cloud_id', 'dirty', 'deleted']));
     // pre-existing row survived
     final legacy = await db.query('products');
     expect(legacy.single['name'], 'Legacy Tee');
     expect(legacy.single['image'], isNull);
+    // sync bookkeeping: timestamped, cloud identity left open for adoption
+    expect(legacy.single['cloud_id'], isNull);
+    expect(legacy.single['updated_at'], greaterThan(0));
+    final legacyCust = await db.query('customers');
+    expect(legacyCust.single['name'], 'Legacy Customer');
+    expect(legacyCust.single['cloud_id'], isNull);
 
     // image writes work on the migrated schema
     final updated = Product(

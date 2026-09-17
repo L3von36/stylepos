@@ -1,8 +1,14 @@
 import 'package:flutter/foundation.dart' hide Category;
+import 'package:uuid/uuid.dart';
 
 import '../data/database.dart';
 import '../models/category.dart';
 import '../models/product.dart';
+import '../services/sync_service.dart';
+
+const _uuid = Uuid();
+
+int _now() => DateTime.now().millisecondsSinceEpoch ~/ 1000;
 
 /// Loads and manages products, variants, categories and stock movements.
 class CatalogProvider extends ChangeNotifier {
@@ -15,18 +21,19 @@ class CatalogProvider extends ChangeNotifier {
     notifyListeners();
     try {
       final db = await DB.instance();
-      final catRows = await db.query('categories', orderBy: 'name');
+      final catRows = await db.query('categories',
+          where: 'deleted = 0', orderBy: 'name');
       categories = catRows.map(Category.fromMap).toList();
 
       final prodRows = await db.query('products',
-          where: 'archived = 0', orderBy: 'name');
+          where: 'archived = 0 AND deleted = 0', orderBy: 'name');
       final prodIds = prodRows.map((r) => r['id'] as int).toList();
 
       final Map<int, List<ProductVariant>> byProduct = {};
       if (prodIds.isNotEmpty) {
         final placeholders = List.filled(prodIds.length, '?').join(',');
         final varRows = await db.query('variants',
-            where: 'product_id IN ($placeholders) AND archived = 0',
+            where: 'product_id IN ($placeholders) AND archived = 0 AND deleted = 0',
             whereArgs: prodIds,
             orderBy: 'id');
         for (final r in varRows) {
@@ -57,27 +64,39 @@ class CatalogProvider extends ChangeNotifier {
 
   Future<void> addCategory(String name) async {
     final db = await DB.instance();
-    await db.insert('categories', Category(name: name.trim()).toMap());
+    final m = Category(name: name.trim()).toMap();
+    m['cloud_id'] = _uuid.v4();
+    m['dirty'] = 1;
+    m['updated_at'] = _now();
+    await db.insert('categories', m);
     await reload();
+    SyncService.I.scheduleSync();
   }
 
   Future<void> renameCategory(Category c, String newName) async {
     final db = await DB.instance();
-    await db.update('categories', Category(name: newName.trim()).toMap(),
-        where: 'id = ?', whereArgs: [c.id]);
+    await db.update('categories', {
+      ...Category(name: newName.trim()).toMap(),
+      'dirty': 1,
+      'updated_at': _now(),
+    }, where: 'id = ?', whereArgs: [c.id]);
     await reload();
+    SyncService.I.scheduleSync();
   }
 
   /// Returns null on success, or an error (e.g. products still assigned).
   Future<String?> deleteCategory(Category c) async {
     final db = await DB.instance();
     final used = await db.query('products',
-        where: 'category_id = ?', whereArgs: [c.id], limit: 1);
+        where: 'category_id = ? AND deleted = 0', whereArgs: [c.id], limit: 1);
     if (used.isNotEmpty) {
       return 'Cannot delete: products are still assigned to this category.';
     }
-    await db.delete('categories', where: 'id = ?', whereArgs: [c.id]);
+    // Soft delete so other devices learn about it on the next sync.
+    await db.update('categories', {'deleted': 1, 'dirty': 1, 'updated_at': _now()},
+        where: 'id = ?', whereArgs: [c.id]);
     await reload();
+    SyncService.I.scheduleSync();
     return null;
   }
 
@@ -87,23 +106,34 @@ class CatalogProvider extends ChangeNotifier {
   /// `removeVariantIds` archives variants that were removed in the editor.
   Future<void> saveProduct(Product product, {List<int>? removeVariantIds}) async {
     final db = await DB.instance();
-    final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    final now = _now();
 
     await db.transaction((txn) async {
       int pid;
       if (product.id == null) {
-        pid = await txn.insert(
-            'products', product.copyWith(createdAt: now).toMap());
+        final m = product.copyWith(createdAt: now).toMap();
+        m['cloud_id'] = _uuid.v4();
+        m['dirty'] = 1;
+        m['updated_at'] = now;
+        pid = await txn.insert('products', m);
       } else {
         pid = product.id!;
-        await txn.update('products', product.toMap(),
-            where: 'id = ?', whereArgs: [pid]);
+        await txn.update('products', {
+          ...product.toMap(),
+          'dirty': 1,
+          'updated_at': now,
+        }, where: 'id = ?', whereArgs: [pid]);
       }
 
       for (final v in product.variants) {
         final attached = v.copyWith(productId: pid);
+        Map<String, Object?> vm;
         if (attached.id == null) {
-          final vid = await txn.insert('variants', attached.toMap());
+          vm = attached.toMap()
+            ..['cloud_id'] = _uuid.v4()
+            ..['dirty'] = 1
+            ..['updated_at'] = now;
+          final vid = await txn.insert('variants', vm);
           if (attached.stock > 0) {
             await txn.insert('stock_movements', {
               'variant_id': vid,
@@ -115,25 +145,30 @@ class CatalogProvider extends ChangeNotifier {
             });
           }
         } else {
-          await txn.update('variants', attached.toMap(),
-              where: 'id = ?', whereArgs: [attached.id]);
+          await txn.update('variants', {
+            ...attached.toMap(),
+            'dirty': 1,
+            'updated_at': now,
+          }, where: 'id = ?', whereArgs: [attached.id]);
         }
       }
 
       for (final vid in removeVariantIds ?? const <int>[]) {
-        await txn.update('variants', {'archived': 1},
+        await txn.update('variants', {'archived': 1, 'dirty': 1, 'updated_at': now},
             where: 'id = ?', whereArgs: [vid]);
       }
     });
 
     await reload();
+    SyncService.I.scheduleSync();
   }
 
   Future<void> archiveProduct(Product product) async {
     final db = await DB.instance();
-    await db.update('products', {'archived': 1},
+    await db.update('products', {'archived': 1, 'dirty': 1, 'updated_at': _now()},
         where: 'id = ?', whereArgs: [product.id]);
     await reload();
+    SyncService.I.scheduleSync();
   }
 
   /// Applies a signed stock delta to a variant and records the movement.
@@ -141,10 +176,10 @@ class CatalogProvider extends ChangeNotifier {
       ProductVariant variant, int delta, String reason, String? note, int? userId) async {
     if (delta == 0) return;
     final db = await DB.instance();
-    final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    final now = _now();
     await db.transaction((txn) async {
       final newStock = (variant.stock + delta).clamp(0, 1 << 30);
-      await txn.update('variants', {'stock': newStock},
+      await txn.update('variants', {'stock': newStock, 'dirty': 1, 'updated_at': now},
           where: 'id = ?', whereArgs: [variant.id]);
       await txn.insert('stock_movements', {
         'variant_id': variant.id,
@@ -156,6 +191,7 @@ class CatalogProvider extends ChangeNotifier {
       });
     });
     await reload();
+    SyncService.I.scheduleSync();
   }
 
   /// Exact SKU / barcode lookup used by the POS scan-in field.

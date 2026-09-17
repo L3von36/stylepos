@@ -45,12 +45,35 @@ class DB {
 
     _instance = await openDatabase(
       dbPath,
-      version: 2,
+      version: 3,
       onConfigure: (db) => db.execute('PRAGMA foreign_keys = ON'),
       onUpgrade: (db, oldVersion, newVersion) async {
         // v2: product photos (relative filename inside the app images dir).
         if (oldVersion < 2) {
           await db.execute('ALTER TABLE products ADD COLUMN image TEXT');
+        }
+        // v3: cloud-sync bookkeeping (see services/sync_service.dart).
+        if (oldVersion < 3) {
+          final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+          const tables = ['categories', 'products', 'variants', 'customers'];
+          for (final t in tables) {
+            await db.execute('ALTER TABLE $t ADD COLUMN cloud_id TEXT');
+            await db.execute(
+                'ALTER TABLE $t ADD COLUMN dirty INTEGER NOT NULL DEFAULT 0');
+            await db.execute(
+                'ALTER TABLE $t ADD COLUMN deleted INTEGER NOT NULL DEFAULT 0');
+            await db.execute(
+                'ALTER TABLE $t ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0');
+            if (t == 'products') {
+              await db.execute(
+                  'ALTER TABLE products ADD COLUMN cloud_image TEXT');
+            }
+            // Pre-existing rows keep cloud_id NULL so the pull step can
+            // ADOPT them onto matching cloud rows (same barcode/SKU/name)
+            // instead of duplicating them. Rows that end up unmatched are
+            // pushed as new by the sync engine.
+            await db.execute('UPDATE $t SET updated_at = $now');
+          }
         }
       },
       onCreate: (db, version) async {
@@ -69,7 +92,11 @@ class DB {
         await db.execute('''
           CREATE TABLE categories (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL UNIQUE
+            name TEXT NOT NULL UNIQUE,
+            cloud_id TEXT,
+            dirty INTEGER NOT NULL DEFAULT 0,
+            deleted INTEGER NOT NULL DEFAULT 0,
+            updated_at INTEGER NOT NULL DEFAULT 0
           )
         ''');
         await db.execute('''
@@ -82,7 +109,12 @@ class DB {
             description TEXT,
             low_stock INTEGER NOT NULL DEFAULT 5,
             archived INTEGER NOT NULL DEFAULT 0,
-            created_at INTEGER NOT NULL
+            created_at INTEGER NOT NULL,
+            cloud_id TEXT,
+            cloud_image TEXT,
+            dirty INTEGER NOT NULL DEFAULT 0,
+            deleted INTEGER NOT NULL DEFAULT 0,
+            updated_at INTEGER NOT NULL DEFAULT 0
           )
         ''');
         await db.execute('''
@@ -96,7 +128,11 @@ class DB {
             price REAL NOT NULL DEFAULT 0,
             cost REAL NOT NULL DEFAULT 0,
             stock INTEGER NOT NULL DEFAULT 0,
-            archived INTEGER NOT NULL DEFAULT 0
+            archived INTEGER NOT NULL DEFAULT 0,
+            cloud_id TEXT,
+            dirty INTEGER NOT NULL DEFAULT 0,
+            deleted INTEGER NOT NULL DEFAULT 0,
+            updated_at INTEGER NOT NULL DEFAULT 0
           )
         ''');
         await db.execute('CREATE INDEX idx_variants_product ON variants(product_id)');
@@ -109,7 +145,11 @@ class DB {
             email TEXT,
             notes TEXT,
             points INTEGER NOT NULL DEFAULT 0,
-            created_at INTEGER NOT NULL
+            created_at INTEGER NOT NULL,
+            cloud_id TEXT,
+            dirty INTEGER NOT NULL DEFAULT 0,
+            deleted INTEGER NOT NULL DEFAULT 0,
+            updated_at INTEGER NOT NULL DEFAULT 0
           )
         ''');
         await db.execute('''
@@ -331,5 +371,13 @@ class DB {
       'points': 0,
       'created_at': now,
     });
+
+    // Sync bookkeeping for the seeded rows: timestamped, but cloud_id
+    // stays NULL so the first pull can adopt them onto cloud rows
+    // (matched by barcode / SKU / name) instead of duplicating.
+    await db.execute('UPDATE categories SET updated_at = $now');
+    await db.execute('UPDATE products SET updated_at = $now');
+    await db.execute('UPDATE variants SET updated_at = $now');
+    await db.execute('UPDATE customers SET updated_at = $now');
   }
 }

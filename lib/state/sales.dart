@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 
 import '../data/database.dart';
 import '../models/sale.dart';
+import '../services/sync_service.dart';
 import 'cart.dart';
 import 'settings.dart';
 
@@ -66,8 +67,8 @@ class SalesProvider extends ChangeNotifier {
           'line_total': item.lineTotal,
         });
         await txn.rawUpdate(
-          'UPDATE variants SET stock = MAX(stock - ?, 0) WHERE id = ?',
-          [item.qty, item.variant.id],
+          'UPDATE variants SET stock = MAX(stock - ?, 0), dirty = 1, updated_at = ? WHERE id = ?',
+          [item.qty, now, item.variant.id],
         );
         await txn.insert('stock_movements', {
           'variant_id': item.variant.id,
@@ -84,8 +85,8 @@ class SalesProvider extends ChangeNotifier {
         final earned = (totals.total / settings.loyaltyStep).floor();
         if (earned > 0) {
           await txn.rawUpdate(
-            'UPDATE customers SET points = points + ? WHERE id = ?',
-            [earned, cart.customer!.id],
+            'UPDATE customers SET points = points + ?, dirty = 1, updated_at = ? WHERE id = ?',
+            [earned, now, cart.customer!.id],
           );
         }
       }
@@ -109,6 +110,7 @@ class SalesProvider extends ChangeNotifier {
 
     revision++;
     notifyListeners();
+    SyncService.I.scheduleSync();
     return sale;
   }
 
@@ -167,7 +169,8 @@ class SalesProvider extends ChangeNotifier {
         final qty = r['qty'] as int;
         final variantId = r['variant_id'] as int;
         await txn.rawUpdate(
-            'UPDATE variants SET stock = stock + ? WHERE id = ?', [qty, variantId]);
+            'UPDATE variants SET stock = stock + ?, dirty = 1, updated_at = ? WHERE id = ?',
+            [qty, now, variantId]);
         await txn.insert('stock_movements', {
           'variant_id': variantId,
           'qty': qty,
@@ -180,6 +183,7 @@ class SalesProvider extends ChangeNotifier {
     });
     revision++;
     notifyListeners();
+    SyncService.I.scheduleSync();
   }
 
   // ---- report queries (completed sales only) ----
