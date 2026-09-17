@@ -63,11 +63,11 @@ class _HomeShellState extends State<HomeShell> {
                 end: Alignment.bottomRight,
                 colors: [Color(0xFF4F46E5), Color(0xFF6D28D9)],
               ),
-              borderRadius: BorderRadius.circular(9),
+              borderRadius: BorderRadius.circular(AppRadius.sm),
             ),
             child: const Icon(Icons.storefront_rounded, size: 17, color: Colors.white),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: AppSpace.s2 + 2),
           Text(settings.shopName),
         ],
       ),
@@ -78,15 +78,15 @@ class _HomeShellState extends State<HomeShell> {
           onPressed: () => _showChangePassword(context),
         ),
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 6),
+          padding: const EdgeInsets.symmetric(horizontal: AppSpace.s1 + 2),
           child: InkWell(
-            borderRadius: BorderRadius.circular(22),
+            borderRadius: BorderRadius.circular(AppRadius.pill),
             onTap: () => _showChangePassword(context),
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: AppSpace.s3, vertical: AppSpace.s1),
               decoration: BoxDecoration(
                 color: AppColors.surfaceTint,
-                borderRadius: BorderRadius.circular(22),
+                borderRadius: BorderRadius.circular(AppRadius.pill),
                 border: Border.all(color: AppColors.borderSoft),
               ),
               child: Row(
@@ -97,7 +97,7 @@ class _HomeShellState extends State<HomeShell> {
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
                       color: AppColors.primarySoft,
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: BorderRadius.circular(AppRadius.sm),
                     ),
                     child: Text(
                       user.name.isEmpty ? '?' : user.name[0].toUpperCase(),
@@ -105,21 +105,21 @@ class _HomeShellState extends State<HomeShell> {
                           fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.primary),
                     ),
                   ),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: AppSpace.s2),
                   Text(user.name,
                       style: const TextStyle(
                           fontFamily: 'Carlito', fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink)),
-                  const SizedBox(width: 6),
+                  const SizedBox(width: AppSpace.s2),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1.5),
+                    padding: const EdgeInsets.symmetric(horizontal: AppSpace.s2, vertical: 2),
                     decoration: BoxDecoration(
                       color: user.isAdmin ? AppColors.primarySoft : AppColors.infoSoft,
-                      borderRadius: BorderRadius.circular(20),
+                      borderRadius: BorderRadius.circular(AppRadius.pill),
                     ),
                     child: Text(
                       user.isAdmin ? 'Admin' : 'Cashier',
                       style: TextStyle(
-                          fontSize: 10.5,
+                          fontSize: 11,
                           fontWeight: FontWeight.w700,
                           color: user.isAdmin ? AppColors.primaryDark : AppColors.info),
                     ),
@@ -149,7 +149,7 @@ class _HomeShellState extends State<HomeShell> {
             }
           },
         ),
-        const SizedBox(width: 4),
+        const SizedBox(width: AppSpace.s1),
       ],
     );
 
@@ -165,9 +165,9 @@ class _HomeShellState extends State<HomeShell> {
                 selectedIndex: index,
                 onDestinationSelected: (i) => nav.go(i),
                 extended: extended,
-                minExtendedWidth: 190,
+                minExtendedWidth: 192,
                 leading: Padding(
-                  padding: const EdgeInsets.only(top: 14, bottom: 10),
+                  padding: const EdgeInsets.only(top: AppSpace.s4, bottom: AppSpace.s3),
                   child: extended
                       ? null
                       : const SizedBox.shrink(),
@@ -198,14 +198,17 @@ class _HomeShellState extends State<HomeShell> {
         drawer: Drawer(
           backgroundColor: Colors.white,
           shape: const RoundedRectangleBorder(
-            borderRadius: BorderRadius.horizontal(right: Radius.circular(20)),
+            borderRadius: BorderRadius.horizontal(right: Radius.circular(AppRadius.xl)), // M3 modal drawer
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Container(
                 padding: EdgeInsets.only(
-                    top: MediaQuery.of(context).padding.top + 20, left: 20, right: 20, bottom: 22),
+                    top: MediaQuery.of(context).padding.top + AppSpace.s5,
+                    left: AppSpace.s5,
+                    right: AppSpace.s5,
+                    bottom: AppSpace.s6),
                 decoration: const BoxDecoration(
                   gradient: LinearGradient(
                     begin: Alignment.topLeft,
@@ -221,18 +224,18 @@ class _HomeShellState extends State<HomeShell> {
                       height: 44,
                       decoration: BoxDecoration(
                         color: Colors.white.withValues(alpha: 0.16),
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(AppRadius.md),
                       ),
                       child: const Icon(Icons.storefront_rounded, color: Colors.white, size: 24),
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: AppSpace.s3),
                     Text(settings.shopName,
                         style: const TextStyle(
                             fontFamily: 'Carlito',
                             fontSize: 18,
                             fontWeight: FontWeight.w700,
                             color: Colors.white)),
-                    const SizedBox(height: 3),
+                    const SizedBox(height: AppSpace.s1),
                     Text('${user.name} · ${user.isAdmin ? 'Admin' : 'Cashier'}',
                         style: TextStyle(
                             fontFamily: 'Carlito',
@@ -243,7 +246,7 @@ class _HomeShellState extends State<HomeShell> {
               ),
               Expanded(
                 child: ListView(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+                  padding: const EdgeInsets.symmetric(horizontal: AppSpace.s3, vertical: AppSpace.s3),
                   children: [
                     for (var i = 0; i < all.length; i++)
                       Padding(
@@ -254,7 +257,8 @@ class _HomeShellState extends State<HomeShell> {
                           selected: i == index,
                           selectedTileColor: AppColors.primarySoft,
                           selectedColor: AppColors.primary,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(AppRadius.md)),
                           onTap: () {
                             nav.go(i);
                             Navigator.pop(context);
@@ -282,12 +286,12 @@ class _HomeShellState extends State<HomeShell> {
       context: context,
       builder: (c) => StatefulBuilder(
         builder: (c, setD) => AlertDialog(
-          titlePadding: const EdgeInsets.fromLTRB(24, 22, 24, 0),
+          titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
           contentPadding: const EdgeInsets.fromLTRB(24, 16, 24, 4),
           actionsPadding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
           title: const Row(children: [
             Icon(Icons.lock_reset_outlined, size: 22, color: AppColors.primary),
-            SizedBox(width: 10),
+            SizedBox(width: AppSpace.s2 + 2),
             Text('Change password'),
           ]),
           content: SizedBox(
@@ -314,7 +318,7 @@ class _HomeShellState extends State<HomeShell> {
                 ),
                 if (error != null)
                   Padding(
-                    padding: const EdgeInsets.only(top: 10),
+                    padding: const EdgeInsets.only(top: AppSpace.s2),
                     child: Text(error!, style: const TextStyle(color: AppColors.danger, fontSize: 13)),
                   ),
               ],

@@ -48,7 +48,7 @@ class _SalesScreenState extends State<SalesScreen> {
         _sales?.where((s) => !s.isRefunded).fold(0.0, (sum, s) => sum + s.total) ?? 0.0;
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
+      padding: const EdgeInsets.all(AppSpace.s4),
       child: Column(
         children: [
           PageHeader(
@@ -75,7 +75,7 @@ class _SalesScreenState extends State<SalesScreen> {
                   },
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: AppSpace.s3),
               SegmentedButton<int>(
                 showSelectedIcon: false,
                 segments: const [
@@ -92,7 +92,7 @@ class _SalesScreenState extends State<SalesScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: AppSpace.s4),
           Expanded(
             child: _sales == null
                 ? const Center(child: CircularProgressIndicator())
@@ -132,7 +132,7 @@ class _SaleTile extends StatelessWidget {
 
     return Card(
       child: InkWell(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(AppRadius.md),
         onTap: () async {
           await Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => SaleDetailScreen(saleId: sale.id!)));
@@ -142,7 +142,7 @@ class _SaleTile extends StatelessWidget {
           }
         },
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+          padding: const EdgeInsets.symmetric(horizontal: AppSpace.s4, vertical: AppSpace.s3),
           child: Row(
             children: [
               Container(
@@ -150,7 +150,7 @@ class _SaleTile extends StatelessWidget {
                 height: 44,
                 decoration: BoxDecoration(
                   color: sale.isRefunded ? AppColors.dangerSoft : AppColors.primarySoft,
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(AppRadius.md),
                 ),
                 child: Icon(
                   switch (sale.paymentMethod) {
@@ -162,7 +162,7 @@ class _SaleTile extends StatelessWidget {
                   color: sale.isRefunded ? AppColors.danger : AppColors.primary,
                 ),
               ),
-              const SizedBox(width: 13),
+              const SizedBox(width: AppSpace.s3),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -176,7 +176,7 @@ class _SaleTile extends StatelessWidget {
                                 fontSize: 14,
                                 color: AppColors.ink)),
                         if (sale.isRefunded) ...[
-                          const SizedBox(width: 8),
+                          const SizedBox(width: AppSpace.s2),
                           StatusPill.build(context,
                               label: 'Refunded',
                               foreground: AppColors.danger,
@@ -199,12 +199,12 @@ class _SaleTile extends StatelessWidget {
                 style: TextStyle(
                   fontFamily: 'Carlito',
                   fontWeight: FontWeight.w700,
-                  fontSize: 15.5,
+                  fontSize: 15,
                   color: sale.isRefunded ? AppColors.faint : AppColors.ink,
                   decoration: sale.isRefunded ? TextDecoration.lineThrough : null,
                 ),
               ),
-              const SizedBox(width: 6),
+              const SizedBox(width: AppSpace.s2),
               const Icon(Icons.chevron_right_rounded, size: 20, color: AppColors.faint),
             ],
           ),

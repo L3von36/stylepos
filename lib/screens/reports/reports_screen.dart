@@ -62,7 +62,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
     final d30 = _summaries?['30d'];
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(18, 18, 18, 24),
+      padding: const EdgeInsets.fromLTRB(AppSpace.s4, AppSpace.s4, AppSpace.s4, AppSpace.s6),
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 1100),
@@ -145,7 +145,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                   ],
                 );
               }),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpace.s4),
 
               // range selector
               Row(
@@ -156,7 +156,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                           fontSize: 13,
                           fontWeight: FontWeight.w700,
                           color: AppColors.muted)),
-                  const SizedBox(width: 10),
+                  const SizedBox(width: AppSpace.s2),
                   SegmentedButton<int>(
                     showSelectedIcon: false,
                     segments: const [
@@ -172,7 +172,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                   ),
                 ],
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: AppSpace.s4),
 
               // revenue chart
               SectionCard(
@@ -188,7 +188,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                   ),
                 ],
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: AppSpace.s4),
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -211,7 +211,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                       ],
                     ),
                   ),
-                  const SizedBox(width: 14),
+                  const SizedBox(width: AppSpace.s4),
                   Expanded(
                     child: SectionCard(
                       icon: Icons.pie_chart_outline_rounded,
@@ -395,7 +395,7 @@ class _TopProductsBarChart extends StatelessWidget {
                   const TextStyle(
                       fontFamily: 'Carlito',
                       fontSize: 12,
-                      fontWeight: FontWeight.w600,
+                      fontWeight: FontWeight.w700,
                       color: Colors.white),
                   textAlign: TextAlign.center,
                 ),
@@ -440,10 +440,10 @@ class _CategoryPie extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: AppSpace.s2),
         Wrap(
-          spacing: 12,
-          runSpacing: 5,
+          spacing: AppSpace.s3,
+          runSpacing: AppSpace.s1,
           children: [
             for (var i = 0; i < data.length; i++)
               Row(
@@ -457,7 +457,7 @@ class _CategoryPie extends StatelessWidget {
                       shape: BoxShape.circle,
                     ),
                   ),
-                  const SizedBox(width: 5),
+                  const SizedBox(width: AppSpace.s1),
                   Text(data[i].$1,
                       style: const TextStyle(fontFamily: 'Carlito', fontSize: 11.5, color: AppColors.body)),
                 ],

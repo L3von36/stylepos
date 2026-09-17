@@ -74,7 +74,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final auth = context.watch<AuthProvider>();
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(18, 18, 18, 24),
+      padding: const EdgeInsets.fromLTRB(AppSpace.s4, AppSpace.s4, AppSpace.s4, AppSpace.s6),
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 660),
@@ -97,20 +97,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     decoration: const InputDecoration(
                         labelText: 'Shop name (shown on receipts)'),
                   ),
-                  const SizedBox(height: 13),
+                  const SizedBox(height: AppSpace.s3),
                   TextField(
                     controller: _address,
                     decoration:
                         const InputDecoration(labelText: 'Address (receipts)'),
                   ),
-                  const SizedBox(height: 13),
+                  const SizedBox(height: AppSpace.s3),
                   TextField(
                     controller: _phone,
                     keyboardType: TextInputType.phone,
                     decoration:
                         const InputDecoration(labelText: 'Phone (receipts)'),
                   ),
-                  const SizedBox(height: 13),
+                  const SizedBox(height: AppSpace.s3),
                   TextField(
                     controller: _footer,
                     decoration: const InputDecoration(
@@ -118,7 +118,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                 ],
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: AppSpace.s4),
 
               // --- currency & tax ---
               SectionCard(
@@ -135,7 +135,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               labelText: 'Currency code (e.g. KES, USD)'),
                         ),
                       ),
-                      const SizedBox(width: 13),
+                      const SizedBox(width: AppSpace.s3),
                       Expanded(
                         child: TextField(
                           controller: _curSymbol,
@@ -145,7 +145,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 13),
+                  const SizedBox(height: AppSpace.s3),
                   Row(
                     children: [
                       Expanded(
@@ -157,7 +157,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               labelText: 'Tax rate (%)', helperText: '0 disables tax'),
                         ),
                       ),
-                      const SizedBox(width: 13),
+                      const SizedBox(width: AppSpace.s3),
                       Expanded(
                         child: TextField(
                           controller: _lowStock,
@@ -168,7 +168,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 13),
+                  const SizedBox(height: AppSpace.s3),
                   TextField(
                     controller: _loyalty,
                     keyboardType: TextInputType.number,
@@ -177,27 +177,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       helperText: '0 disables loyalty points',
                     ),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: AppSpace.s4),
                   FilledButton.icon(
-                    style: FilledButton.styleFrom(minimumSize: const Size(0, 46)),
+                    style: FilledButton.styleFrom(minimumSize: const Size(0, 48)),
                     onPressed: _save,
                     icon: const Icon(Icons.save_outlined, size: 18),
                     label: const Text('Save settings'),
                   ),
                 ],
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: AppSpace.s4),
 
               // --- users ---
               Card(
                 child: ListTile(
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: AppSpace.s4, vertical: AppSpace.s2),
                   leading: Container(
-                    width: 42,
-                    height: 42,
+                    width: 44,
+                    height: 44,
                     decoration: BoxDecoration(
                       color: AppColors.primarySoft,
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(AppRadius.md),
                     ),
                     child: const Icon(Icons.manage_accounts_outlined,
                         color: AppColors.primary, size: 22),
@@ -213,24 +214,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
               // --- about ---
               Card(
                 child: Padding(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(AppSpace.s4),
                   child: Row(
                     children: [
                       Container(
-                        width: 42,
-                        height: 42,
+                        width: 44,
+                        height: 44,
                         decoration: BoxDecoration(
                           gradient: const LinearGradient(
                             begin: Alignment.topLeft,
                             end: Alignment.bottomRight,
                             colors: [Color(0xFF4F46E5), Color(0xFF6D28D9)],
                           ),
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(AppRadius.md),
                         ),
                         child: const Icon(Icons.storefront_rounded,
                             color: Colors.white, size: 22),
                       ),
-                      const SizedBox(width: 14),
+                      const SizedBox(width: AppSpace.s4),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -241,7 +242,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                     fontSize: 15,
                                     fontWeight: FontWeight.w700,
                                     color: AppColors.ink)),
-                            const SizedBox(height: 2),
+                            const SizedBox(height: AppSpace.s1),
                             Text(
                               'Offline point of sale for clothing shops\n'
                               'Signed in as ${auth.user?.name ?? "-"} '
@@ -256,7 +257,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                 ),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: AppSpace.s6),
             ],
           ),
         ),

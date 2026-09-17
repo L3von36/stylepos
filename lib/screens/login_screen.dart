@@ -60,10 +60,10 @@ class _LoginScreenState extends State<LoginScreen> {
             child: Container(
               width: 920,
               height: 580,
-              margin: const EdgeInsets.all(24),
+              margin: const EdgeInsets.all(AppSpace.s6),
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(24),
+                borderRadius: BorderRadius.circular(AppRadius.xl), // M3 extra-large
                 boxShadow: const [
                   BoxShadow(
                     color: Color(0x14101828),
@@ -119,27 +119,27 @@ class _BrandPane extends StatelessWidget {
           colors: [Color(0xFF4338CA), Color(0xFF4F46E5), Color(0xFF6D28D9)],
         ),
       ),
-      padding: const EdgeInsets.all(44),
+      padding: const EdgeInsets.all(AppSpace.s10),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
               Container(
-                width: 42,
-                height: 42,
+                width: 40,
+                height: 40,
                 decoration: BoxDecoration(
                   color: Colors.white.withValues(alpha: 0.16),
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(AppRadius.md),
                 ),
                 child: const Icon(Icons.storefront_rounded, color: Colors.white, size: 24),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: AppSpace.s3),
               const Text(
                 'StylePOS',
                 style: TextStyle(
                   fontFamily: 'Carlito',
-                  fontSize: 21,
+                  fontSize: 20,
                   fontWeight: FontWeight.w700,
                   color: Colors.white,
                   letterSpacing: 0.3,
@@ -152,13 +152,13 @@ class _BrandPane extends StatelessWidget {
             'Run your shop\nlike a pro.',
             style: TextStyle(
               fontFamily: 'Carlito',
-              fontSize: 34,
+              fontSize: 32, // M3 headlineLarge
               height: 1.15,
               fontWeight: FontWeight.w700,
               color: Colors.white,
             ),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: AppSpace.s4),
           Text(
             'Fast checkout, live stock levels and clear reports —\nall offline, right on your own device.',
             style: TextStyle(
@@ -171,10 +171,10 @@ class _BrandPane extends StatelessWidget {
           const Spacer(),
           const _FeatureRow(Icons.bolt_rounded, 'Scan & sell in seconds',
               'Barcode scanner ready, keyboard friendly'),
-          const SizedBox(height: 14),
+          const SizedBox(height: AppSpace.s4),
           const _FeatureRow(Icons.inventory_2_outlined, 'Per-variant stock',
               'Every size and color tracked separately'),
-          const SizedBox(height: 14),
+          const SizedBox(height: AppSpace.s4),
           const _FeatureRow(Icons.insights_rounded, 'Reports that matter',
               'Revenue, best sellers and category share'),
         ],
@@ -199,11 +199,11 @@ class _FeatureRow extends StatelessWidget {
           height: 36,
           decoration: BoxDecoration(
             color: Colors.white.withValues(alpha: 0.14),
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(AppRadius.sm),
           ),
           child: Icon(icon, size: 19, color: Colors.white),
         ),
-        const SizedBox(width: 12),
+        const SizedBox(width: AppSpace.s3),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -211,7 +211,7 @@ class _FeatureRow extends StatelessWidget {
               Text(title,
                   style: const TextStyle(
                       fontFamily: 'Carlito',
-                      fontSize: 14.5,
+                      fontSize: 14,
                       fontWeight: FontWeight.w700,
                       color: Colors.white)),
               Text(subtitle,
@@ -244,7 +244,7 @@ class _LogoBadge extends StatelessWidget {
           end: Alignment.bottomRight,
           colors: [Color(0xFF4F46E5), Color(0xFF6D28D9)],
         ),
-        borderRadius: BorderRadius.circular(size * 0.28),
+        borderRadius: BorderRadius.circular(AppRadius.lg), // M3 large
         boxShadow: const [BoxShadow(color: Color(0x294F46E5), blurRadius: 18, offset: Offset(0, 8))],
       ),
       child: Icon(Icons.storefront_rounded, color: Colors.white, size: iconSize),
@@ -265,7 +265,9 @@ class _LoginForm extends StatelessWidget {
     final theme = Theme.of(context);
 
     return Padding(
-      padding: EdgeInsets.symmetric(horizontal: compactHeader ? 0 : 44, vertical: compactHeader ? 0 : 36),
+      padding: EdgeInsets.symmetric(
+          horizontal: compactHeader ? 0 : AppSpace.s10,
+          vertical: compactHeader ? 0 : AppSpace.s8),
       child: Form(
         key: state._formKey,
         child: Column(
@@ -278,21 +280,21 @@ class _LoginForm extends StatelessWidget {
                 textAlign: TextAlign.center,
                 style: theme.textTheme.headlineSmall,
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: AppSpace.s1),
               const Text(
                 'Sign in to continue',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontFamily: 'Carlito', fontSize: 13.5, color: AppColors.muted),
               ),
-              const SizedBox(height: 22),
+              const SizedBox(height: AppSpace.s6),
             ] else ...[
               Text('Welcome back', style: theme.textTheme.headlineSmall),
-              const SizedBox(height: 6),
+              const SizedBox(height: AppSpace.s2),
               Text(
                 'Sign in to ${settings.shopName} to open the register.',
                 style: theme.textTheme.bodySmall,
               ),
-              const SizedBox(height: 26),
+              const SizedBox(height: AppSpace.s6),
             ],
             TextFormField(
               controller: state._email,
@@ -305,7 +307,7 @@ class _LoginForm extends StatelessWidget {
               validator: (v) =>
                   (v == null || !v.contains('@')) ? 'Enter a valid email' : null,
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: AppSpace.s4),
             TextFormField(
               controller: state._password,
               obscureText: state._obscure,
@@ -324,12 +326,12 @@ class _LoginForm extends StatelessWidget {
                   (v == null || v.isEmpty) ? 'Enter your password' : null,
             ),
             if (state._error != null) ...[
-              const SizedBox(height: 14),
+              const SizedBox(height: AppSpace.s4),
               Container(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(AppSpace.s3),
                 decoration: BoxDecoration(
                   color: AppColors.dangerSoft,
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
                 ),
                 child: Row(
                   children: [
@@ -359,12 +361,12 @@ class _LoginForm extends StatelessWidget {
                     )
                   : const Text('Sign in'),
             ),
-            const SizedBox(height: 18),
+            const SizedBox(height: AppSpace.s4),
             Container(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(AppSpace.s3),
               decoration: BoxDecoration(
                 color: AppColors.surfaceTint,
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(AppRadius.sm),
                 border: Border.all(color: AppColors.borderSoft),
               ),
               child: Row(
@@ -374,8 +376,8 @@ class _LoginForm extends StatelessWidget {
                   Expanded(
                     child: Text(
                       'First run? Sign in with admin@stylepos.app / admin123, then change the password.',
-                      style: TextStyle(
-                          fontFamily: 'Carlito', fontSize: 12, color: Colors.grey.shade600, height: 1.35),
+                      style: const TextStyle(
+                          fontFamily: 'Carlito', fontSize: 12, color: AppColors.muted, height: 1.35),
                     ),
                   ),
                 ],

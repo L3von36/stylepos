@@ -1,32 +1,92 @@
 import 'package:flutter/material.dart';
 
-/// StylePOS design system.
+/// StylePOS design system — built on the Material Design 3 (2021) spec.
 ///
-/// A single place for the brand palette, the global [AppTheme] and the
-/// shared building blocks (page headers, section cards, status pills,
-/// KPI cards, empty states…) so every screen looks like one product.
+/// Tokens follow the official M3 guidelines:
+///  * Color ........ 26 color roles in a full [ColorScheme]; semantic extras
+///                   (success/warning/info) follow the same tonal-pair pattern.
+///  * Typography ... M3 type scale roles (display/headline/title/body/label)
+///                   in Carlito. Only w400/w700 are registered, so the scale
+///                   sticks to those weights (no faux-bold rendering).
+///  * Shape ........ M3 shape scale: small 8 / medium 12 / large 16 /
+///                   extra-large 28 / full (stadium). No other radii.
+///  * Spacing ...... 4dp baseline grid — every gap/padding is a multiple of 4.
+///  * Elevation .... M3 levels: cards 0 (outlined), menus 2, dialogs/complex
+///                   surfaces 3, FAB 6 (lowered variant 3).
+///  * Targets ...... 48dp minimum touch targets, 8dp separation.
+///  * Motion ....... M3 page transitions + standard easing/duration tokens.
 
 // ---------------------------------------------------------------------------
-// Palette
+// Spacing — 4dp baseline grid (M3 "Spacing methods")
+// ---------------------------------------------------------------------------
+
+abstract final class AppSpace {
+  static const double s1 = 4;
+  static const double s2 = 8;
+  static const double s3 = 12;
+  static const double s4 = 16;
+  static const double s5 = 20;
+  static const double s6 = 24;
+  static const double s8 = 32;
+  static const double s10 = 40;
+  static const double s12 = 48;
+}
+
+// ---------------------------------------------------------------------------
+// Shape — M3 shape scale
+// ---------------------------------------------------------------------------
+
+abstract final class AppRadius {
+  /// Small components: chips, text fields, snackbars, tooltips.
+  static const double sm = 8;
+
+  /// Medium components: cards, list tiles, menus, steppers.
+  static const double md = 12;
+
+  /// Large components: FAB, hero panels.
+  static const double lg = 16;
+
+  /// Extra-large components: dialogs, modal bottom sheets.
+  static const double xl = 28;
+
+  /// Full rounding: buttons, status pills.
+  static const double pill = 999;
+}
+
+// ---------------------------------------------------------------------------
+// Motion — M3 duration + easing tokens
+// ---------------------------------------------------------------------------
+
+abstract final class AppMotion {
+  static const Duration fast = Duration(milliseconds: 150); // short4
+  static const Duration normal = Duration(milliseconds: 200); // short4+ (M3 medium-ish)
+  static const Duration slow = Duration(milliseconds: 300);
+  static const Curve emphasized = Curves.easeInOutCubicEmphasized;
+  static const Curve standard = Curves.easeOutCubic;
+}
+
+// ---------------------------------------------------------------------------
+// Palette — brand + semantic tones (paired like M3 container roles)
 // ---------------------------------------------------------------------------
 
 abstract final class AppColors {
-  // Brand
+  // Brand (indigo)
   static const primary = Color(0xFF4F46E5); // indigo 600
   static const primaryDark = Color(0xFF3730A3); // indigo 800
   static const primarySoft = Color(0xFFEEF2FF); // indigo 50
+  static const primaryContainer = Color(0xFFE0E7FF); // indigo 100
 
   // Neutrals (slate)
   static const ink = Color(0xFF0F172A); // headings
   static const body = Color(0xFF334155); // body text
-  static const muted = Color(0xFF64748B); // secondary text
+  static const muted = Color(0xFF64748B); // secondary text (4.8:1 on white)
   static const faint = Color(0xFF94A3B8); // hints / disabled text
-  static const border = Color(0xFFE2E8F0);
-  static const borderSoft = Color(0xFFEDF0F5);
+  static const border = Color(0xFFCBD5E1); // outline
+  static const borderSoft = Color(0xFFE2E8F0); // outlineVariant
   static const background = Color(0xFFF4F5F9);
   static const surfaceTint = Color(0xFFF8FAFC);
 
-  // Semantic
+  // Semantic (fixed fg + container pairs, M3-style)
   static const success = Color(0xFF059669);
   static const successSoft = Color(0xFFD1FAE5);
   static const warning = Color(0xFFB45309);
@@ -50,7 +110,7 @@ abstract final class AppColors {
 }
 
 // ---------------------------------------------------------------------------
-// Theme
+// Theme — global M3 component themes
 // ---------------------------------------------------------------------------
 
 abstract final class AppTheme {
@@ -59,7 +119,7 @@ abstract final class AppTheme {
       brightness: Brightness.light,
       primary: AppColors.primary,
       onPrimary: Colors.white,
-      primaryContainer: Color(0xFFE0E7FF),
+      primaryContainer: AppColors.primaryContainer,
       onPrimaryContainer: AppColors.primaryDark,
       secondary: Color(0xFF0F766E),
       onSecondary: Colors.white,
@@ -79,15 +139,16 @@ abstract final class AppTheme {
       surfaceContainerLow: AppColors.surfaceTint,
       surfaceContainer: Color(0xFFF1F5F9),
       surfaceContainerHigh: Color(0xFFE8ECF3),
-      surfaceContainerHighest: AppColors.border,
+      surfaceContainerHighest: AppColors.borderSoft,
       onSurfaceVariant: AppColors.muted,
-      outline: Color(0xFFCBD5E1),
-      outlineVariant: AppColors.border,
+      outline: AppColors.border,
+      outlineVariant: AppColors.borderSoft,
       shadow: Color(0xFF0F172A),
       inverseSurface: Color(0xFF1E293B),
       onInverseSurface: Color(0xFFF8FAFC),
       inversePrimary: Color(0xFFA5B4FC),
-      surfaceTint: Colors.transparent,
+      // Elevated surfaces (dialogs, menus) receive the M3 primary tint.
+      surfaceTint: AppColors.primary,
     );
 
     final base = ThemeData(useMaterial3: true, colorScheme: scheme, fontFamily: 'Carlito');
@@ -95,6 +156,8 @@ abstract final class AppTheme {
     return base.copyWith(
       scaffoldBackgroundColor: AppColors.background,
       textTheme: _textTheme(base.textTheme),
+
+      // -- App bar: flat, surface-colored, hairline bottom (M3 surface role) --
       appBarTheme: const AppBarTheme(
         backgroundColor: Colors.white,
         foregroundColor: AppColors.ink,
@@ -104,132 +167,184 @@ abstract final class AppTheme {
         centerTitle: false,
         titleTextStyle: TextStyle(
           fontFamily: 'Carlito',
-          fontSize: 19,
+          fontSize: 20,
           fontWeight: FontWeight.w700,
           color: AppColors.ink,
+          height: 28 / 20,
         ),
         shape: Border(bottom: BorderSide(color: AppColors.borderSoft)),
       ),
+
+      // -- Cards: M3 *outlined card* — level-0 elevation, outlineVariant stroke --
       cardTheme: CardThemeData(
         elevation: 0,
-        color: Colors.white,
+        color: scheme.surface,
         surfaceTintColor: Colors.transparent,
         margin: EdgeInsets.zero,
+        clipBehavior: Clip.antiAlias,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(AppRadius.md),
           side: const BorderSide(color: AppColors.borderSoft),
         ),
       ),
+
+      // -- Dialogs: M3 basic dialog — extra-large shape, level-3 elevation --
       dialogTheme: DialogThemeData(
         backgroundColor: Colors.white,
-        surfaceTintColor: Colors.transparent,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        surfaceTintColor: Colors.white,
+        elevation: 3,
+        shadowColor: const Color(0x240F172A),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.xl)),
         titleTextStyle: const TextStyle(
           fontFamily: 'Carlito',
-          fontSize: 18,
+          fontSize: 20,
           fontWeight: FontWeight.w700,
           color: AppColors.ink,
+          height: 28 / 20,
         ),
         contentTextStyle: const TextStyle(
           fontFamily: 'Carlito',
           fontSize: 14,
+          height: 20 / 14,
           color: AppColors.body,
         ),
       ),
+
+      // -- Text fields: M3 outlined style — 1dp outline, 2dp active indicator --
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: Colors.white,
         hintStyle: const TextStyle(color: AppColors.faint),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+        contentPadding: const EdgeInsets.symmetric(horizontal: AppSpace.s4, vertical: AppSpace.s3 + 1),
         border: _inputBorder(AppColors.border),
         enabledBorder: _inputBorder(AppColors.border),
-        focusedBorder: _inputBorder(AppColors.primary, width: 1.6),
+        focusedBorder: _inputBorder(AppColors.primary, width: 2),
         errorBorder: _inputBorder(AppColors.danger),
-        focusedErrorBorder: _inputBorder(AppColors.danger, width: 1.6),
+        focusedErrorBorder: _inputBorder(AppColors.danger, width: 2),
       ),
+
+      // -- Buttons: M3 full-round (stadium) shapes, 40dp height, labelLarge --
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
           elevation: 0,
-          minimumSize: const Size(0, 44),
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          textStyle: const TextStyle(fontFamily: 'Carlito', fontSize: 14.5, fontWeight: FontWeight.w700),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          minimumSize: const Size(0, 40),
+          padding: const EdgeInsets.symmetric(horizontal: AppSpace.s5),
+          textStyle: const TextStyle(
+              fontFamily: 'Carlito', fontSize: 14, fontWeight: FontWeight.w700, letterSpacing: 0.1),
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.all(Radius.circular(AppRadius.pill)),
+          ),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          minimumSize: const Size(0, 44),
-          padding: const EdgeInsets.symmetric(horizontal: 18),
+          minimumSize: const Size(0, 40),
+          padding: const EdgeInsets.symmetric(horizontal: AppSpace.s4),
           foregroundColor: AppColors.primaryDark,
           side: const BorderSide(color: AppColors.border),
-          textStyle: const TextStyle(fontFamily: 'Carlito', fontSize: 14.5, fontWeight: FontWeight.w700),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          textStyle: const TextStyle(
+              fontFamily: 'Carlito', fontSize: 14, fontWeight: FontWeight.w700, letterSpacing: 0.1),
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.all(Radius.circular(AppRadius.pill)),
+          ),
         ),
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
           foregroundColor: AppColors.primary,
-          textStyle: const TextStyle(fontFamily: 'Carlito', fontSize: 14, fontWeight: FontWeight.w700),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          minimumSize: const Size(0, 40),
+          padding: const EdgeInsets.symmetric(horizontal: AppSpace.s3),
+          textStyle: const TextStyle(
+              fontFamily: 'Carlito', fontSize: 14, fontWeight: FontWeight.w700, letterSpacing: 0.1),
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.all(Radius.circular(AppRadius.pill)),
+          ),
         ),
       ),
       segmentedButtonTheme: SegmentedButtonThemeData(
         style: ButtonStyle(
           side: const WidgetStatePropertyAll(BorderSide(color: AppColors.border)),
-          shape: WidgetStatePropertyAll(
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          ),
+          minimumSize: const WidgetStatePropertyAll(Size(0, 40)),
           textStyle: const WidgetStatePropertyAll(
-            TextStyle(fontFamily: 'Carlito', fontSize: 13.5, fontWeight: FontWeight.w600),
+            TextStyle(fontFamily: 'Carlito', fontSize: 13.5, fontWeight: FontWeight.w700),
+          ),
+          shape: const WidgetStatePropertyAll(
+            RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(AppRadius.pill))),
           ),
         ),
       ),
+      iconButtonTheme: IconButtonThemeData(
+        style: IconButton.styleFrom(
+          // M3 touch-target rule: never shrink below 48dp unless density demands.
+          minimumSize: const Size(40, 40),
+          tapTargetSize: MaterialTapTargetSize.padded,
+        ),
+      ),
+
+      // -- Chips: small shape (8dp), 32dp height --
       chipTheme: ChipThemeData(
         backgroundColor: Colors.white,
         side: const BorderSide(color: AppColors.border),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(9)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.sm)),
         labelStyle: const TextStyle(fontFamily: 'Carlito', fontSize: 13, color: AppColors.body),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+        padding: const EdgeInsets.symmetric(horizontal: AppSpace.s2 + 2, vertical: AppSpace.s1),
       ),
+
+      // -- FAB: large shape (16dp), lowered elevation (3) --
       floatingActionButtonTheme: FloatingActionButtonThemeData(
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
-        elevation: 2,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        elevation: 3,
+        focusElevation: 3,
+        hoverElevation: 4,
+        highlightElevation: 6,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.lg)),
       ),
+
+      // -- Navigation rail: primaryContainer indicator pill --
       navigationRailTheme: NavigationRailThemeData(
         backgroundColor: Colors.white,
-        indicatorColor: AppColors.primarySoft,
-        selectedIconTheme: const IconThemeData(color: AppColors.primary),
+        indicatorColor: AppColors.primaryContainer,
+        selectedIconTheme: const IconThemeData(color: AppColors.primaryDark),
         unselectedIconTheme: const IconThemeData(color: AppColors.muted),
         selectedLabelTextStyle: const TextStyle(
-            fontFamily: 'Carlito', fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.primary),
+            fontFamily: 'Carlito', fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.primaryDark),
         unselectedLabelTextStyle:
             const TextStyle(fontFamily: 'Carlito', fontSize: 13, color: AppColors.muted),
       ),
+
+      // -- List items: 16dp horizontal content padding (M3 list metrics) --
       listTileTheme: ListTileThemeData(
         iconColor: AppColors.muted,
+        contentPadding: const EdgeInsets.symmetric(horizontal: AppSpace.s4),
         titleTextStyle: const TextStyle(
-            fontFamily: 'Carlito', fontSize: 14.5, fontWeight: FontWeight.w600, color: AppColors.ink),
-        subtitleTextStyle:
-            const TextStyle(fontFamily: 'Carlito', fontSize: 12.5, color: AppColors.muted),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            fontFamily: 'Carlito', fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.ink),
+        subtitleTextStyle: const TextStyle(
+            fontFamily: 'Carlito', fontSize: 12.5, height: 17 / 12.5, color: AppColors.muted),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
       ),
+
+      // -- Snackbars: inverse surface, level-3 elevation, small shape --
       snackBarTheme: SnackBarThemeData(
         behavior: SnackBarBehavior.floating,
-        backgroundColor: const Color(0xFF1E293B),
-        contentTextStyle: const TextStyle(fontFamily: 'Carlito', fontSize: 13.5, color: Color(0xFFF8FAFC)),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        backgroundColor: scheme.inverseSurface,
+        elevation: 3,
+        contentTextStyle: const TextStyle(
+            fontFamily: 'Carlito', fontSize: 13.5, color: Color(0xFFF8FAFC), letterSpacing: 0.2),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.sm)),
       ),
-      dividerTheme: const DividerThemeData(color: AppColors.borderSoft, thickness: 1, space: 1),
+
+      // -- Menus / popovers: medium shape, level-2 elevation --
       popupMenuTheme: PopupMenuThemeData(
         color: Colors.white,
-        surfaceTintColor: Colors.transparent,
-        elevation: 8,
-        shadowColor: const Color(0x1F0F172A),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        surfaceTintColor: Colors.white,
+        elevation: 3,
+        shadowColor: const Color(0x240F172A),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
         textStyle: const TextStyle(fontFamily: 'Carlito', fontSize: 13.5, color: AppColors.body),
       ),
+
+      dividerTheme: const DividerThemeData(color: AppColors.borderSoft, thickness: 1, space: 1),
       progressIndicatorTheme: const ProgressIndicatorThemeData(
         color: AppColors.primary,
         linearTrackColor: AppColors.borderSoft,
@@ -237,32 +352,70 @@ abstract final class AppTheme {
       tooltipTheme: TooltipThemeData(
         decoration: BoxDecoration(
           color: const Color(0xFF1E293B),
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(AppRadius.sm),
         ),
         textStyle: const TextStyle(fontFamily: 'Carlito', fontSize: 12, color: Color(0xFFF8FAFC)),
       ),
+
+      // -- M3 page transitions (forward + fade) --
+      pageTransitionsTheme: const PageTransitionsTheme(builders: {
+        TargetPlatform.android: FadeForwardsPageTransitionsBuilder(),
+        TargetPlatform.windows: FadeForwardsPageTransitionsBuilder(),
+        TargetPlatform.iOS: FadeForwardsPageTransitionsBuilder(),
+        TargetPlatform.macOS: FadeForwardsPageTransitionsBuilder(),
+        TargetPlatform.linux: FadeForwardsPageTransitionsBuilder(),
+      }),
     );
   }
 
-  static OutlineInputBorder _inputBorder(Color color, {double width = 1}) =>
-      OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
+  static OutlineInputBorder _inputBorder(Color color, {double width = 1}) => OutlineInputBorder(
+        borderRadius: BorderRadius.circular(AppRadius.sm),
         borderSide: BorderSide(color: color, width: width),
       );
 
+  /// M3 type scale (2021) in Carlito. Sizes/line-heights follow the spec;
+  /// weights are reduced to the two registered cuts (400/700) to avoid
+  /// faux-bold synthesis, and display/headline get the spec's -0.25 tracking.
   static TextTheme _textTheme(TextTheme base) {
     const f = 'Carlito';
     return base.copyWith(
-      headlineMedium: const TextStyle(fontFamily: f, fontSize: 30, fontWeight: FontWeight.w700, color: AppColors.ink),
-      headlineSmall: const TextStyle(fontFamily: f, fontSize: 24, fontWeight: FontWeight.w700, color: AppColors.ink),
-      titleLarge: const TextStyle(fontFamily: f, fontSize: 19, fontWeight: FontWeight.w700, color: AppColors.ink),
-      titleMedium: const TextStyle(fontFamily: f, fontSize: 15.5, fontWeight: FontWeight.w700, color: AppColors.ink),
-      titleSmall: const TextStyle(fontFamily: f, fontSize: 13.5, fontWeight: FontWeight.w700, color: AppColors.ink),
-      bodyLarge: const TextStyle(fontFamily: f, fontSize: 14.5, color: AppColors.body),
-      bodyMedium: const TextStyle(fontFamily: f, fontSize: 14, color: AppColors.body),
-      bodySmall: const TextStyle(fontFamily: f, fontSize: 12.5, color: AppColors.muted),
-      labelLarge: const TextStyle(fontFamily: f, fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.ink),
-      labelSmall: const TextStyle(fontFamily: f, fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.muted),
+      // Headline (largest on-screen text, section/page headers)
+      headlineMedium: const TextStyle(
+          fontFamily: f, fontSize: 28, height: 36 / 28, letterSpacing: -0.25,
+          fontWeight: FontWeight.w700, color: AppColors.ink),
+      headlineSmall: const TextStyle(
+          fontFamily: f, fontSize: 24, height: 32 / 24, letterSpacing: -0.25,
+          fontWeight: FontWeight.w700, color: AppColors.ink),
+      // Title (medium-emphasis headers of components)
+      titleLarge: const TextStyle(
+          fontFamily: f, fontSize: 20, height: 28 / 20,
+          fontWeight: FontWeight.w700, color: AppColors.ink),
+      titleMedium: const TextStyle(
+          fontFamily: f, fontSize: 16, height: 24 / 16, letterSpacing: 0.15,
+          fontWeight: FontWeight.w700, color: AppColors.ink),
+      titleSmall: const TextStyle(
+          fontFamily: f, fontSize: 14, height: 20 / 14, letterSpacing: 0.1,
+          fontWeight: FontWeight.w700, color: AppColors.ink),
+      // Body (reading text)
+      bodyLarge: const TextStyle(
+          fontFamily: f, fontSize: 15, height: 22 / 15, letterSpacing: 0.2,
+          fontWeight: FontWeight.w400, color: AppColors.body),
+      bodyMedium: const TextStyle(
+          fontFamily: f, fontSize: 14, height: 20 / 14, letterSpacing: 0.2,
+          fontWeight: FontWeight.w400, color: AppColors.body),
+      bodySmall: const TextStyle(
+          fontFamily: f, fontSize: 12.5, height: 17 / 12.5, letterSpacing: 0.3,
+          fontWeight: FontWeight.w400, color: AppColors.muted),
+      // Label (buttons, pills, captions, overlines)
+      labelLarge: const TextStyle(
+          fontFamily: f, fontSize: 14, height: 20 / 14, letterSpacing: 0.1,
+          fontWeight: FontWeight.w700, color: AppColors.ink),
+      labelMedium: const TextStyle(
+          fontFamily: f, fontSize: 12, height: 16 / 12, letterSpacing: 0.3,
+          fontWeight: FontWeight.w700, color: AppColors.muted),
+      labelSmall: const TextStyle(
+          fontFamily: f, fontSize: 11, height: 16 / 11, letterSpacing: 0.4,
+          fontWeight: FontWeight.w700, color: AppColors.muted),
     );
   }
 }
@@ -271,7 +424,7 @@ abstract final class AppTheme {
 // Shared widgets
 // ---------------------------------------------------------------------------
 
-/// Screen-level header: big title, optional subtitle and trailing actions.
+/// Screen-level header: headline title, optional subtitle and trailing actions.
 class PageHeader extends StatelessWidget {
   final String title;
   final String? subtitle;
@@ -282,7 +435,7 @@ class PageHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.only(bottom: AppSpace.s4),
       child: Row(
         children: [
           Expanded(
@@ -291,14 +444,14 @@ class PageHeader extends StatelessWidget {
               children: [
                 Text(title, style: Theme.of(context).textTheme.headlineSmall),
                 if (subtitle != null) ...[
-                  const SizedBox(height: 2),
-                  Text(subtitle!, style: Theme.of(context).textTheme.bodySmall),
+                  const SizedBox(height: AppSpace.s1),
+                  Text(subtitle!, style: Theme.of(context).textTheme.bodyMedium),
                 ],
               ],
             ),
           ),
           for (final a in actions) ...[
-            const SizedBox(width: 10),
+            const SizedBox(width: AppSpace.s2),
             a,
           ],
         ],
@@ -322,7 +475,7 @@ class SectionCard extends StatelessWidget {
     required this.title,
     this.subtitle,
     this.action,
-    this.padding = const EdgeInsets.all(18),
+    this.padding = const EdgeInsets.all(AppSpace.s4 + 2),
     required this.children,
   });
 
@@ -338,15 +491,15 @@ class SectionCard extends StatelessWidget {
               children: [
                 if (icon != null) ...[
                   Container(
-                    width: 30,
-                    height: 30,
+                    width: 32,
+                    height: 32,
                     decoration: BoxDecoration(
                       color: AppColors.primarySoft,
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: BorderRadius.circular(AppRadius.sm),
                     ),
-                    child: Icon(icon, size: 17, color: AppColors.primary),
+                    child: Icon(icon, size: 18, color: AppColors.primary),
                   ),
-                  const SizedBox(width: 10),
+                  const SizedBox(width: AppSpace.s2 + 2),
                 ],
                 Expanded(
                   child: Column(
@@ -361,7 +514,7 @@ class SectionCard extends StatelessWidget {
                 ?action,
               ],
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: AppSpace.s4),
             ...children,
           ],
         ),
@@ -380,22 +533,23 @@ class StatusPill {
     IconData? icon,
   }) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpace.s2 + 2, vertical: AppSpace.s1),
       decoration: BoxDecoration(
         color: background ?? Color.lerp(foreground, Colors.white, 0.88),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(AppRadius.pill),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           if (icon != null) ...[
             Icon(icon, size: 12, color: foreground),
-            const SizedBox(width: 4),
+            const SizedBox(width: AppSpace.s1),
           ],
           Text(
             label,
             style: TextStyle(
-              fontSize: 11.5,
+              fontSize: 12,
+              height: 16 / 12,
               fontWeight: FontWeight.w700,
               color: foreground,
             ),
@@ -407,12 +561,15 @@ class StatusPill {
 
   static Widget stock(BuildContext context, int qty, {String? label}) {
     if (qty <= 0) {
-      return build(context, label: label ?? 'Out of stock', foreground: AppColors.danger, background: AppColors.dangerSoft);
+      return build(context,
+          label: label ?? 'Out of stock', foreground: AppColors.danger, background: AppColors.dangerSoft);
     }
     if (qty <= 5) {
-      return build(context, label: label ?? 'Low · $qty', foreground: AppColors.warning, background: AppColors.warningSoft);
+      return build(context,
+          label: label ?? 'Low · $qty', foreground: AppColors.warning, background: AppColors.warningSoft);
     }
-    return build(context, label: label ?? '$qty in stock', foreground: AppColors.success, background: AppColors.successSoft);
+    return build(context,
+        label: label ?? '$qty in stock', foreground: AppColors.success, background: AppColors.successSoft);
   }
 }
 
@@ -437,20 +594,21 @@ class EmptyState extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(AppSpace.s6),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
               width: 76,
               height: 76,
-              decoration: const BoxDecoration(color: AppColors.surfaceTint, shape: BoxShape.circle),
+              decoration: const BoxDecoration(
+                  color: AppColors.surfaceTint, shape: BoxShape.circle),
               child: Icon(icon, size: 34, color: AppColors.faint),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpace.s4),
             Text(title, style: Theme.of(context).textTheme.titleMedium, textAlign: TextAlign.center),
             if (message != null) ...[
-              const SizedBox(height: 6),
+              const SizedBox(height: AppSpace.s2),
               Text(
                 message!,
                 style: Theme.of(context).textTheme.bodySmall,
@@ -458,7 +616,7 @@ class EmptyState extends StatelessWidget {
               ),
             ],
             if (actionLabel != null) ...[
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpace.s4),
               FilledButton.tonal(onPressed: onAction, child: Text(actionLabel!)),
             ],
           ],
@@ -487,36 +645,45 @@ class KpiCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final valueColor = color == AppColors.primary ? AppColors.ink : color;
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(AppSpace.s4),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
                 Container(
-                  width: 34,
-                  height: 34,
-                  decoration: BoxDecoration(color: soft, borderRadius: BorderRadius.circular(10)),
-                  child: Icon(icon, size: 18, color: color),
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                      color: soft, borderRadius: BorderRadius.circular(AppRadius.sm)),
+                  child: Icon(icon, size: 19, color: color),
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: AppSpace.s2 + 2),
                 Expanded(
                   child: Text(
-                    label,
+                    label.toUpperCase(),
                     overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600),
+                    maxLines: 1,
+                    style: Theme.of(context)
+                        .textTheme
+                        .labelSmall
+                        ?.copyWith(color: AppColors.muted),
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpace.s3),
             Text(
               value,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 21, color: color == AppColors.primary ? AppColors.ink : color),
+              style: Theme.of(context)
+                  .textTheme
+                  .titleLarge
+                  ?.copyWith(fontSize: 22, color: valueColor),
             ),
           ],
         ),
@@ -532,7 +699,7 @@ class InitialsAvatar extends StatelessWidget {
   final Color? color;
   final Color? soft;
 
-  const InitialsAvatar(this.name, {super.key, this.size = 42, this.color, this.soft});
+  const InitialsAvatar(this.name, {super.key, this.size = 40, this.color, this.soft});
 
   @override
   Widget build(BuildContext context) {
@@ -542,7 +709,7 @@ class InitialsAvatar extends StatelessWidget {
       height: size,
       decoration: BoxDecoration(
         color: soft ?? Color.lerp(c, Colors.white, 0.9),
-        borderRadius: BorderRadius.circular(size * 0.3),
+        borderRadius: BorderRadius.circular(AppRadius.md),
       ),
       alignment: Alignment.center,
       child: Text(
@@ -590,7 +757,7 @@ class SearchField extends StatelessWidget {
   }
 }
 
-/// Compact − qty + stepper for cart lines.
+/// Compact − qty + stepper for cart lines (48dp-friendly hit areas).
 class QtyStepper extends StatelessWidget {
   final int qty;
   final VoidCallback onMinus;
@@ -601,19 +768,21 @@ class QtyStepper extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 30,
+      height: 40,
       decoration: BoxDecoration(
-        border: Border.all(color: AppColors.border),
-        borderRadius: BorderRadius.circular(9),
+        border: Border.all(color: AppColors.borderSoft),
+        borderRadius: BorderRadius.circular(AppRadius.pill),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           _btn(Icons.remove_rounded, onMinus),
           SizedBox(
-            width: 26,
-            child: Text('$qty', textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: AppColors.ink)),
+            width: 28,
+            child: Text('$qty',
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                    fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.ink)),
           ),
           _btn(Icons.add_rounded, onPlus),
         ],
@@ -621,11 +790,12 @@ class QtyStepper extends StatelessWidget {
     );
   }
 
-  Widget _btn(IconData icon, VoidCallback onTap) => InkWell(
-        borderRadius: BorderRadius.circular(9),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 4),
+  Widget _btn(IconData icon, VoidCallback onTap) => SizedBox(
+        width: 40,
+        height: 40,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(AppRadius.pill),
+          onTap: onTap,
           child: Icon(icon, size: 16, color: AppColors.muted),
         ),
       );

@@ -25,16 +25,16 @@ class CartPanel extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 8, 0),
+          padding: const EdgeInsets.fromLTRB(AppSpace.s4, AppSpace.s4, AppSpace.s2, 0),
           child: Row(
             children: [
               const Icon(Icons.shopping_cart_outlined, size: 19, color: AppColors.primary),
-              const SizedBox(width: 8),
+              const SizedBox(width: AppSpace.s2),
               const Expanded(
                 child: Text('Current Sale',
                     style: TextStyle(
                         fontFamily: 'Carlito',
-                        fontSize: 15.5,
+                        fontSize: 15,
                         fontWeight: FontWeight.w700,
                         color: AppColors.ink)),
               ),
@@ -50,21 +50,21 @@ class CartPanel extends StatelessWidget {
 
         // customer selector
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 10, 16, 2),
+          padding: const EdgeInsets.fromLTRB(AppSpace.s4, AppSpace.s2 + 2, AppSpace.s4, 2),
           child: InkWell(
-            borderRadius: BorderRadius.circular(11),
+            borderRadius: BorderRadius.circular(AppRadius.sm),
             onTap: () => _pickCustomer(context),
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
+              padding: const EdgeInsets.symmetric(horizontal: AppSpace.s3, vertical: AppSpace.s2),
               decoration: BoxDecoration(
                 color: AppColors.surfaceTint,
-                borderRadius: BorderRadius.circular(11),
+                borderRadius: BorderRadius.circular(AppRadius.sm),
                 border: Border.all(color: AppColors.borderSoft),
               ),
               child: Row(
                 children: [
                   InitialsAvatar(cart.customer?.name ?? 'Walk-in', size: 26),
-                  const SizedBox(width: 9),
+                  const SizedBox(width: AppSpace.s2),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -97,7 +97,7 @@ class CartPanel extends StatelessWidget {
                   message: 'Tap products or scan a barcode to add them.',
                 )
               : ListView.builder(
-                  padding: const EdgeInsets.fromLTRB(10, 6, 10, 4),
+                  padding: const EdgeInsets.fromLTRB(AppSpace.s3, AppSpace.s2, AppSpace.s3, AppSpace.s1),
                   itemCount: cart.items.length,
                   itemBuilder: (context, i) => _CartTile(item: cart.items[i]),
                 ),
@@ -106,11 +106,11 @@ class CartPanel extends StatelessWidget {
         // discount + totals
         if (!cart.isEmpty)
           Container(
-            margin: const EdgeInsets.fromLTRB(14, 6, 14, 0),
-            padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+            margin: const EdgeInsets.fromLTRB(AppSpace.s4, AppSpace.s2, AppSpace.s4, 0),
+            padding: const EdgeInsets.fromLTRB(AppSpace.s4, AppSpace.s3, AppSpace.s4, AppSpace.s3),
             decoration: BoxDecoration(
               color: AppColors.surfaceTint,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(AppRadius.md),
               border: Border.all(color: AppColors.borderSoft),
             ),
             child: Column(
@@ -123,7 +123,7 @@ class CartPanel extends StatelessWidget {
                     const _DiscountField(),
                   ],
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: AppSpace.s2),
                 _totalRow(context, 'Subtotal', settings.money(cart.subtotal)),
                 if (cart.discount > 0)
                   _totalRow(context, 'Discount', '- ${settings.money(cart.discount)}',
@@ -132,7 +132,7 @@ class CartPanel extends StatelessWidget {
                   _totalRow(
                       context, 'Tax (${settings.taxRate.toStringAsFixed(0)}%)',
                       settings.money(cart.tax(settings.taxRate))),
-                Divider(height: 16, color: Colors.grey.shade200, thickness: 1),
+                Divider(height: AppSpace.s4, color: AppColors.borderSoft, thickness: 1),
                 Row(
                   children: [
                     const Text('TOTAL',
@@ -157,9 +157,9 @@ class CartPanel extends StatelessWidget {
           ),
 
         Padding(
-          padding: const EdgeInsets.all(14),
+          padding: const EdgeInsets.all(AppSpace.s4),
           child: FilledButton.icon(
-            style: FilledButton.styleFrom(minimumSize: const Size(0, 50)),
+            style: FilledButton.styleFrom(minimumSize: const Size(0, 48)), // M3 touch target
             onPressed: cart.isEmpty
                 ? null
                 : () => showDialog(
@@ -172,7 +172,7 @@ class CartPanel extends StatelessWidget {
               cart.isEmpty
                   ? 'Charge'
                   : 'Charge · ${settings.money(cart.total(settings.taxRate))}',
-              style: const TextStyle(fontSize: 15.5),
+              style: const TextStyle(fontSize: 15),
             ),
           ),
         ),
@@ -193,13 +193,13 @@ class CartPanel extends StatelessWidget {
 
   Widget _totalRow(BuildContext context, String label, String value, {Color? color}) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 1.5),
+      padding: const EdgeInsets.symmetric(vertical: 2),
       child: Row(
         children: [
           Text(label, style: const TextStyle(fontFamily: 'Carlito', fontSize: 13, color: AppColors.muted)),
           const Spacer(),
           Text(value, style: TextStyle(
-              fontFamily: 'Carlito', fontSize: 13, fontWeight: FontWeight.w600,
+              fontFamily: 'Carlito', fontSize: 13, fontWeight: FontWeight.w700,
               color: color ?? AppColors.body)),
         ],
       ),
@@ -236,11 +236,11 @@ class _CartTile extends StatelessWidget {
     final cart = context.watch<CartProvider>();
 
     return Container(
-      margin: const EdgeInsets.symmetric(vertical: 3, horizontal: 2),
-      padding: const EdgeInsets.fromLTRB(11, 9, 8, 9),
+      margin: const EdgeInsets.symmetric(vertical: AppSpace.s1, horizontal: 0),
+      padding: const EdgeInsets.fromLTRB(AppSpace.s3, AppSpace.s2, AppSpace.s2, AppSpace.s2),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(11),
+        borderRadius: BorderRadius.circular(AppRadius.sm),
         border: Border.all(color: AppColors.borderSoft),
       ),
       child: Row(
@@ -254,7 +254,7 @@ class _CartTile extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                         fontFamily: 'Carlito', fontWeight: FontWeight.w700, fontSize: 13.5, color: AppColors.ink)),
-                const SizedBox(height: 1),
+                const SizedBox(height: 2),
                 Text(
                   '${item.variant.descriptor} · ${settings.money(item.variant.price)}',
                   style: const TextStyle(fontFamily: 'Carlito', fontSize: 12, color: AppColors.muted),
@@ -267,9 +267,9 @@ class _CartTile extends StatelessWidget {
             onMinus: () => cart.setQty(item.key, item.qty - 1),
             onPlus: () => cart.setQty(item.key, item.qty + 1),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: AppSpace.s2),
           SizedBox(
-            width: 86,
+            width: 84,
             child: Text(
               settings.money(item.lineTotal),
               textAlign: TextAlign.right,
@@ -307,25 +307,25 @@ class _DiscountFieldState extends State<_DiscountField> {
         controller: _c,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
         textAlign: TextAlign.right,
-        style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600),
+        style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700),
         decoration: InputDecoration(
           isDense: true,
           filled: true,
           fillColor: Colors.white,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          contentPadding: const EdgeInsets.symmetric(horizontal: AppSpace.s3, vertical: AppSpace.s2),
           prefixText: '- ',
           prefixStyle: const TextStyle(color: AppColors.danger, fontWeight: FontWeight.w700),
           border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(9),
+            borderRadius: BorderRadius.circular(AppRadius.sm),
             borderSide: const BorderSide(color: AppColors.border),
           ),
           enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(9),
+            borderRadius: BorderRadius.circular(AppRadius.sm),
             borderSide: const BorderSide(color: AppColors.border),
           ),
           focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(9),
-            borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+            borderRadius: BorderRadius.circular(AppRadius.sm),
+            borderSide: const BorderSide(color: AppColors.primary, width: 2), // M3 2dp indicator
           ),
         ),
         onChanged: (v) =>
@@ -351,17 +351,17 @@ class _CustomerPickerDialogState extends State<_CustomerPickerDialog> {
     final list = customers.search(_q);
 
     return AlertDialog(
-      titlePadding: const EdgeInsets.fromLTRB(24, 22, 24, 0),
-      contentPadding: const EdgeInsets.fromLTRB(24, 14, 24, 0),
-      actionsPadding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+      titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
+      contentPadding: const EdgeInsets.fromLTRB(24, AppSpace.s4, 24, 0),
+      actionsPadding: const EdgeInsets.fromLTRB(AppSpace.s4, AppSpace.s2, AppSpace.s4, AppSpace.s4),
       title: const Row(children: [
         Icon(Icons.person_search_rounded, size: 22, color: AppColors.primary),
-        SizedBox(width: 10),
+        SizedBox(width: AppSpace.s3),
         Text('Attach customer'),
       ]),
       content: SizedBox(
         width: 400,
-        height: 430,
+        height: 432,
         child: Column(
           children: [
             TextField(
@@ -371,24 +371,24 @@ class _CustomerPickerDialogState extends State<_CustomerPickerDialog> {
                 prefixIcon: Icon(Icons.search_rounded, size: 20),
               ),
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: AppSpace.s3),
             Expanded(
               child: ListView(
                 children: [
                   ListTile(
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(11),
+                        borderRadius: BorderRadius.circular(AppRadius.md),
                         side: const BorderSide(color: AppColors.borderSoft)),
                     leading: const Icon(Icons.person_off_outlined, size: 21),
                     title: const Text('Walk-in customer'),
                     onTap: () => Navigator.pop(
                         context, const Customer(id: 0, name: 'Walk-in customer', createdAt: 0)),
                   ),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: AppSpace.s2),
                   ...list.map(
                     (c) => ListTile(
                       shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(11),
+                          borderRadius: BorderRadius.circular(AppRadius.md),
                           side: const BorderSide(color: AppColors.borderSoft)),
                       leading: InitialsAvatar(c.name, size: 34),
                       title: Text(c.name),

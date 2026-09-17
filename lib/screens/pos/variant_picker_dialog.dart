@@ -16,8 +16,8 @@ class VariantPickerDialog extends StatelessWidget {
     final settings = context.watch<AppSettings>();
 
     return AlertDialog(
-      titlePadding: const EdgeInsets.fromLTRB(24, 22, 24, 0),
-      contentPadding: const EdgeInsets.fromLTRB(24, 14, 24, 0),
+      titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
+      contentPadding: const EdgeInsets.fromLTRB(24, AppSpace.s4, 24, 0),
       actionsPadding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
       title: Row(
         children: [
@@ -26,11 +26,11 @@ class VariantPickerDialog extends StatelessWidget {
             height: 34,
             decoration: BoxDecoration(
               color: AppColors.primarySoft,
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(AppRadius.sm),
             ),
             child: const Icon(Icons.checkroom_rounded, size: 19, color: AppColors.primary),
           ),
-          const SizedBox(width: 11),
+          const SizedBox(width: AppSpace.s3),
           Expanded(child: Text(product.name, overflow: TextOverflow.ellipsis)),
         ],
       ),
@@ -51,11 +51,11 @@ class VariantPickerDialog extends StatelessWidget {
                   final v = product.variants[i];
                   final soldOut = v.stock <= 0;
                   return Padding(
-                    padding: const EdgeInsets.only(bottom: 7),
+                    padding: const EdgeInsets.only(bottom: AppSpace.s2),
                     child: ListTile(
                       enabled: !soldOut,
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(AppRadius.md),
                         side: BorderSide(
                             color: soldOut ? AppColors.borderSoft : AppColors.border),
                       ),
@@ -66,7 +66,7 @@ class VariantPickerDialog extends StatelessWidget {
                         alignment: Alignment.center,
                         decoration: BoxDecoration(
                           color: soldOut ? AppColors.borderSoft : AppColors.primarySoft,
-                          borderRadius: BorderRadius.circular(11),
+                          borderRadius: BorderRadius.circular(AppRadius.sm),
                         ),
                         child: Text(
                           v.size.isEmpty

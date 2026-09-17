@@ -49,7 +49,7 @@ class _StockAdjustDialogState extends State<StockAdjustDialog> {
     final newStock = (variant.stock + _delta).clamp(0, 1 << 30);
 
     return AlertDialog(
-      titlePadding: const EdgeInsets.fromLTRB(24, 22, 24, 0),
+      titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
       contentPadding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
       actionsPadding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
       title: Row(children: [
@@ -58,11 +58,11 @@ class _StockAdjustDialogState extends State<StockAdjustDialog> {
           height: 34,
           decoration: BoxDecoration(
             color: AppColors.primarySoft,
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(AppRadius.sm),
           ),
           child: const Icon(Icons.inventory_rounded, size: 19, color: AppColors.primary),
         ),
-        const SizedBox(width: 11),
+        const SizedBox(width: AppSpace.s3),
         Expanded(child: Text('Adjust stock · ${product.name}', overflow: TextOverflow.ellipsis)),
       ]),
       content: SizedBox(
@@ -90,12 +90,12 @@ class _StockAdjustDialogState extends State<StockAdjustDialog> {
                   _delta = 0;
                 }),
               ),
-            const SizedBox(height: 14),
+            const SizedBox(height: AppSpace.s4),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: AppSpace.s4, vertical: AppSpace.s3),
               decoration: BoxDecoration(
                 color: AppColors.surfaceTint,
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(AppRadius.md),
                 border: Border.all(color: AppColors.borderSoft),
               ),
               child: Row(
@@ -110,14 +110,14 @@ class _StockAdjustDialogState extends State<StockAdjustDialog> {
                                 fontSize: 13,
                                 fontWeight: FontWeight.w700,
                                 color: AppColors.body)),
-                        const SizedBox(height: 2),
+                        const SizedBox(height: AppSpace.s1),
                         Text('Current stock: ${variant.stock} pcs',
                             style: const TextStyle(fontFamily: 'Carlito', fontSize: 12, color: AppColors.muted)),
                       ],
                     ),
                   ),
-                  Icon(Icons.arrow_forward_rounded, size: 18, color: Colors.grey.shade400),
-                  const SizedBox(width: 12),
+                  Icon(Icons.arrow_forward_rounded, size: 18, color: AppColors.faint),
+                  const SizedBox(width: AppSpace.s3),
                   Text(
                     '$newStock pcs',
                     style: TextStyle(
@@ -132,16 +132,16 @@ class _StockAdjustDialogState extends State<StockAdjustDialog> {
                 ],
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpace.s3),
             Wrap(
-              spacing: 7,
-              runSpacing: 7,
+              spacing: AppSpace.s2,
+              runSpacing: AppSpace.s2,
               children: [
                 for (final d in [-10, -5, -1, 1, 5, 10])
                   OutlinedButton(
                     onPressed: () => setState(() => _delta += d),
                     style: OutlinedButton.styleFrom(
-                      minimumSize: const Size(52, 38),
+                      minimumSize: const Size(56, 40),
                       backgroundColor: d > 0 ? AppColors.successSoft : AppColors.dangerSoft,
                       foregroundColor: d > 0 ? AppColors.success : AppColors.danger,
                       side: BorderSide.none,

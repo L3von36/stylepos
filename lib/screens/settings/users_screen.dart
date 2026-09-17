@@ -52,21 +52,22 @@ class _UsersScreenState extends State<UsersScreen> {
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 660),
                 child: ListView.separated(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(AppSpace.s4),
                   itemCount: _users!.length,
-                  separatorBuilder: (_, _) => const SizedBox(height: 8),
+                  separatorBuilder: (_, _) => const SizedBox(height: AppSpace.s2),
                   itemBuilder: (context, i) {
                     final u = _users![i];
                     final isSelf = u.id == auth.user?.id;
                     return Card(
                       child: ListTile(
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                        contentPadding:
+                            const EdgeInsets.symmetric(horizontal: AppSpace.s4, vertical: AppSpace.s1),
                         leading: Container(
                           width: 44,
                           height: 44,
                           decoration: BoxDecoration(
                             color: u.isAdmin ? AppColors.primarySoft : AppColors.infoSoft,
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(AppRadius.md),
                           ),
                           child: Icon(
                             u.isAdmin
@@ -83,18 +84,18 @@ class _UsersScreenState extends State<UsersScreen> {
                               style: TextStyle(
                                   fontFamily: 'Carlito',
                                   fontWeight: FontWeight.w700,
-                                  fontSize: 14.5,
+                                  fontSize: 14,
                                   color: u.active ? AppColors.ink : AppColors.faint),
                             ),
                             if (isSelf) ...[
-                              const SizedBox(width: 7),
+                              const SizedBox(width: AppSpace.s2),
                               StatusPill.build(context,
                                   label: 'You',
                                   foreground: AppColors.primary,
                                   background: AppColors.primarySoft),
                             ],
                             if (!u.active) ...[
-                              const SizedBox(width: 7),
+                              const SizedBox(width: AppSpace.s2),
                               StatusPill.build(context,
                                   label: 'Inactive',
                                   foreground: AppColors.danger,
@@ -235,7 +236,7 @@ class _UserEditDialogState extends State<_UserEditDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      titlePadding: const EdgeInsets.fromLTRB(24, 22, 24, 0),
+      titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
       contentPadding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
       actionsPadding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
       title: Row(children: [
@@ -244,7 +245,7 @@ class _UserEditDialogState extends State<_UserEditDialog> {
           height: 34,
           decoration: BoxDecoration(
             color: AppColors.primarySoft,
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(AppRadius.sm),
           ),
           child: Icon(
             _isNew ? Icons.person_add_alt_rounded : Icons.manage_accounts_outlined,
@@ -252,7 +253,7 @@ class _UserEditDialogState extends State<_UserEditDialog> {
             color: AppColors.primary,
           ),
         ),
-        const SizedBox(width: 11),
+        const SizedBox(width: AppSpace.s3),
         Text(_isNew ? 'Add staff account' : 'Edit staff account'),
       ]),
       content: SizedBox(
@@ -266,7 +267,7 @@ class _UserEditDialogState extends State<_UserEditDialog> {
                   labelText: 'Full name *',
                   prefixIcon: Icon(Icons.person_outline_rounded, size: 20)),
             ),
-            const SizedBox(height: 13),
+            const SizedBox(height: AppSpace.s3),
             TextField(
               controller: _email,
               enabled: _isNew,
@@ -289,7 +290,7 @@ class _UserEditDialogState extends State<_UserEditDialog> {
               onChanged: (v) => setState(() => _role = v ?? 'cashier'),
             ),
             if (_isNew) ...[
-              const SizedBox(height: 13),
+              const SizedBox(height: AppSpace.s3),
               TextField(
                 controller: _password,
                 obscureText: true,
@@ -299,17 +300,17 @@ class _UserEditDialogState extends State<_UserEditDialog> {
               ),
             ],
             if (_error != null) ...[
-              const SizedBox(height: 12),
+              const SizedBox(height: AppSpace.s3),
               Container(
-                padding: const EdgeInsets.all(11),
+                padding: const EdgeInsets.all(AppSpace.s3),
                 decoration: BoxDecoration(
                   color: AppColors.dangerSoft,
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
                 ),
                 child: Row(
                   children: [
                     const Icon(Icons.error_outline_rounded, size: 17, color: AppColors.danger),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: AppSpace.s2),
                     Expanded(
                       child: Text(_error!,
                           style: const TextStyle(

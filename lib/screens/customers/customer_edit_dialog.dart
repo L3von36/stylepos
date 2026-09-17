@@ -63,7 +63,7 @@ class _CustomerEditDialogState extends State<CustomerEditDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      titlePadding: const EdgeInsets.fromLTRB(24, 22, 24, 0),
+      titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
       contentPadding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
       actionsPadding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
       title: Row(children: [
@@ -72,7 +72,7 @@ class _CustomerEditDialogState extends State<CustomerEditDialog> {
           height: 34,
           decoration: BoxDecoration(
             color: AppColors.primarySoft,
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(AppRadius.sm),
           ),
           child: Icon(
             _isNew ? Icons.person_add_alt_rounded : Icons.edit_outlined,
@@ -80,7 +80,7 @@ class _CustomerEditDialogState extends State<CustomerEditDialog> {
             color: AppColors.primary,
           ),
         ),
-        const SizedBox(width: 11),
+        const SizedBox(width: AppSpace.s3),
         Text(_isNew ? 'New customer' : 'Edit customer'),
       ]),
       content: SizedBox(
@@ -95,7 +95,7 @@ class _CustomerEditDialogState extends State<CustomerEditDialog> {
                   labelText: 'Name *',
                   prefixIcon: Icon(Icons.person_outline_rounded, size: 20)),
             ),
-            const SizedBox(height: 13),
+            const SizedBox(height: AppSpace.s3),
             TextField(
               controller: _phone,
               keyboardType: TextInputType.phone,
@@ -103,7 +103,7 @@ class _CustomerEditDialogState extends State<CustomerEditDialog> {
                   labelText: 'Phone',
                   prefixIcon: Icon(Icons.phone_outlined, size: 20)),
             ),
-            const SizedBox(height: 13),
+            const SizedBox(height: AppSpace.s3),
             TextField(
               controller: _email,
               keyboardType: TextInputType.emailAddress,
@@ -111,7 +111,7 @@ class _CustomerEditDialogState extends State<CustomerEditDialog> {
                   labelText: 'Email',
                   prefixIcon: Icon(Icons.alternate_email_rounded, size: 20)),
             ),
-            const SizedBox(height: 13),
+            const SizedBox(height: AppSpace.s3),
             TextField(
               controller: _notes,
               maxLines: 2,

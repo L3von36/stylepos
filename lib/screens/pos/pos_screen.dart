@@ -87,12 +87,12 @@ class _PosScreenState extends State<PosScreen> {
 
       if (wide) {
         return Padding(
-          padding: const EdgeInsets.fromLTRB(18, 18, 18, 0),
+          padding: const EdgeInsets.fromLTRB(AppSpace.s4, AppSpace.s4, AppSpace.s4, 0),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(child: grid),
-              const SizedBox(width: 16),
+              const SizedBox(width: AppSpace.s4),
               SizedBox(width: 380, child: CartPanel(scrollable: true)),
             ],
           ),
@@ -106,7 +106,8 @@ class _PosScreenState extends State<PosScreen> {
             isScrollControlled: true,
             backgroundColor: Colors.white,
             shape: const RoundedRectangleBorder(
-              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+              // M3 modal bottom sheet: extra-large top corners
+              borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.xl)),
             ),
             builder: (_) => SizedBox(
               height: MediaQuery.of(context).size.height * 0.78,
@@ -143,11 +144,11 @@ class _PosScreenState extends State<PosScreen> {
           decoration: InputDecoration(
             hintText: 'Scan barcode or search name / SKU…',
             prefixIcon: Container(
-              margin: const EdgeInsets.fromLTRB(6, 6, 0, 6),
-              padding: const EdgeInsets.all(7),
+              margin: const EdgeInsets.fromLTRB(AppSpace.s2, AppSpace.s2, 0, AppSpace.s2),
+              padding: const EdgeInsets.all(AppSpace.s2),
               decoration: BoxDecoration(
                 color: AppColors.primarySoft,
-                borderRadius: BorderRadius.circular(9),
+                borderRadius: BorderRadius.circular(AppRadius.sm),
               ),
               child: const Icon(Icons.qr_code_scanner_rounded, size: 19, color: AppColors.primary),
             ),
@@ -164,24 +165,24 @@ class _PosScreenState extends State<PosScreen> {
                   ),
           ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: AppSpace.s3),
 
         // category chips
         SizedBox(
-          height: 38,
+          height: 36,
           child: ListView(
             scrollDirection: Axis.horizontal,
             children: [
               _chip(context, 'All', -1),
-              const SizedBox(width: 8),
+              const SizedBox(width: AppSpace.s2),
               for (final cat in catalog.categories) ...[
                 _chip(context, cat.name, cat.id ?? -1),
-                const SizedBox(width: 8),
+                const SizedBox(width: AppSpace.s2),
               ],
             ],
           ),
         ),
-        const SizedBox(height: 14),
+        const SizedBox(height: AppSpace.s4),
 
         // product grid
         Expanded(
@@ -219,17 +220,18 @@ class _PosScreenState extends State<PosScreen> {
       label: Text(label),
       selected: selected,
       showCheckmark: false,
-      labelPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+      labelPadding: const EdgeInsets.symmetric(horizontal: AppSpace.s4, vertical: AppSpace.s1),
       labelStyle: TextStyle(
         fontFamily: 'Carlito',
         fontSize: 13,
-        fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+        fontWeight: FontWeight.w700,
         color: selected ? AppColors.primaryDark : AppColors.muted,
       ),
       selectedColor: AppColors.primarySoft,
       backgroundColor: Colors.white,
       side: BorderSide(color: selected ? AppColors.primary.withValues(alpha: 0.35) : AppColors.border),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(19)),
+      // M3 chips use the small shape (8dp)
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.sm)),
       onSelected: (_) => setState(() => _categoryFilter = value),
     );
   }
@@ -258,10 +260,11 @@ class _ProductCardState extends State<_ProductCard> {
       onEnter: (_) => setState(() => _hover = true),
       onExit: (_) => setState(() => _hover = false),
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 140),
+        duration: AppMotion.fast,
+        curve: AppMotion.standard,
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(AppRadius.md),
           border: Border.all(
             color: _hover ? AppColors.primary.withValues(alpha: 0.45) : AppColors.borderSoft,
           ),
@@ -271,9 +274,9 @@ class _ProductCardState extends State<_ProductCard> {
         ),
         child: InkWell(
           onTap: widget.onTap,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(AppRadius.md),
           child: Padding(
-            padding: const EdgeInsets.all(10),
+            padding: const EdgeInsets.all(AppSpace.s3),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -291,7 +294,7 @@ class _ProductCardState extends State<_ProductCard> {
                               AppColors.primarySoft.withValues(alpha: 0.55),
                             ],
                           ),
-                          borderRadius: BorderRadius.circular(10),
+                          borderRadius: BorderRadius.circular(AppRadius.sm),
                         ),
                         child: Icon(
                           _iconFor(p),
@@ -301,8 +304,8 @@ class _ProductCardState extends State<_ProductCard> {
                       ),
                       if (out)
                         Positioned(
-                          top: 6,
-                          right: 6,
+                          top: AppSpace.s2,
+                          right: AppSpace.s2,
                           child: StatusPill.build(
                             context,
                             label: 'Out',
@@ -312,8 +315,8 @@ class _ProductCardState extends State<_ProductCard> {
                         )
                       else if (p.hasLowStock)
                         Positioned(
-                          top: 6,
-                          right: 6,
+                          top: AppSpace.s2,
+                          right: AppSpace.s2,
                           child: StatusPill.build(
                             context,
                             label: 'Low',
@@ -324,7 +327,7 @@ class _ProductCardState extends State<_ProductCard> {
                     ],
                   ),
                 ),
-                const SizedBox(height: 9),
+                const SizedBox(height: AppSpace.s2),
                 Text(
                   p.name,
                   maxLines: 2,
@@ -336,7 +339,7 @@ class _ProductCardState extends State<_ProductCard> {
                       height: 1.2,
                       color: AppColors.ink),
                 ),
-                const SizedBox(height: 5),
+                const SizedBox(height: AppSpace.s1),
                 Row(
                   children: [
                     Expanded(
@@ -352,7 +355,7 @@ class _ProductCardState extends State<_ProductCard> {
                     ),
                     Text(
                       '${p.variants.length} var',
-                      style: TextStyle(fontFamily: 'Carlito', fontSize: 11, color: Colors.grey.shade500),
+                      style: const TextStyle(fontFamily: 'Carlito', fontSize: 11, color: AppColors.faint),
                     ),
                   ],
                 ),

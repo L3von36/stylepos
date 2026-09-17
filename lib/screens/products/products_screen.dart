@@ -75,7 +75,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
     final lowCount = catalog.products.where((p) => p.hasLowStock).length;
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
+      padding: const EdgeInsets.all(AppSpace.s4),
       child: Column(
         children: [
           PageHeader(
@@ -109,9 +109,9 @@ class _ProductsScreenState extends State<ProductsScreen> {
                   setState(() => _query = '');
                 },
               )),
-              const SizedBox(width: 10),
+              const SizedBox(width: AppSpace.s2),
               SizedBox(
-                width: 190,
+                width: 192,
                 child: DropdownButtonFormField<int>(
                   initialValue: _categoryFilter,
                   isDense: true,
@@ -126,7 +126,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
                   onChanged: (v) => setState(() => _categoryFilter = v ?? -1),
                 ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: AppSpace.s2),
               FilterChip(
                 label: const Text('Low stock'),
                 selected: _lowOnly,
@@ -134,7 +134,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
                 labelStyle: TextStyle(
                   fontFamily: 'Carlito',
                   fontSize: 13,
-                  fontWeight: FontWeight.w600,
+                  fontWeight: FontWeight.w700,
                   color: _lowOnly ? AppColors.warning : AppColors.muted,
                 ),
                 selectedColor: AppColors.warningSoft,
@@ -204,25 +204,25 @@ class _ProductTile extends StatelessWidget {
 
     return Card(
       child: InkWell(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(AppRadius.md),
         onTap: () async {
           await Navigator.of(context).push(MaterialPageRoute(
               builder: (_) => ProductEditScreen(product: product)));
         },
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+          padding: const EdgeInsets.symmetric(horizontal: AppSpace.s4, vertical: AppSpace.s3),
           child: Row(
             children: [
               Container(
-                width: 46,
-                height: 46,
+                width: 44,
+                height: 44,
                 decoration: BoxDecoration(
                   color: AppColors.primarySoft,
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(AppRadius.md),
                 ),
                 child: Icon(Icons.checkroom_rounded, color: AppColors.primary, size: 22),
               ),
-              const SizedBox(width: 13),
+              const SizedBox(width: AppSpace.s3),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -231,7 +231,7 @@ class _ProductTile extends StatelessWidget {
                         style: const TextStyle(
                             fontFamily: 'Carlito',
                             fontWeight: FontWeight.w700,
-                            fontSize: 14.5,
+                            fontSize: 14,
                             color: AppColors.ink)),
                     const SizedBox(height: 2),
                     Text(
@@ -245,16 +245,16 @@ class _ProductTile extends StatelessWidget {
                 ),
               ),
               if (lowVariants > 0) ...[
-                const SizedBox(width: 8),
+                const SizedBox(width: AppSpace.s2),
                 StatusPill.build(context,
                     label: '$lowVariants low', foreground: AppColors.warning, background: AppColors.warningSoft),
               ],
-              const SizedBox(width: 10),
+              const SizedBox(width: AppSpace.s2),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                padding: const EdgeInsets.symmetric(horizontal: AppSpace.s3, vertical: AppSpace.s1),
                 decoration: BoxDecoration(
                   color: AppColors.surfaceTint,
-                  borderRadius: BorderRadius.circular(9),
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
                   border: Border.all(color: AppColors.borderSoft),
                 ),
                 child: Text(
@@ -267,7 +267,7 @@ class _ProductTile extends StatelessWidget {
                   ),
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: AppSpace.s2),
               PopupMenuButton<String>(
                 icon: const Icon(Icons.more_vert_rounded, size: 20, color: AppColors.muted),
                 onSelected: (v) async {
@@ -314,17 +314,17 @@ class _CategoriesDialogState extends State<_CategoriesDialog> {
     final catalog = context.watch<CatalogProvider>();
 
     return AlertDialog(
-      titlePadding: const EdgeInsets.fromLTRB(24, 22, 24, 0),
-      contentPadding: const EdgeInsets.fromLTRB(24, 14, 24, 0),
+      titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
+      contentPadding: const EdgeInsets.fromLTRB(24, AppSpace.s4, 24, 0),
       actionsPadding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
       title: const Row(children: [
         Icon(Icons.category_outlined, size: 22, color: AppColors.primary),
-        SizedBox(width: 10),
+        SizedBox(width: AppSpace.s3),
         Text('Categories'),
       ]),
       content: SizedBox(
         width: 380,
-        height: 390,
+        height: 388,
         child: Column(
           children: [
             Expanded(
@@ -334,7 +334,7 @@ class _CategoriesDialogState extends State<_CategoriesDialog> {
                   final c = catalog.categories[i];
                   return ListTile(
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(11),
+                        borderRadius: BorderRadius.circular(AppRadius.md),
                         side: const BorderSide(color: AppColors.borderSoft)),
                     leading: const Icon(Icons.label_outline, size: 19, color: AppColors.muted),
                     title: Text(c.name),
@@ -384,7 +384,7 @@ class _CategoriesDialogState extends State<_CategoriesDialog> {
                 },
               ),
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: AppSpace.s3),
             Row(
               children: [
                 Expanded(
@@ -393,7 +393,7 @@ class _CategoriesDialogState extends State<_CategoriesDialog> {
                     decoration: const InputDecoration(labelText: 'New category'),
                   ),
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: AppSpace.s2),
                 FilledButton.tonalIcon(
                   onPressed: () async {
                     if (_new.text.trim().isEmpty) return;

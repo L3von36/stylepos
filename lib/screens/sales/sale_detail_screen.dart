@@ -56,7 +56,7 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
       builder: (c) => AlertDialog(
         title: const Row(children: [
           Icon(Icons.undo_rounded, size: 21, color: AppColors.danger),
-          SizedBox(width: 10),
+          SizedBox(width: AppSpace.s3),
           Text('Refund this sale?'),
         ]),
         content: const Text(
@@ -139,12 +139,12 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
               icon: const Icon(Icons.undo_rounded),
               onPressed: _refund,
             ),
-          const SizedBox(width: 8),
+          const SizedBox(width: AppSpace.s2),
         ],
       ),
       body: Center(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(18),
+          padding: const EdgeInsets.all(AppSpace.s4),
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 580),
             child: Column(
@@ -153,7 +153,7 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
                 // header
                 Card(
                   child: Padding(
-                    padding: const EdgeInsets.all(18),
+                    padding: const EdgeInsets.all(AppSpace.s4 + 2),
                     child: Row(
                       children: [
                         Container(
@@ -161,7 +161,7 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
                           height: 48,
                           decoration: BoxDecoration(
                             color: sale.isRefunded ? AppColors.dangerSoft : AppColors.primarySoft,
-                            borderRadius: BorderRadius.circular(13),
+                            borderRadius: BorderRadius.circular(AppRadius.md),
                           ),
                           child: Icon(
                             sale.isRefunded ? Icons.undo_rounded : Icons.receipt_long_rounded,
@@ -169,7 +169,7 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
                             color: sale.isRefunded ? AppColors.danger : AppColors.primary,
                           ),
                         ),
-                        const SizedBox(width: 14),
+                        const SizedBox(width: AppSpace.s4),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -183,7 +183,7 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
                                           fontWeight: FontWeight.w700,
                                           color: AppColors.ink)),
                                   if (sale.isRefunded) ...[
-                                    const SizedBox(width: 8),
+                                    const SizedBox(width: AppSpace.s2),
                                     StatusPill.build(context,
                                         label: 'REFUNDED',
                                         foreground: AppColors.danger,
@@ -191,7 +191,7 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
                                   ],
                                 ],
                               ),
-                              const SizedBox(height: 3),
+                              const SizedBox(height: AppSpace.s1),
                               Text('$when · Cashier: ${sale.cashierName ?? '-'}'
                                   ' · Customer: ${sale.customerName ?? 'Walk-in'}',
                                   style: const TextStyle(
@@ -203,7 +203,7 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
                     ),
                   ),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: AppSpace.s3),
 
                 // items
                 Card(
@@ -211,7 +211,7 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
                   child: Column(
                     children: [
                       Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 13, 16, 9),
+                        padding: const EdgeInsets.fromLTRB(16, AppSpace.s3, 16, AppSpace.s2),
                         child: Row(
                           children: [
                             const Text('Items',
@@ -229,7 +229,7 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
                       const Divider(indent: 16, endIndent: 16),
                       for (final it in _items)
                         Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: AppSpace.s2),
                           child: Row(
                             children: [
                               Expanded(
@@ -258,16 +258,16 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
                             ],
                           ),
                         ),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: AppSpace.s1),
                     ],
                   ),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: AppSpace.s3),
 
                 // totals
                 Card(
                   child: Padding(
-                    padding: const EdgeInsets.all(18),
+                    padding: const EdgeInsets.all(AppSpace.s4 + 2),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
@@ -276,7 +276,7 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
                           _row('Discount', '- ${settings.money(sale.discount)}',
                               color: AppColors.danger),
                         if (sale.tax > 0) _row('Tax', settings.money(sale.tax)),
-                        const Divider(height: 20),
+                        const Divider(height: AppSpace.s5),
                         Row(
                           children: [
                             const Text('TOTAL',
@@ -295,12 +295,12 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
                                     color: AppColors.primaryDark)),
                           ],
                         ),
-                        const SizedBox(height: 10),
+                        const SizedBox(height: AppSpace.s3),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 10),
+                          padding: const EdgeInsets.symmetric(horizontal: AppSpace.s4, vertical: AppSpace.s3),
                           decoration: BoxDecoration(
                             color: AppColors.surfaceTint,
-                            borderRadius: BorderRadius.circular(11),
+                            borderRadius: BorderRadius.circular(AppRadius.sm),
                           ),
                           child: Column(
                             children: [
@@ -318,7 +318,7 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
                     ),
                   ),
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(height: AppSpace.s4),
                 Row(
                   children: [
                     Expanded(
@@ -328,7 +328,7 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
                         label: const Text('Save PDF'),
                       ),
                     ),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: AppSpace.s3),
                     Expanded(
                       child: FilledButton.icon(
                         onPressed: () => _saveOrPrint(printIt: true),
@@ -357,7 +357,7 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
           Text(label, style: const TextStyle(fontFamily: 'Carlito', fontSize: 13, color: AppColors.muted)),
           const Spacer(),
           Text(value, style: TextStyle(
-              fontFamily: 'Carlito', fontSize: 13, fontWeight: FontWeight.w600,
+              fontFamily: 'Carlito', fontSize: 13, fontWeight: FontWeight.w700,
               color: color ?? AppColors.body)),
         ],
       ),

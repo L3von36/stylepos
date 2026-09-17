@@ -152,7 +152,7 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
     return PopScope(
       canPop: _stage != _Stage.processing && _stage != _Stage.done,
       child: AlertDialog(
-        titlePadding: const EdgeInsets.fromLTRB(24, 22, 24, 0),
+        titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
         contentPadding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
         actionsPadding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
         title: Row(
@@ -170,11 +170,11 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
                 height: 34,
                 decoration: BoxDecoration(
                   color: AppColors.primarySoft,
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
                 ),
                 child: const Icon(Icons.payments_outlined, size: 19, color: AppColors.primary),
               ),
-            const SizedBox(width: 11),
+            const SizedBox(width: AppSpace.s3),
             Text(_stage == _Stage.done ? 'Sale complete' : 'Take payment'),
           ],
         ),
@@ -183,12 +183,12 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
           child: switch (_stage) {
             _Stage.done => _buildDone(context, settings),
             _Stage.processing => const Padding(
-                padding: EdgeInsets.all(40),
+                padding: EdgeInsets.all(AppSpace.s10),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     CircularProgressIndicator(),
-                    SizedBox(height: 18),
+                    SizedBox(height: AppSpace.s4),
                     Text('Processing sale…'),
                   ],
                 ),
@@ -244,14 +244,14 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
       children: [
         // totals summary
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          padding: const EdgeInsets.symmetric(horizontal: AppSpace.s4, vertical: AppSpace.s4),
           decoration: BoxDecoration(
             gradient: const LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
               colors: [Color(0xFF4F46E5), Color(0xFF6D28D9)],
             ),
-            borderRadius: BorderRadius.circular(13),
+            borderRadius: BorderRadius.circular(AppRadius.md),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -260,10 +260,10 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
                   style: TextStyle(
                       fontFamily: 'Carlito',
                       fontSize: 12.5,
-                      fontWeight: FontWeight.w600,
+                      fontWeight: FontWeight.w700,
                       letterSpacing: 0.4,
                       color: Colors.white.withValues(alpha: 0.8))),
-              const SizedBox(height: 2),
+              const SizedBox(height: AppSpace.s1),
               Text(
                 settings.money(total),
                 style: const TextStyle(
@@ -296,7 +296,7 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
         ),
 
         if (_method == 'cash') ...[
-          const SizedBox(height: 16),
+          const SizedBox(height: AppSpace.s4),
           TextField(
             controller: _tendered,
             autofocus: true,
@@ -307,10 +307,10 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
               labelText: 'Cash received (${settings.currencySymbol})',
             ),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: AppSpace.s3),
           Wrap(
-            spacing: 7,
-            runSpacing: 7,
+            spacing: AppSpace.s2,
+            runSpacing: AppSpace.s2,
             children: [
               for (final quick in [
                 total.ceilToDouble(),
@@ -332,17 +332,17 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
             ],
           ),
           if (_tenderedValue > 0) ...[
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpace.s3),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: AppSpace.s4, vertical: AppSpace.s3),
               decoration: BoxDecoration(
                 color: AppColors.successSoft,
-                borderRadius: BorderRadius.circular(11),
+                borderRadius: BorderRadius.circular(AppRadius.sm),
               ),
               child: Row(
                 children: [
                   const Icon(Icons.savings_outlined, size: 19, color: AppColors.success),
-                  const SizedBox(width: 9),
+                  const SizedBox(width: AppSpace.s2),
                   const Text('Change due',
                       style: TextStyle(fontFamily: 'Carlito', fontSize: 13.5, color: AppColors.body)),
                   const Spacer(),
@@ -361,17 +361,17 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
         ],
 
         if (cart.customer != null && settings.loyaltyStep > 0) ...[
-          const SizedBox(height: 13),
+          const SizedBox(height: AppSpace.s3),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+            padding: const EdgeInsets.symmetric(horizontal: AppSpace.s3, vertical: AppSpace.s2),
             decoration: BoxDecoration(
               color: AppColors.primarySoft,
-              borderRadius: BorderRadius.circular(11),
+              borderRadius: BorderRadius.circular(AppRadius.sm),
             ),
             child: Row(
               children: [
                 const Icon(Icons.loyalty_outlined, size: 17, color: AppColors.primary),
-                const SizedBox(width: 8),
+                const SizedBox(width: AppSpace.s2),
                 Expanded(
                   child: Text(
                     '${cart.customer!.name} earns ${(total / settings.loyaltyStep).floor()} loyalty points',
@@ -384,17 +384,17 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
         ],
 
         if (_error != null) ...[
-          const SizedBox(height: 12),
+          const SizedBox(height: AppSpace.s3),
           Container(
-            padding: const EdgeInsets.all(11),
+            padding: const EdgeInsets.all(AppSpace.s3),
             decoration: BoxDecoration(
               color: AppColors.dangerSoft,
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(AppRadius.sm),
             ),
             child: Row(
               children: [
                 const Icon(Icons.error_outline_rounded, size: 17, color: AppColors.danger),
-                const SizedBox(width: 8),
+                const SizedBox(width: AppSpace.s2),
                 Expanded(
                   child: Text(_error!,
                       style: const TextStyle(fontFamily: 'Carlito', fontSize: 12.5, color: AppColors.danger)),
@@ -414,10 +414,10 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Container(
-          padding: const EdgeInsets.all(18),
+          padding: const EdgeInsets.all(AppSpace.s4),
           decoration: BoxDecoration(
             color: AppColors.successSoft,
-            borderRadius: BorderRadius.circular(13),
+            borderRadius: BorderRadius.circular(AppRadius.md),
             border: Border.all(color: AppColors.success.withValues(alpha: 0.25)),
           ),
           child: Column(
@@ -433,12 +433,12 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
                   style: const TextStyle(fontFamily: 'Carlito', fontSize: 13, color: AppColors.body)),
               if (sale.changeDue > 0)
                 Padding(
-                  padding: const EdgeInsets.only(top: 10),
+                  padding: const EdgeInsets.only(top: AppSpace.s2),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                    padding: const EdgeInsets.symmetric(horizontal: AppSpace.s4, vertical: AppSpace.s1),
                     decoration: BoxDecoration(
                       color: Colors.white,
-                      borderRadius: BorderRadius.circular(20),
+                      borderRadius: BorderRadius.circular(AppRadius.pill),
                     ),
                     child: Text(
                       'Give change: ${settings.money(sale.changeDue)}',

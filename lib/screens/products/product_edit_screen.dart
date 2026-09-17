@@ -78,7 +78,7 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
       context: context,
       builder: (c) => StatefulBuilder(
         builder: (c, setD) => AlertDialog(
-          titlePadding: const EdgeInsets.fromLTRB(24, 22, 24, 0),
+          titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
           contentPadding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
           actionsPadding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
           title: Row(children: [
@@ -87,11 +87,11 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
               height: 34,
               decoration: BoxDecoration(
                 color: AppColors.primarySoft,
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(AppRadius.sm),
               ),
               child: const Icon(Icons.style_outlined, size: 19, color: AppColors.primary),
             ),
-            const SizedBox(width: 11),
+            const SizedBox(width: AppSpace.s3),
             Text(isNew ? 'Add variant' : 'Edit variant'),
           ]),
           content: SingleChildScrollView(
@@ -107,7 +107,7 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
                             labelText: 'Size (S/M/L/…)'), // clothing sizes
                       ),
                     ),
-                    const SizedBox(width: 10),
+                    const SizedBox(width: AppSpace.s3),
                     Expanded(
                       child: TextField(
                         controller: color,
@@ -116,7 +116,7 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: AppSpace.s3),
                 TextField(
                   controller: sku,
                   decoration: InputDecoration(
@@ -130,13 +130,13 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
                     ),
                   ),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: AppSpace.s3),
                 TextField(
                   controller: barcode,
                   decoration: const InputDecoration(
                       labelText: 'Barcode (optional, scanner-friendly)'),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: AppSpace.s3),
                 Row(
                   children: [
                     Expanded(
@@ -148,7 +148,7 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
                             labelText: 'Price (${settings.currencySymbol}) *'),
                       ),
                     ),
-                    const SizedBox(width: 10),
+                    const SizedBox(width: AppSpace.s3),
                     Expanded(
                       child: TextField(
                         controller: cost,
@@ -160,7 +160,7 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: AppSpace.s3),
                 TextField(
                   controller: stock,
                   enabled: isNew,
@@ -171,17 +171,17 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
                   ),
                 ),
                 if (err != null) ...[
-                  const SizedBox(height: 12),
+                  const SizedBox(height: AppSpace.s3),
                   Container(
-                    padding: const EdgeInsets.all(11),
+                    padding: const EdgeInsets.all(AppSpace.s3),
                     decoration: BoxDecoration(
                       color: AppColors.dangerSoft,
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius: BorderRadius.circular(AppRadius.sm),
                     ),
                     child: Row(
                       children: [
                         const Icon(Icons.error_outline_rounded, size: 17, color: AppColors.danger),
-                        const SizedBox(width: 8),
+                        const SizedBox(width: AppSpace.s2),
                         Expanded(
                           child: Text(err!,
                               style: const TextStyle(
@@ -279,7 +279,7 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
         title: Text(_isNew ? 'New product' : 'Edit product'),
         actions: [
           Padding(
-            padding: const EdgeInsets.only(right: 14),
+            padding: const EdgeInsets.only(right: AppSpace.s4),
             child: FilledButton.icon(
               onPressed: _save,
               icon: const Icon(Icons.check_rounded, size: 18),
@@ -289,7 +289,7 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
         ],
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(18),
+        padding: const EdgeInsets.all(AppSpace.s4),
         child: Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 780),
@@ -307,7 +307,7 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
                           labelText: 'Product name *',
                           hintText: 'e.g. Classic Cotton Tee'),
                     ),
-                    const SizedBox(height: 13),
+                    const SizedBox(height: AppSpace.s3),
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -326,7 +326,7 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
                             onChanged: (v) => setState(() => _categoryId = v),
                           ),
                         ),
-                        const SizedBox(width: 13),
+                        const SizedBox(width: AppSpace.s3),
                         Expanded(
                           child: TextField(
                             controller: _barcode,
@@ -336,14 +336,14 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 13),
+                    const SizedBox(height: AppSpace.s3),
                     TextField(
                       controller: _description,
                       maxLines: 2,
                       decoration: const InputDecoration(
                           labelText: 'Description (optional)'),
                     ),
-                    const SizedBox(height: 13),
+                    const SizedBox(height: AppSpace.s3),
                     SizedBox(
                       width: 220,
                       child: TextField(
@@ -356,7 +356,7 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(height: AppSpace.s4),
 
                 // --- variants card ---
                 SectionCard(
@@ -378,22 +378,22 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
                   children: [
                     for (final v in _variants)
                       Container(
-                        margin: const EdgeInsets.only(bottom: 8),
-                        padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 9),
+                        margin: const EdgeInsets.only(bottom: AppSpace.s2),
+                        padding: const EdgeInsets.symmetric(horizontal: AppSpace.s3, vertical: AppSpace.s2),
                         decoration: BoxDecoration(
                           color: AppColors.surfaceTint,
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(AppRadius.md),
                           border: Border.all(color: AppColors.borderSoft),
                         ),
                         child: Row(
                           children: [
                             Container(
-                              width: 38,
-                              height: 38,
+                              width: 40,
+                              height: 40,
                               alignment: Alignment.center,
                               decoration: BoxDecoration(
                                 color: AppColors.primarySoft,
-                                borderRadius: BorderRadius.circular(10),
+                                borderRadius: BorderRadius.circular(AppRadius.sm),
                               ),
                               child: Text(
                                 v.size.isEmpty
@@ -403,7 +403,7 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
                                     fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.primary),
                               ),
                             ),
-                            const SizedBox(width: 12),
+                            const SizedBox(width: AppSpace.s3),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -446,7 +446,7 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
                           style: theme.textTheme.bodySmall),
                   ],
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: AppSpace.s6),
               ],
             ),
           ),

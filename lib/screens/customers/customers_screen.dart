@@ -48,7 +48,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
     }
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
+      padding: const EdgeInsets.all(AppSpace.s4),
       child: Column(
         children: [
           PageHeader(
@@ -71,7 +71,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
               setState(() => _query = '');
             },
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: AppSpace.s4),
           Expanded(
             child: list.isEmpty
                 ? EmptyState(
@@ -89,11 +89,12 @@ class _CustomersScreenState extends State<CustomersScreen> {
                       return Card(
                         child: ListTile(
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
+                            borderRadius: BorderRadius.circular(AppRadius.md),
                             side: const BorderSide(color: Colors.transparent),
                           ),
                           onTap: () => setState(() => _openCustomerId = c.id),
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 3),
+                          contentPadding:
+                              const EdgeInsets.symmetric(horizontal: AppSpace.s4, vertical: AppSpace.s1),
                           leading: InitialsAvatar(c.name),
                           title: Text(c.name),
                           subtitle: Text(c.phone ?? c.email ?? '—'),
@@ -105,7 +106,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
                                   foreground: AppColors.primary,
                                   background: AppColors.primarySoft,
                                   icon: Icons.loyalty_outlined),
-                              const SizedBox(width: 6),
+                              const SizedBox(width: AppSpace.s2),
                               const Icon(Icons.chevron_right_rounded, size: 20, color: AppColors.faint),
                             ],
                           ),
@@ -157,7 +158,7 @@ class _CustomerDetailState extends State<_CustomerDetail> {
         : _history!.where((s) => !s.isRefunded).fold(0.0, (sum, s) => sum + s.total);
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
+      padding: const EdgeInsets.all(AppSpace.s4),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -167,9 +168,9 @@ class _CustomerDetailState extends State<_CustomerDetail> {
                 icon: const Icon(Icons.arrow_back_rounded),
                 onPressed: widget.onBack,
               ),
-              const SizedBox(width: 6),
+              const SizedBox(width: AppSpace.s2),
               InitialsAvatar(c.name, size: 48),
-              const SizedBox(width: 13),
+              const SizedBox(width: AppSpace.s3),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -189,7 +190,7 @@ class _CustomerDetailState extends State<_CustomerDetail> {
                 icon: const Icon(Icons.edit_outlined, size: 17),
                 label: const Text('Edit'),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: AppSpace.s2),
               FilledButton.icon(
                 onPressed: () {
                   context.read<CartProvider>().setCustomer(c);
@@ -198,7 +199,7 @@ class _CustomerDetailState extends State<_CustomerDetail> {
                 icon: const Icon(Icons.point_of_sale_rounded, size: 18),
                 label: const Text('Start sale'),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: AppSpace.s2),
               OutlinedButton(
                 style: OutlinedButton.styleFrom(foregroundColor: AppColors.danger),
                 onPressed: () async {
@@ -216,7 +217,7 @@ class _CustomerDetailState extends State<_CustomerDetail> {
               ),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: AppSpace.s4),
           Row(
             children: [
               Expanded(
@@ -226,7 +227,7 @@ class _CustomerDetailState extends State<_CustomerDetail> {
                   icon: Icons.loyalty_outlined,
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: AppSpace.s3),
               Expanded(
                 child: KpiCard(
                   label: 'Purchases',
@@ -236,7 +237,7 @@ class _CustomerDetailState extends State<_CustomerDetail> {
                   soft: AppColors.infoSoft,
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: AppSpace.s3),
               Expanded(
                 child: KpiCard(
                   label: 'Total spent',
@@ -248,14 +249,14 @@ class _CustomerDetailState extends State<_CustomerDetail> {
               ),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: AppSpace.s4),
           const Text('Purchase history',
               style: TextStyle(
                   fontFamily: 'Carlito',
                   fontSize: 15,
                   fontWeight: FontWeight.w700,
                   color: AppColors.ink)),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpace.s2),
           Expanded(
             child: _history == null
                 ? const Center(child: CircularProgressIndicator())
@@ -271,17 +272,17 @@ class _CustomerDetailState extends State<_CustomerDetail> {
                           final s = _history![i];
                           final dt = DateTime.fromMillisecondsSinceEpoch(s.createdAt * 1000);
                           return Container(
-                            margin: const EdgeInsets.only(bottom: 7),
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+                            margin: const EdgeInsets.only(bottom: AppSpace.s2),
+                            padding: const EdgeInsets.symmetric(horizontal: AppSpace.s4, vertical: AppSpace.s2 + 2),
                             decoration: BoxDecoration(
                               color: Colors.white,
-                              borderRadius: BorderRadius.circular(12),
+                              borderRadius: BorderRadius.circular(AppRadius.md),
                               border: Border.all(color: AppColors.borderSoft),
                             ),
                             child: Row(
                               children: [
                                 const Icon(Icons.receipt_long_outlined, size: 19, color: AppColors.muted),
-                                const SizedBox(width: 11),
+                                const SizedBox(width: AppSpace.s3),
                                 Expanded(
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
