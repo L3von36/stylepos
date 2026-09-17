@@ -1,16 +1,29 @@
+import 'dart:io' show Platform;
+
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/product.dart';
+import '../../services/scan_gate.dart';
+import '../../state/auth.dart';
 import '../../state/cart.dart';
 import '../../state/catalog.dart';
+import '../../state/sales.dart';
 import '../../state/settings.dart';
 import '../../widgets/ui.dart';
 import 'cart_panel.dart';
+import 'scan_dialog.dart';
 import 'variant_picker_dialog.dart';
 
 /// The sell screen: product grid on the left, cart on the right (wide),
-/// or a cart FAB + bottom sheet on narrow screens.
+/// or a cart FAB + bottom sheet on narrow screens (phones).
+///
+/// Barcode workflow: hardware scanners type into the focused field and
+/// press Enter; on phones the camera button opens a live scanner. The
+/// [ScanGate] guarantees one physical scan adds exactly one item even
+/// though scanners/cameras can emit the same code several times.
 class PosScreen extends StatefulWidget {
   const PosScreen({super.key});
 
@@ -21,8 +34,11 @@ class PosScreen extends StatefulWidget {
 class _PosScreenState extends State<PosScreen> {
   final _search = TextEditingController();
   final _scanFocus = FocusNode();
+  final ScanGate _gate = ScanGate();
   int _categoryFilter = -1; // -1 = all
   String _query = '';
+
+  bool get _cameraAvailable => !kIsWeb && (Platform.isAndroid || Platform.isIOS);
 
   @override
   void dispose() {
@@ -31,27 +47,120 @@ class _PosScreenState extends State<PosScreen> {
     super.dispose();
   }
 
+  void _refocus() {
+    _search.clear();
+    setState(() => _query = '');
+    _scanFocus.requestFocus();
+  }
+
+  void _toast(String msg, Color color) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..clearSnackBars()
+      ..showSnackBar(SnackBar(
+        content: Text(msg),
+        behavior: SnackBarBehavior.floating,
+        width: 380,
+        backgroundColor: color,
+        duration: const Duration(milliseconds: 1600),
+      ));
+  }
+
+  /// Tries to ring up [code] as an exact item code.
+  /// Returns true when handled (added or rejected as duplicate).
+  /// When [strict] is set (camera path) unknown codes show an error;
+  /// from the keyboard path unknown codes fall through to text search.
+  bool _tryRingUp(String rawCode, {required bool strict}) {
+    final code = rawCode.trim();
+    if (code.isEmpty) return false;
+
+    final catalog = context.read<CatalogProvider>();
+    final cart = context.read<CartProvider>();
+
+    // One scan = one item: swallow repeats inside the cooldown window.
+    if (!_gate.accept(code)) {
+      _toast('Already added just now — scan again to repeat', AppColors.warning);
+      return true;
+    }
+
+    // Exact variant barcode / SKU -> add one unit.
+    final match = catalog.findByCode(code);
+    if (match != null) {
+      final ok = cart.add(match.$1, match.$2);
+      if (ok) {
+        HapticFeedback.selectionClick();
+      } else {
+        HapticFeedback.heavyImpact();
+        _toast('Only ${match.$2.stock} in stock — all are in the cart',
+            AppColors.warning);
+      }
+      _refocus();
+      return true;
+    }
+
+    // Product-level barcode -> single variant adds straight away,
+    // multi-variant products open the size/color picker.
+    Product? product;
+    for (final p in catalog.products) {
+      if ((p.barcode ?? '').trim().toLowerCase() == code.toLowerCase()) {
+        product = p;
+        break;
+      }
+    }
+    if (product != null && product.variants.isNotEmpty) {
+      if (product.variants.length == 1) {
+        final ok = cart.add(product, product.variants.first);
+        if (ok) {
+          HapticFeedback.selectionClick();
+        } else {
+          HapticFeedback.heavyImpact();
+          _toast('Only ${product.variants.first.stock} in stock — all are in the cart',
+              AppColors.warning);
+        }
+      } else {
+        showDialog(
+          context: context,
+          builder: (_) => VariantPickerDialog(product: product!),
+        );
+      }
+      _refocus();
+      return true;
+    }
+
+    if (strict) {
+      HapticFeedback.heavyImpact();
+      _toast('No item tagged "$code" in this shop', AppColors.danger);
+      _refocus();
+      return true;
+    }
+    return false;
+  }
+
   /// Scanner workflow: type/scan a code, press Enter -> exact SKU/barcode
   /// match is added straight to the cart. Anything else becomes a filter.
   void _onSearchSubmit(String value) {
-    final catalog = context.read<CatalogProvider>();
-    final match = catalog.findByCode(value);
-    if (match != null) {
-      context.read<CartProvider>().add(match.$1, match.$2);
-      _search.clear();
-      setState(() => _query = '');
-      _scanFocus.requestFocus();
-      return;
+    final v = value.trim();
+    if (v.isEmpty) return;
+    if (_tryRingUp(v, strict: false)) {
+      _refocus();
+    } else {
+      setState(() => _query = v);
     }
-    setState(() => _query = value);
+  }
+
+  /// Camera scanning path (phones): returns exactly one code per scan.
+  Future<void> _openCameraScanner() async {
+    _gate.reset();
+    final code = await openScanner(context);
+    if (code == null || !mounted) return;
+    _tryRingUp(code, strict: true);
+    _scanFocus.requestFocus();
   }
 
   List<Product> _filtered(CatalogProvider catalog) {
     Iterable<Product> out = catalog.products;
     if (_categoryFilter >= 0) {
-      final catId = _categoryFilter == 0 ? null : _categoryFilter;
-      out = out.where((p) => p.categoryId == catId);
-      if (_categoryFilter == 0) out = out.where((p) => p.categoryId == null);
+      out = out.where((p) => p.categoryId == _categoryFilter);
     }
     if (_query.trim().isNotEmpty) {
       final q = _query.trim().toLowerCase();
@@ -116,7 +225,9 @@ class _PosScreenState extends State<PosScreen> {
           ),
           icon: const Icon(Icons.shopping_cart_outlined, size: 21),
           label: Consumer<CartProvider>(
-            builder: (context, cart, _) => Text(cart.isEmpty ? 'Cart' : '${cart.itemCount} item${cart.itemCount == 1 ? '' : 's'}'),
+            builder: (context, cart, _) => Text(cart.isEmpty
+                ? (cart.heldCount > 0 ? 'Cart · ${cart.heldCount} held' : 'Cart')
+                : '${cart.itemCount} item${cart.itemCount == 1 ? '' : 's'}'),
           ),
         ),
         body: grid,
@@ -130,8 +241,15 @@ class _PosScreenState extends State<PosScreen> {
     AppSettings settings,
     List<Product> products,
   ) {
+    final auth = context.watch<AuthProvider>();
+    final user = auth.user;
+
     return Column(
       children: [
+        // my-shift strip
+        if (user != null) _MyTodayStrip(userId: user.id!),
+        const SizedBox(height: AppSpace.s3),
+
         // scan / search bar
         TextField(
           controller: _search,
@@ -153,16 +271,26 @@ class _PosScreenState extends State<PosScreen> {
               child: const Icon(Icons.qr_code_scanner_rounded, size: 19, color: AppColors.primary),
             ),
             prefixIconConstraints: const BoxConstraints(minWidth: 40),
-            suffixIcon: _query.isEmpty
-                ? const Icon(Icons.search_rounded, size: 20, color: AppColors.faint)
-                : IconButton(
-                    icon: const Icon(Icons.close_rounded, size: 19),
-                    onPressed: () {
-                      _search.clear();
-                      setState(() => _query = '');
-                      _scanFocus.requestFocus();
-                    },
-                  ),
+            suffixIcon: Row(mainAxisSize: MainAxisSize.min, children: [
+              if (_cameraAvailable)
+                IconButton(
+                  tooltip: 'Scan with camera',
+                  icon: const Icon(Icons.photo_camera_outlined, size: 20, color: AppColors.primary),
+                  onPressed: _openCameraScanner,
+                ),
+              if (_query.isEmpty)
+                const SizedBox(width: AppSpace.s3)
+              else
+                IconButton(
+                  tooltip: 'Clear',
+                  icon: const Icon(Icons.close_rounded, size: 19),
+                  onPressed: () {
+                    _search.clear();
+                    setState(() => _query = '');
+                    _scanFocus.requestFocus();
+                  },
+                ),
+            ]),
           ),
         ),
         const SizedBox(height: AppSpace.s3),
@@ -233,6 +361,78 @@ class _PosScreenState extends State<PosScreen> {
       // M3 chips use the small shape (8dp)
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.sm)),
       onSelected: (_) => setState(() => _categoryFilter = value),
+    );
+  }
+}
+
+/// Slim strip showing the logged-in staff member's sales since midnight.
+/// Refreshes automatically after every checkout or refund.
+class _MyTodayStrip extends StatefulWidget {
+  final int userId;
+  const _MyTodayStrip({required this.userId});
+
+  @override
+  State<_MyTodayStrip> createState() => _MyTodayStripState();
+}
+
+class _MyTodayStripState extends State<_MyTodayStrip> {
+  Future<({int orders, double revenue, int itemsSold})>? _future;
+  int _lastRevision = -1;
+
+  void _sync() {
+    final sales = context.watch<SalesProvider>();
+    if (_future == null || sales.revision != _lastRevision) {
+      _lastRevision = sales.revision;
+      _future = sales.todaySummaryForUser(widget.userId);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    _sync();
+    final settings = context.watch<AppSettings>();
+    final auth = context.watch<AuthProvider>();
+
+    return FutureBuilder<({int orders, double revenue, int itemsSold})>(
+      future: _future,
+      builder: (context, snap) {
+        final s = snap.data;
+        final hasData = s != null && (s.orders > 0 || s.revenue > 0);
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: AppSpace.s4, vertical: AppSpace.s2),
+          decoration: BoxDecoration(
+            color: AppColors.primarySoft.withValues(alpha: 0.55),
+            borderRadius: BorderRadius.circular(AppRadius.sm),
+            border: Border.all(color: AppColors.primary.withValues(alpha: 0.18)),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.badge_outlined, size: 16, color: AppColors.primary),
+              const SizedBox(width: AppSpace.s2),
+              Text(
+                '${auth.user?.name ?? 'You'} · ${auth.user?.isAdmin == true ? 'Manager' : 'Sales'}',
+                style: const TextStyle(
+                    fontFamily: 'Carlito', fontSize: 12.5, fontWeight: FontWeight.w700,
+                    color: AppColors.primaryDark),
+              ),
+              const Spacer(),
+              if (hasData) ...[
+                Text(
+                  'Today: ${s.orders} sale${s.orders == 1 ? '' : 's'} · '
+                  '${s.itemsSold} item${s.itemsSold == 1 ? '' : 's'} · '
+                  '${settings.money(s.revenue)}',
+                  style: const TextStyle(
+                      fontFamily: 'Carlito', fontSize: 12.5, color: AppColors.body),
+                ),
+              ] else
+                Text(
+                  'No sales yet today — scan a garment to start',
+                  style: const TextStyle(fontFamily: 'Carlito', fontSize: 12.5, color: AppColors.muted),
+                ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

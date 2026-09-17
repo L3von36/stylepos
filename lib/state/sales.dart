@@ -7,6 +7,10 @@ import 'settings.dart';
 
 /// Sales history, checkout transaction and report queries.
 class SalesProvider extends ChangeNotifier {
+  /// Bumped whenever a sale completes or is refunded so listeners
+  /// (e.g. the POS "my sales today" strip) know to refresh.
+  int revision = 0;
+
   /// Completes a sale inside a single DB transaction:
   /// inserts the sale + items, decrements stock, records movements and
   /// awards loyalty points. Returns the persisted [Sale] (with id).
@@ -17,7 +21,7 @@ class SalesProvider extends ChangeNotifier {
     required double amountPaid,
     required AppSettings settings,
   }) async {
-    assert(!cart.isEmpty, 'Cannot checkout an empty cart');
+    assert(cart.isNotEmpty, 'Cannot checkout an empty cart');
 
     final db = await DB.instance();
     final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
@@ -103,6 +107,7 @@ class SalesProvider extends ChangeNotifier {
       );
     });
 
+    revision++;
     notifyListeners();
     return sale;
   }
@@ -173,6 +178,7 @@ class SalesProvider extends ChangeNotifier {
         });
       }
     });
+    revision++;
     notifyListeners();
   }
 
@@ -294,6 +300,110 @@ class SalesProvider extends ChangeNotifier {
     ''', [cutoff]);
     return rows
         .map((r) => (r['name'] as String, (r['revenue'] as num).toDouble()))
+        .toList();
+  }
+
+  /// "My sales today" strip on the POS screen: orders + revenue + items
+  /// sold by one staff member since local midnight.
+  Future<({int orders, double revenue, int itemsSold})> todaySummaryForUser(
+      int userId) async {
+    final db = await DB.instance();
+    final now = DateTime.now();
+    final midnight = DateTime(now.year, now.month, now.day)
+        .millisecondsSinceEpoch ~/
+        1000;
+    final rows = await db.rawQuery('''
+      SELECT COUNT(*) AS orders, COALESCE(SUM(total), 0) AS revenue
+      FROM sales
+      WHERE status = 'completed' AND user_id = ? AND created_at >= ?
+    ''', [userId, midnight]);
+    final itemRows = await db.rawQuery('''
+      SELECT COALESCE(SUM(si.qty), 0) AS items
+      FROM sale_items si
+      JOIN sales s ON s.id = si.sale_id
+      WHERE s.status = 'completed' AND s.user_id = ? AND s.created_at >= ?
+    ''', [userId, midnight]);
+    return (
+      orders: rows.first['orders'] as int? ?? 0,
+      revenue: (rows.first['revenue'] as num?)?.toDouble() ?? 0,
+      itemsSold: itemRows.first['items'] as int? ?? 0,
+    );
+  }
+
+  /// Revenue and order count per staff member (manager feature).
+  Future<List<({String name, int orders, double revenue})>> staffPerformance(
+      int days) async {
+    final db = await DB.instance();
+    final cutoff = days > 0
+        ? DateTime.now()
+                .subtract(Duration(days: days))
+                .millisecondsSinceEpoch ~/
+            1000
+        : 0;
+    final rows = await db.rawQuery('''
+      SELECT u.name AS name,
+             COUNT(*) AS orders,
+             COALESCE(SUM(s.total), 0) AS revenue
+      FROM sales s
+      JOIN users u ON u.id = s.user_id
+      WHERE s.status = 'completed' AND s.created_at >= ?
+      GROUP BY u.id, u.name
+      ORDER BY revenue DESC
+    ''', [cutoff]);
+    return rows
+        .map((r) => (
+              name: r['name'] as String? ?? 'Unknown',
+              orders: r['orders'] as int? ?? 0,
+              revenue: (r['revenue'] as num?)?.toDouble() ?? 0,
+            ))
+        .toList();
+  }
+
+  /// Cost of goods sold for the window, from variant cost prices.
+  /// Lets the manager see an estimated profit next to revenue.
+  Future<double> cogs(int days) async {
+    final db = await DB.instance();
+    final cutoff = days > 0
+        ? DateTime.now()
+                .subtract(Duration(days: days))
+                .millisecondsSinceEpoch ~/
+            1000
+        : 0;
+    final rows = await db.rawQuery('''
+      SELECT COALESCE(SUM(si.qty * COALESCE(v.cost, 0)), 0) AS cost
+      FROM sale_items si
+      JOIN sales s ON s.id = si.sale_id
+      LEFT JOIN variants v ON v.id = si.variant_id
+      WHERE s.status = 'completed' AND s.created_at >= ?
+    ''', [cutoff]);
+    return (rows.first['cost'] as num?)?.toDouble() ?? 0;
+  }
+
+  /// Totals per payment method in the window (manager feature).
+  Future<List<({String method, int orders, double total})>> paymentBreakdown(
+      int days) async {
+    final db = await DB.instance();
+    final cutoff = days > 0
+        ? DateTime.now()
+                .subtract(Duration(days: days))
+                .millisecondsSinceEpoch ~/
+            1000
+        : 0;
+    final rows = await db.rawQuery('''
+      SELECT payment_method AS method,
+             COUNT(*) AS orders,
+             COALESCE(SUM(total), 0) AS total
+      FROM sales
+      WHERE status = 'completed' AND created_at >= ?
+      GROUP BY payment_method
+      ORDER BY total DESC
+    ''', [cutoff]);
+    return rows
+        .map((r) => (
+              method: r['method'] as String? ?? 'cash',
+              orders: r['orders'] as int? ?? 0,
+              total: (r['total'] as num?)?.toDouble() ?? 0,
+            ))
         .toList();
   }
 }

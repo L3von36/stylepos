@@ -194,7 +194,7 @@ class _CustomerDetailState extends State<_CustomerDetail> {
               FilledButton.icon(
                 onPressed: () {
                   context.read<CartProvider>().setCustomer(c);
-                  context.read<NavProvider>().go(0); // jump to POS tab
+                  context.read<NavProvider>().goTo(NavId.pos); // jump to POS tab
                 },
                 icon: const Icon(Icons.point_of_sale_rounded, size: 18),
                 label: const Text('Start sale'),

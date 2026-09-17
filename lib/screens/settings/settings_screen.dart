@@ -73,7 +73,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
 
-    return SingleChildScrollView(
+    // Pushed as a standalone page from the app bar (manager only), so it
+    // owns a Scaffold with a back button.
+    return Scaffold(
+      appBar: AppBar(title: const Text('Settings')),
+      body: SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(AppSpace.s4, AppSpace.s4, AppSpace.s4, AppSpace.s6),
       child: Center(
         child: ConstrainedBox(
@@ -246,7 +250,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             Text(
                               'Offline point of sale for clothing shops\n'
                               'Signed in as ${auth.user?.name ?? "-"} '
-                              '(${(auth.user?.isAdmin ?? false) ? "admin" : "cashier"})',
+                              '(${(auth.user?.isAdmin ?? false) ? "Manager" : "Sales"})',
                               style: const TextStyle(
                                   fontFamily: 'Carlito', fontSize: 12.5, color: AppColors.muted, height: 1.4),
                             ),
@@ -261,6 +265,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ],
           ),
         ),
+      ),
       ),
     );
   }

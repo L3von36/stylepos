@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/product.dart';
+import '../../services/barcode.dart';
+import '../../services/label_service.dart';
+import '../../services/receipt_service.dart';
 import '../../state/catalog.dart';
 import '../../state/settings.dart';
 import '../../widgets/ui.dart';
@@ -62,8 +65,24 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
     return '${prefix.isEmpty ? "ITM" : prefix}-$seed';
   }
 
+  /// Barcodes already used anywhere in the catalog, so generated codes
+  /// never collide with an existing variant or product code.
+  Set<String> _takenCodes(CatalogProvider catalog) {
+    return {
+      for (final p in catalog.products) ...[
+        if (p.barcode != null && p.barcode!.trim().isNotEmpty) p.barcode!.trim(),
+        for (final v in p.variants) ...[
+          if (v.barcode != null && v.barcode!.trim().isNotEmpty) v.barcode!.trim(),
+        ],
+      ],
+      for (final v in _variants)
+        if (v.barcode != null && v.barcode!.trim().isNotEmpty) v.barcode!.trim(),
+    };
+  }
+
   Future<void> _editVariant(ProductVariant v) async {
     final settings = context.read<AppSettings>();
+    final catalog = context.read<CatalogProvider>();
     final isNew = v.id == null;
     final size = TextEditingController(text: v.size);
     final color = TextEditingController(text: v.color);
@@ -133,8 +152,19 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
                 const SizedBox(height: AppSpace.s3),
                 TextField(
                   controller: barcode,
-                  decoration: const InputDecoration(
-                      labelText: 'Barcode (optional, scanner-friendly)'),
+                  decoration: InputDecoration(
+                    labelText: 'Barcode (unique, scanner-friendly)',
+                    helperText: 'Print and tag the garment so one scan sells it',
+                    suffixIcon: IconButton(
+                      tooltip: 'Generate in-store barcode',
+                      icon: const Icon(Icons.qr_code_2_rounded, size: 19),
+                      onPressed: () {
+                        final taken = _takenCodes(catalog);
+                        setD(() => barcode.text =
+                            BarcodeGen.generateInStore(isTaken: taken.contains));
+                      },
+                    ),
+                  ),
                 ),
                 const SizedBox(height: AppSpace.s3),
                 Row(
@@ -231,6 +261,151 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
     }
   }
 
+  /// Print tag labels (item name + size/color + price + barcode) so the
+  /// sales person can ring up garments straight off the rack.
+  Future<void> _printLabels() async {
+    if (_variants.isEmpty) {
+      _snack(context, 'Add at least one variant first.');
+      return;
+    }
+    final settings = context.read<AppSettings>();
+    final messenger = ScaffoldMessenger.of(context);
+    LabelPaper paper = LabelPaper.a4;
+    final copies = [for (final _ in _variants) 1];
+
+    await showDialog(
+      context: context,
+      builder: (c) => StatefulBuilder(
+        builder: (c, setD) => AlertDialog(
+          titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
+          contentPadding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+          actionsPadding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+          title: const Row(children: [
+            Icon(Icons.style_outlined, size: 22, color: AppColors.primary),
+            SizedBox(width: AppSpace.s3),
+            Text('Barcode labels'),
+          ]),
+          content: SizedBox(
+            width: 430,
+            height: 400,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                SegmentedButton<LabelPaper>(
+                  showSelectedIcon: false,
+                  segments: const [
+                    ButtonSegment(value: LabelPaper.a4, label: Text('A4 sheet')),
+                    ButtonSegment(
+                        value: LabelPaper.roll50x30, label: Text('50×30 roll')),
+                  ],
+                  selected: {paper},
+                  onSelectionChanged: (s) => setD(() => paper = s.first),
+                ),
+                const SizedBox(height: AppSpace.s3),
+                Expanded(
+                  child: ListView.builder(
+                    itemCount: _variants.length,
+                    itemBuilder: (context, i) {
+                      final v = _variants[i];
+                      return ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        dense: true,
+                        title: Text(v.descriptor,
+                            style: const TextStyle(
+                                fontFamily: 'Carlito',
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.w700)),
+                        subtitle: Text(v.barcode?.isEmpty == false
+                            ? v.barcode!
+                            : v.sku,
+                            style: const TextStyle(
+                                fontFamily: 'Carlito', fontSize: 12)),
+                        trailing: QtyStepper(
+                          qty: copies[i],
+                          onMinus: () => setD(() =>
+                              copies[i] = (copies[i] - 1).clamp(0, 99)),
+                          onPlus: () => setD(
+                              () => copies[i] = (copies[i] + 1).clamp(0, 99)),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                Text(
+                  '${copies.fold<int>(0, (a, b) => a + b)} label(s) will be printed',
+                  style: const TextStyle(
+                      fontFamily: 'Carlito', fontSize: 12.5, color: AppColors.muted),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(c), child: const Text('Cancel')),
+            TextButton.icon(
+              onPressed: () async {
+                try {
+                  final bytes = await LabelService.build(
+                    settings: settings,
+                    paper: paper,
+                    entries: [
+                      for (var i = 0; i < _variants.length; i++)
+                        (
+                          Product(
+                              name: _name.text.isEmpty
+                                  ? 'Product'
+                                  : _name.text,
+                              createdAt: 0),
+                          _variants[i],
+                          copies[i],
+                        ),
+                    ],
+                  );
+                  final file = await ReceiptService.savePdf(
+                      bytes, 'labels-${DateTime.now().millisecondsSinceEpoch}');
+                  messenger.showSnackBar(
+                      SnackBar(content: Text('Saved to ${file.path}')));
+                } catch (e) {
+                  messenger.showSnackBar(
+                      SnackBar(content: Text('Could not build labels: $e')));
+                }
+              },
+              icon: const Icon(Icons.save_outlined, size: 17),
+              label: const Text('Save PDF'),
+            ),
+            FilledButton.icon(
+              onPressed: () async {
+                try {
+                  final bytes = await LabelService.build(
+                    settings: settings,
+                    paper: paper,
+                    entries: [
+                      for (var i = 0; i < _variants.length; i++)
+                        (
+                          Product(
+                              name: _name.text.isEmpty
+                                  ? 'Product'
+                                  : _name.text,
+                              createdAt: 0),
+                          _variants[i],
+                          copies[i],
+                        ),
+                    ],
+                  );
+                  await ReceiptService.printPdf(bytes);
+                } catch (e) {
+                  messenger.showSnackBar(
+                      SnackBar(content: Text('Could not print: $e')));
+                }
+              },
+              icon: const Icon(Icons.print_outlined, size: 17),
+              label: const Text('Print'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _save() async {
     final catalog = context.read<CatalogProvider>();
     final settings = context.read<AppSettings>();
@@ -246,6 +421,43 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
     if (skus.length != _variants.length) {
       _snack(context, 'Each variant needs a unique SKU.');
       return;
+    }
+
+    // Barcodes must be unique — the scan-to-sell flow depends on it.
+    final seenBc = <String>{};
+    for (final v in _variants) {
+      final bc = (v.barcode ?? '').trim();
+      if (bc.isEmpty) continue;
+      if (!seenBc.add(bc.toLowerCase())) {
+        _snack(context, 'Two variants share barcode $bc — barcodes must be unique.');
+        return;
+      }
+    }
+
+    // Tag every variant with a unique scannable code so the POS can
+    // ring it up with one scan. Codes are generated for any variant
+    // left without one.
+    final taken = _takenCodes(catalog);
+    final tagged = <ProductVariant>[];
+    var autoTagged = false;
+    for (final v in _variants) {
+      final bc = (v.barcode ?? '').trim();
+      if (bc.isNotEmpty) {
+        taken.add(bc);
+        tagged.add(v);
+        continue;
+      }
+      final code = BarcodeGen.generateInStore(isTaken: taken.contains);
+      taken.add(code);
+      tagged.add(v.copyWith(barcode: code));
+      autoTagged = true;
+    }
+    if (autoTagged) {
+      setState(() {
+        _variants
+          ..clear()
+          ..addAll(tagged);
+      });
     }
 
     final product = (widget.product ?? Product(
@@ -363,17 +575,28 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
                   icon: Icons.style_outlined,
                   title: 'Variants',
                   subtitle: 'Each size/color combination tracks its own stock, price and barcode.',
-                  action: FilledButton.tonalIcon(
-                    onPressed: () {
-                      setState(() {
-                        _variants.add(ProductVariant(
-                          productId: widget.product?.id ?? 0,
-                          sku: _autoSku(''),
-                        ));
-                      });
-                    },
-                    icon: const Icon(Icons.add_rounded, size: 18),
-                    label: const Text('Add variant'),
+                  action: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      OutlinedButton.icon(
+                        onPressed: _printLabels,
+                        icon: const Icon(Icons.qr_code_2_rounded, size: 17),
+                        label: const Text('Labels'),
+                      ),
+                      const SizedBox(width: AppSpace.s2),
+                      FilledButton.tonalIcon(
+                        onPressed: () {
+                          setState(() {
+                            _variants.add(ProductVariant(
+                              productId: widget.product?.id ?? 0,
+                              sku: _autoSku(''),
+                            ));
+                          });
+                        },
+                        icon: const Icon(Icons.add_rounded, size: 18),
+                        label: const Text('Add variant'),
+                      ),
+                    ],
                   ),
                   children: [
                     for (final v in _variants)

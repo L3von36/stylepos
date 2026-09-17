@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../models/customer.dart';
 import '../../state/cart.dart';
+import '../../state/catalog.dart';
 import '../../state/customers.dart';
 import '../../state/nav.dart';
 import '../../state/settings.dart';
@@ -38,7 +39,31 @@ class CartPanel extends StatelessWidget {
                         fontWeight: FontWeight.w700,
                         color: AppColors.ink)),
               ),
-              if (!cart.isEmpty)
+              if (cart.heldCount > 0)
+                TextButton.icon(
+                  style: TextButton.styleFrom(
+                      foregroundColor: AppColors.info, visualDensity: VisualDensity.compact),
+                  onPressed: () => _showHeldSheet(context),
+                  icon: const Icon(Icons.bookmark_rounded, size: 17),
+                  label: Text('${cart.heldCount} held'),
+                ),
+              if (cart.isNotEmpty)
+                TextButton.icon(
+                  style: TextButton.styleFrom(
+                      foregroundColor: AppColors.primary, visualDensity: VisualDensity.compact),
+                  onPressed: () async {
+                    await context.read<CartProvider>().holdCurrentSale();
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                        content: Text('Sale held — serve the next customer'),
+                        behavior: SnackBarBehavior.floating,
+                      ));
+                    }
+                  },
+                  icon: const Icon(Icons.bookmark_border_rounded, size: 17),
+                  label: const Text('Hold'),
+                ),
+              if (cart.isNotEmpty)
                 TextButton(
                   style: TextButton.styleFrom(foregroundColor: AppColors.danger, visualDensity: VisualDensity.compact),
                   onPressed: () => cart.clear(),
@@ -104,7 +129,7 @@ class CartPanel extends StatelessWidget {
         ),
 
         // discount + totals
-        if (!cart.isEmpty)
+        if (cart.isNotEmpty)
           Container(
             margin: const EdgeInsets.fromLTRB(AppSpace.s4, AppSpace.s2, AppSpace.s4, 0),
             padding: const EdgeInsets.fromLTRB(AppSpace.s4, AppSpace.s3, AppSpace.s4, AppSpace.s3),
@@ -191,6 +216,147 @@ class CartPanel extends StatelessWidget {
     );
   }
 
+  /// Lists parked sales so the sales person can serve several customers
+  /// at once (e.g. one keeps browsing while another pays).
+  Future<void> _showHeldSheet(BuildContext context) async {
+    final cart = context.read<CartProvider>();
+    final catalog = context.read<CatalogProvider>();
+    await showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.xl)),
+      ),
+      builder: (sheetContext) => AnimatedBuilder(
+        animation: cart,
+        builder: (sheetContext, _) {
+          final settings = sheetContext.watch<AppSettings>();
+          final held = cart.held;
+          return SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                      AppSpace.s5, AppSpace.s5, AppSpace.s5, AppSpace.s2),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.bookmark_rounded, size: 20, color: AppColors.primary),
+                      const SizedBox(width: AppSpace.s2),
+                      const Expanded(
+                        child: Text('Held sales',
+                            style: TextStyle(
+                                fontFamily: 'Carlito',
+                                fontSize: 17,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.ink)),
+                      ),
+                      Text('${held.length} parked',
+                          style: const TextStyle(
+                              fontFamily: 'Carlito', fontSize: 12.5, color: AppColors.muted)),
+                    ],
+                  ),
+                ),
+                if (held.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.all(AppSpace.s6),
+                    child: EmptyState(
+                      icon: Icons.bookmark_border_rounded,
+                      title: 'Nothing held',
+                      message: 'Use Hold in the cart to park a sale.',
+                    ),
+                  )
+                else
+                  Flexible(
+                    child: ListView.builder(
+                      shrinkWrap: true,
+                      padding: const EdgeInsets.fromLTRB(
+                          AppSpace.s4, 0, AppSpace.s4, AppSpace.s4),
+                      itemCount: held.length,
+                      itemBuilder: (listContext, i) {
+                        final h = held[i];
+                        final when = DateTime.fromMillisecondsSinceEpoch(h.heldAt * 1000);
+                        String two(int n) => n.toString().padLeft(2, '0');
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: AppSpace.s2),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: AppSpace.s3, vertical: AppSpace.s2),
+                          decoration: BoxDecoration(
+                            color: AppColors.surfaceTint,
+                            borderRadius: BorderRadius.circular(AppRadius.md),
+                            border: Border.all(color: AppColors.borderSoft),
+                          ),
+                          child: Row(
+                            children: [
+                              InitialsAvatar(h.customerName ?? 'Held', size: 34),
+                              const SizedBox(width: AppSpace.s3),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      h.customerName ?? 'Walk-in customer',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                          fontFamily: 'Carlito',
+                                          fontSize: 13.5,
+                                          fontWeight: FontWeight.w700,
+                                          color: AppColors.ink),
+                                    ),
+                                    Text(
+                                      '${h.itemCount} item${h.itemCount == 1 ? '' : 's'} · '
+                                      '${two(when.hour)}:${two(when.minute)}'
+                                      '${h.discount > 0 ? ' · disc ${settings.money(h.discount)}' : ''}',
+                                      style: const TextStyle(
+                                          fontFamily: 'Carlito', fontSize: 12, color: AppColors.muted),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              IconButton(
+                                tooltip: 'Discard',
+                                icon: const Icon(Icons.delete_outline,
+                                    size: 19, color: AppColors.danger),
+                                onPressed: () => cart.dropHeld(h),
+                              ),
+                              const SizedBox(width: AppSpace.s1),
+                              FilledButton.tonal(
+                                onPressed: () async {
+                                  final ok = await cart.resumeHeld(
+                                      h, catalog.findVariantById);
+                                  if (sheetContext.mounted && !ok) {
+                                    Navigator.pop(sheetContext);
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text(
+                                            'That sale\'s items are no longer in the catalog'),
+                                        behavior: SnackBarBehavior.floating,
+                                      ),
+                                    );
+                                  } else if (sheetContext.mounted) {
+                                    Navigator.pop(sheetContext);
+                                  }
+                                },
+                                style: FilledButton.styleFrom(
+                                    minimumSize: const Size(0, 40)),
+                                child: const Text('Resume'),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   Widget _totalRow(BuildContext context, String label, String value, {Color? color}) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
@@ -218,7 +384,7 @@ class CartPanel extends StatelessWidget {
     if (selected == null) return;
     if (selected.id == -1) {
       // "Manage customers" sentinel -> jump to customers tab
-      nav.go(3);
+      nav.goTo(NavId.customers);
       return;
     }
     cart.setCustomer(selected.id == 0 ? null : selected);

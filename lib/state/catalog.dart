@@ -170,6 +170,16 @@ class CatalogProvider extends ChangeNotifier {
     return null;
   }
 
+  /// Resolves a variant id (and its product) for restoring held sales.
+  ({Product product, ProductVariant variant})? findVariantById(int variantId) {
+    for (final p in products) {
+      for (final v in p.variants) {
+        if (v.id == variantId) return (product: p, variant: v);
+      }
+    }
+    return null;
+  }
+
   /// All (product, variant) pairs at or below their low-stock threshold.
   List<(Product, ProductVariant)> lowStockItems() {
     final out = <(Product, ProductVariant)>[];

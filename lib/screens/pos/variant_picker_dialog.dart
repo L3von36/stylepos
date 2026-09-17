@@ -102,7 +102,14 @@ class VariantPickerDialog extends StatelessWidget {
                             color: soldOut ? AppColors.faint : AppColors.primaryDark),
                       ),
                       onTap: () {
-                        context.read<CartProvider>().add(product, v);
+                        final ok = context.read<CartProvider>().add(product, v);
+                        if (!ok) {
+                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                            content: Text('Only ${v.stock} in stock — all are in the cart'),
+                            behavior: SnackBarBehavior.floating,
+                          ));
+                          return;
+                        }
                         Navigator.pop(context);
                       },
                     ),

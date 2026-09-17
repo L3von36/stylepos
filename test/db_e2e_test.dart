@@ -172,4 +172,114 @@ void main() {
         where: 'reason = ?', whereArgs: ['restock']);
     expect(movements, isNotEmpty);
   });
+
+  test('cart.add cannot oversell the shelf stock', () {
+    final product = catalog.products.first;
+    final variant = product.variants.first;
+    final cart = CartProvider();
+
+    var added = 0;
+    for (var i = 0; i < variant.stock + 3; i++) {
+      if (cart.add(product, variant)) added++;
+    }
+    expect(added, variant.stock);
+    expect(cart.itemCount, variant.stock);
+  });
+
+  test('held sales: park, resume, discard and survive restart', () async {
+    final cart = CartProvider();
+    await cart.loadHeld();
+    expect(cart.heldCount, 0);
+
+    final product = catalog.products.first;
+    final variant = product.variants.first;
+    cart.add(product, variant);
+    cart.add(product, variant);
+    cart.setDiscount(50);
+
+    final held = await cart.holdCurrentSale();
+    expect(cart.isEmpty, isTrue);
+    expect(cart.heldCount, 1);
+    expect(held.lines.single.qty, 2);
+
+    // resume rebuilds the cart from the live catalog
+    final ok = await cart.resumeHeld(held, catalog.findVariantById);
+    expect(ok, isTrue);
+    expect(cart.items.single.qty, 2);
+    expect(cart.orderDiscount, 50);
+    expect(cart.heldCount, 0);
+
+    // park again -> persists -> a "fresh" provider sees it after reload
+    cart.clear();
+    cart.add(product, variant);
+    await cart.holdCurrentSale();
+    expect(cart.heldCount, 1);
+
+    final cart2 = CartProvider();
+    await cart2.loadHeld();
+    expect(cart2.heldCount, 1);
+    expect(cart2.held.first.itemCount, 1);
+
+    // resuming on the fresh provider removes it from persistence too
+    final resumed =
+        await cart2.resumeHeld(cart2.held.first, catalog.findVariantById);
+    expect(resumed, isTrue);
+    final cart3 = CartProvider();
+    await cart3.loadHeld();
+    expect(cart3.heldCount, 0);
+
+    // The original provider still holds its own reference to the parked
+    // sale that cart2 consumed from persistence; discard it to stay in
+    // sync (mirrors two screens sharing one persisted store).
+    await cart.dropHeld(cart.held.first);
+    expect(cart.heldCount, 0);
+
+    // lines whose variant no longer exists are not restorable
+    cart.add(product, variant);
+    final h3 = await cart.holdCurrentSale();
+    final bogus = HeldSale(
+        id: 'x',
+        heldAt: 0,
+        lines: const [(variantId: 999999, qty: 1)]);
+    expect(await cart.resumeHeld(bogus, catalog.findVariantById), isFalse);
+    await cart.dropHeld(h3);
+    expect(cart.heldCount, 0);
+  });
+
+  test('manager reports: staff performance, profit, payment mix, my day',
+      () async {
+    // Complete one fresh sale (the earlier one was refunded above).
+    await catalog.reload();
+    final product = catalog.products.first;
+    final variant = product.variants.first;
+    final cart = CartProvider()..add(product, variant);
+    final sale = await sales.checkout(
+      cart: cart,
+      userId: 1,
+      paymentMethod: 'mobile',
+      amountPaid: 999999,
+      settings: settings,
+    );
+    expect(sale.total, greaterThan(0));
+    cart.clear();
+
+    final staff = await sales.staffPerformance(7);
+    expect(staff, isNotEmpty);
+    expect(staff.first.name, 'Admin');
+    expect(staff.first.orders, 1);
+    expect(staff.first.revenue, greaterThan(0));
+
+    final cost = await sales.cogs(7);
+    expect(cost, greaterThan(0));
+
+    final pays = await sales.paymentBreakdown(7);
+    expect(pays, isNotEmpty);
+    expect(pays.first.method, 'mobile');
+    expect(pays.first.total, greaterThan(0));
+
+    final mine = await sales.todaySummaryForUser(1);
+    expect(mine.orders, 1);
+    expect(mine.revenue, greaterThan(0));
+    expect(mine.itemsSold, 1);
+  });
 }

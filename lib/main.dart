@@ -28,6 +28,8 @@ Future<void> main() async {
   // First-run bootstrapping of the starter catalog.
   await catalog.reload();
   await customers.reload();
+  // Restore any sales parked (held) before the app last closed.
+  await cart.loadHeld();
 
   runApp(StylePosApp(
     settings: settings,

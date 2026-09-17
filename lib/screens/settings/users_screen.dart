@@ -104,7 +104,7 @@ class _UsersScreenState extends State<UsersScreen> {
                           ],
                         ),
                         subtitle: Text(
-                            '${u.email} · ${u.isAdmin ? "Admin" : "Cashier"}',
+                            '${u.email} · ${u.isAdmin ? "Manager" : "Sales"}',
                             style: const TextStyle(fontFamily: 'Carlito', fontSize: 12.5)),
                         trailing: PopupMenuButton<String>(
                           icon: const Icon(Icons.more_vert_rounded, size: 20, color: AppColors.muted),
@@ -284,8 +284,8 @@ class _UserEditDialogState extends State<_UserEditDialog> {
               icon: const Icon(Icons.expand_more_rounded, size: 19),
               decoration: const InputDecoration(labelText: 'Role'),
               items: const [
-                DropdownMenuItem(value: 'cashier', child: Text('Cashier — sell & customers')),
-                DropdownMenuItem(value: 'admin', child: Text('Admin — full access')),
+                DropdownMenuItem(value: 'cashier', child: Text('Sales — sell, customers & own sales')),
+                DropdownMenuItem(value: 'admin', child: Text('Manager — full access incl. reports')),
               ],
               onChanged: (v) => setState(() => _role = v ?? 'cashier'),
             ),

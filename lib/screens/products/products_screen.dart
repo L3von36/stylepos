@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/product.dart';
+import '../../state/auth.dart';
 import '../../state/catalog.dart';
 import '../../state/settings.dart';
 import '../../widgets/ui.dart';
@@ -71,6 +72,8 @@ class _ProductsScreenState extends State<ProductsScreen> {
   Widget build(BuildContext context) {
     final catalog = context.watch<CatalogProvider>();
     final settings = context.watch<AppSettings>();
+    final auth = context.watch<AuthProvider>();
+    final canManage = auth.user?.isAdmin ?? false;
     final products = _filtered(catalog);
     final lowCount = catalog.products.where((p) => p.hasLowStock).length;
 
@@ -81,21 +84,24 @@ class _ProductsScreenState extends State<ProductsScreen> {
           PageHeader(
             title: 'Products',
             subtitle:
-                '${catalog.products.length} in catalog · $lowCount need restocking',
+                '${catalog.products.length} in catalog · $lowCount need restocking'
+                '${canManage ? '' : ' · view only'}',
             actions: [
-              OutlinedButton.icon(
-                onPressed: () => _manageCategories(context),
-                icon: const Icon(Icons.category_outlined, size: 17),
-                label: const Text('Categories'),
-              ),
-              FilledButton.icon(
-                onPressed: () async {
-                  await Navigator.of(context).push(MaterialPageRoute(
-                      builder: (_) => const ProductEditScreen()));
-                },
-                icon: const Icon(Icons.add_rounded, size: 19),
-                label: const Text('New product'),
-              ),
+              if (canManage)
+                OutlinedButton.icon(
+                  onPressed: () => _manageCategories(context),
+                  icon: const Icon(Icons.category_outlined, size: 17),
+                  label: const Text('Categories'),
+                ),
+              if (canManage)
+                FilledButton.icon(
+                  onPressed: () async {
+                    await Navigator.of(context).push(MaterialPageRoute(
+                        builder: (_) => const ProductEditScreen()));
+                  },
+                  icon: const Icon(Icons.add_rounded, size: 19),
+                  label: const Text('New product'),
+                ),
             ],
           ),
           Row(
@@ -159,9 +165,11 @@ class _ProductsScreenState extends State<ProductsScreen> {
                     message: _query.isNotEmpty || _lowOnly || _categoryFilter >= 0
                         ? 'Try clearing the search or filters.'
                         : 'Add your first product to start tracking stock.',
-                    actionLabel: 'New product',
-                    onAction: () => Navigator.of(context).push(
-                        MaterialPageRoute(builder: (_) => const ProductEditScreen())),
+                    actionLabel: canManage ? 'New product' : null,
+                    onAction: canManage
+                        ? () => Navigator.of(context).push(
+                            MaterialPageRoute(builder: (_) => const ProductEditScreen()))
+                        : null,
                   )
                 : ListView.separated(
                     itemCount: products.length,
@@ -169,6 +177,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
                     itemBuilder: (context, i) => _ProductTile(
                   product: products[i],
                   settings: settings,
+                  canManage: canManage,
                   onArchive: _confirmArchive,
                 ),
                   ),
@@ -190,10 +199,12 @@ class _ProductsScreenState extends State<ProductsScreen> {
 class _ProductTile extends StatelessWidget {
   final Product product;
   final AppSettings settings;
+  final bool canManage;
   final Future<void> Function(Product) onArchive;
   const _ProductTile({
     required this.product,
     required this.settings,
+    required this.canManage,
     required this.onArchive,
   });
 
@@ -205,10 +216,12 @@ class _ProductTile extends StatelessWidget {
     return Card(
       child: InkWell(
         borderRadius: BorderRadius.circular(AppRadius.md),
-        onTap: () async {
-          await Navigator.of(context).push(MaterialPageRoute(
-              builder: (_) => ProductEditScreen(product: product)));
-        },
+        onTap: canManage
+            ? () async {
+                await Navigator.of(context).push(MaterialPageRoute(
+                    builder: (_) => ProductEditScreen(product: product)));
+              }
+            : null,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: AppSpace.s4, vertical: AppSpace.s3),
           child: Row(
@@ -268,23 +281,24 @@ class _ProductTile extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: AppSpace.s2),
-              PopupMenuButton<String>(
-                icon: const Icon(Icons.more_vert_rounded, size: 20, color: AppColors.muted),
-                onSelected: (v) async {
-                  if (v == 'stock') {
-                    showDialog(
-                      context: context,
-                      builder: (_) => StockAdjustDialog(product: product),
-                    );
-                  } else if (v == 'archive') {
-                    await onArchive(product);
-                  }
-                },
-                itemBuilder: (_) => const [
-                  PopupMenuItem(value: 'stock', child: Text('Adjust stock')),
-                  PopupMenuItem(value: 'archive', child: Text('Archive')),
-                ],
-              ),
+              if (canManage)
+                PopupMenuButton<String>(
+                  icon: const Icon(Icons.more_vert_rounded, size: 20, color: AppColors.muted),
+                  onSelected: (v) async {
+                    if (v == 'stock') {
+                      showDialog(
+                        context: context,
+                        builder: (_) => StockAdjustDialog(product: product),
+                      );
+                    } else if (v == 'archive') {
+                      await onArchive(product);
+                    }
+                  },
+                  itemBuilder: (_) => const [
+                    PopupMenuItem(value: 'stock', child: Text('Adjust stock')),
+                    PopupMenuItem(value: 'archive', child: Text('Archive')),
+                  ],
+                ),
             ],
           ),
         ),

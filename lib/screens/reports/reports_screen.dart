@@ -20,6 +20,9 @@ class _ReportsScreenState extends State<ReportsScreen> {
   List<(DateTime, double)>? _revenue;
   List<(String, int, double)>? _top;
   List<(String, double)>? _categories;
+  List<({String name, int orders, double revenue})>? _staff;
+  List<({String method, int orders, double total})>? _payments;
+  double? _cogs;
   int _lowStock = 0;
 
   @override
@@ -39,6 +42,9 @@ class _ReportsScreenState extends State<ReportsScreen> {
       sales.topProducts(_range, limit: 5),
       sales.categoryShare(_range),
       sales.lowStockCount(),
+      sales.staffPerformance(_range),
+      sales.cogs(_range),
+      sales.paymentBreakdown(_range),
     ]);
     if (!mounted) return;
     setState(() {
@@ -51,6 +57,11 @@ class _ReportsScreenState extends State<ReportsScreen> {
       _top = results[5] as List<(String, int, double)>;
       _categories = results[6] as List<(String, double)>;
       _lowStock = results[7] as int;
+      _staff = results[8]
+          as List<({String name, int orders, double revenue})>;
+      _cogs = results[9] as double;
+      _payments = results[10]
+          as List<({String method, int orders, double total})>;
     });
   }
 
@@ -233,11 +244,265 @@ class _ReportsScreenState extends State<ReportsScreen> {
                   ),
                 ],
               ),
+              const SizedBox(height: AppSpace.s4),
+
+              // manager insights: estimated profit + staff + payment methods
+              _ManagerInsightsCard(
+                settings: settings,
+                staff: _staff,
+                payments: _payments,
+                cogs: _cogs,
+                revenue: _revenue == null
+                    ? 0.0
+                    : _revenue!.fold<double>(0.0, (s, d) => s + d.$2),
+                rangeDays: _range,
+              ),
               const SizedBox(height: 12),
             ],
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Manager-only section: estimated profit for the period, who is selling,
+/// and how customers are paying.
+class _ManagerInsightsCard extends StatelessWidget {
+  final AppSettings settings;
+  final List<({String name, int orders, double revenue})>? staff;
+  final List<({String method, int orders, double total})>? payments;
+  final double? cogs;
+  final double revenue;
+  final int rangeDays;
+
+  const _ManagerInsightsCard({
+    required this.settings,
+    required this.staff,
+    required this.payments,
+    required this.cogs,
+    required this.revenue,
+    required this.rangeDays,
+  });
+
+  String _methodLabel(String m) =>
+      m == 'cash' ? 'Cash' : m == 'card' ? 'Card' : 'Mobile money';
+
+  IconData _methodIcon(String m) => m == 'cash'
+      ? Icons.payments_outlined
+      : m == 'card'
+          ? Icons.credit_card_rounded
+          : Icons.smartphone_rounded;
+
+  @override
+  Widget build(BuildContext context) {
+    final profit = revenue - (cogs ?? 0);
+    final margin = revenue > 0 ? (profit / revenue * 100) : 0.0;
+
+    return SectionCard(
+      icon: Icons.manage_accounts_rounded,
+      title: 'Manager insights',
+      subtitle: 'Profit estimate, staff performance and payment mix',
+      children: [
+        // profit strip
+        Container(
+          padding: const EdgeInsets.all(AppSpace.s3),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xFF4F46E5), Color(0xFF6D28D9)],
+            ),
+            borderRadius: BorderRadius.circular(AppRadius.md),
+          ),
+          child: Row(
+            children: [
+              _profitCell('Revenue ($rangeDays d)', settings.money(revenue)),
+              _profitCell('Est. cost of goods', settings.money(cogs ?? 0)),
+              _profitCell(
+                  'Est. profit', settings.money(profit),
+                  trailing: '${margin.toStringAsFixed(0)}% margin'),
+            ],
+          ),
+        ),
+        const SizedBox(height: AppSpace.s4),
+        LayoutBuilder(builder: (context, c) {
+          final twoCols = c.maxWidth >= 640;
+          final staffList = _buildStaff();
+          final payList = _buildPayments();
+          if (!twoCols) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                staffList,
+                const SizedBox(height: AppSpace.s4),
+                payList,
+              ],
+            );
+          }
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: staffList),
+              const SizedBox(width: AppSpace.s4),
+              Expanded(child: payList),
+            ],
+          );
+        }),
+      ],
+    );
+  }
+
+  Widget _profitCell(String label, String value, {String? trailing}) {
+    return Expanded(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label.toUpperCase(),
+              style: TextStyle(
+                  fontFamily: 'Carlito',
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.4,
+                  color: Colors.white.withValues(alpha: 0.75))),
+          const SizedBox(height: 2),
+          Text(value,
+              style: TextStyle(
+                  fontFamily: 'Carlito',
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white)),
+          if (trailing != null)
+            Text(trailing,
+                style: TextStyle(
+                    fontFamily: 'Carlito',
+                    fontSize: 11,
+                    color: Colors.white.withValues(alpha: 0.75))),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStaff() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Staff performance',
+            style: TextStyle(
+                fontFamily: 'Carlito',
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: AppColors.ink)),
+        const SizedBox(height: AppSpace.s2),
+        if (staff == null || staff!.isEmpty)
+          const EmptyState(
+            icon: Icons.badge_outlined,
+            title: 'No sales in this period',
+            message: 'Staff revenue will appear here.',
+          )
+        else
+          for (final s in staff!)
+            Container(
+              margin: const EdgeInsets.only(bottom: AppSpace.s2),
+              padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpace.s3, vertical: AppSpace.s2),
+              decoration: BoxDecoration(
+                color: AppColors.surfaceTint,
+                borderRadius: BorderRadius.circular(AppRadius.sm),
+                border: Border.all(color: AppColors.borderSoft),
+              ),
+              child: Row(
+                children: [
+                  InitialsAvatar(s.name, size: 32),
+                  const SizedBox(width: AppSpace.s2),
+                  Expanded(
+                    child: Text(s.name,
+                        style: const TextStyle(
+                            fontFamily: 'Carlito',
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.ink)),
+                  ),
+                  Text('${s.orders} sale${s.orders == 1 ? '' : 's'}',
+                      style: const TextStyle(
+                          fontFamily: 'Carlito', fontSize: 12, color: AppColors.muted)),
+                  const SizedBox(width: AppSpace.s3),
+                  Text(settings.money(s.revenue),
+                      style: const TextStyle(
+                          fontFamily: 'Carlito',
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.primary)),
+                ],
+              ),
+            ),
+      ],
+    );
+  }
+
+  Widget _buildPayments() {
+    final total = payments?.fold(0.0, (s, p) => s + p.total) ?? 0;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Payment methods',
+            style: TextStyle(
+                fontFamily: 'Carlito',
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: AppColors.ink)),
+        const SizedBox(height: AppSpace.s2),
+        if (payments == null || payments!.isEmpty)
+          const EmptyState(
+            icon: Icons.credit_card_off_outlined,
+            title: 'No payments in this period',
+            message: 'Cash / card / mobile money split will appear here.',
+          )
+        else
+          for (final p in payments!)
+            Container(
+              margin: const EdgeInsets.only(bottom: AppSpace.s2),
+              padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpace.s3, vertical: AppSpace.s2),
+              decoration: BoxDecoration(
+                color: AppColors.surfaceTint,
+                borderRadius: BorderRadius.circular(AppRadius.sm),
+                border: Border.all(color: AppColors.borderSoft),
+              ),
+              child: Row(
+                children: [
+                  Icon(_methodIcon(p.method), size: 18, color: AppColors.primary),
+                  const SizedBox(width: AppSpace.s2),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(_methodLabel(p.method),
+                            style: const TextStyle(
+                                fontFamily: 'Carlito',
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.ink)),
+                        Text(
+                            '${p.orders} sale${p.orders == 1 ? '' : 's'} · '
+                            '${total > 0 ? (p.total / total * 100).toStringAsFixed(0) : 0}% of revenue',
+                            style: const TextStyle(
+                                fontFamily: 'Carlito',
+                                fontSize: 11.5,
+                                color: AppColors.muted)),
+                      ],
+                    ),
+                  ),
+                  Text(settings.money(p.total),
+                      style: const TextStyle(
+                          fontFamily: 'Carlito',
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.body)),
+                ],
+              ),
+            ),
+      ],
     );
   }
 }

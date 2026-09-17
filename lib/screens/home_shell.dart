@@ -13,15 +13,17 @@ import '../state/settings.dart';
 import '../widgets/ui.dart';
 
 class _Dest {
+  final NavId id;
   final IconData icon;
   final IconData activeIcon;
   final String label;
   final Widget page;
-  const _Dest(this.icon, this.activeIcon, this.label, this.page);
+  const _Dest(this.id, this.icon, this.activeIcon, this.label, this.page);
 }
 
 /// Adaptive app scaffold: NavigationRail on wide screens (desktop/tablet),
-/// drawer navigation on narrow phones.
+/// and a Material 3 [NavigationBar] at the bottom on phones — the standard
+/// one-hand mobile pattern for POS apps.
 class HomeShell extends StatefulWidget {
   const HomeShell({super.key});
 
@@ -38,17 +40,23 @@ class _HomeShellState extends State<HomeShell> {
     final user = auth.user;
     if (user == null) return const SizedBox.shrink();
 
+    // Role-aware destinations: the shop manager sees reports too, while
+    // the sales person gets a focused selling workspace. Settings lives
+    // in the app bar (manager only) to keep the bottom bar at 4-5 tabs.
     final all = [
-      _Dest(Icons.point_of_sale_outlined, Icons.point_of_sale_rounded, 'POS', const PosScreen()),
-      _Dest(Icons.inventory_2_outlined, Icons.inventory_2_rounded, 'Products', const ProductsScreen()),
-      _Dest(Icons.receipt_long_outlined, Icons.receipt_long_rounded, 'Sales', const SalesScreen()),
-      _Dest(Icons.people_outline, Icons.people_alt_rounded, 'Customers', const CustomersScreen()),
+      _Dest(NavId.pos, Icons.point_of_sale_outlined, Icons.point_of_sale_rounded, 'Sell',
+          const PosScreen()),
+      _Dest(NavId.products, Icons.inventory_2_outlined, Icons.inventory_2_rounded, 'Products',
+          const ProductsScreen()),
+      _Dest(NavId.sales, Icons.receipt_long_outlined, Icons.receipt_long_rounded, 'Sales',
+          const SalesScreen()),
+      _Dest(NavId.customers, Icons.people_outline, Icons.people_alt_rounded, 'Customers',
+          const CustomersScreen()),
       if (user.isAdmin)
-        _Dest(Icons.insights_outlined, Icons.insights_rounded, 'Reports', const ReportsScreen()),
-      if (user.isAdmin)
-        _Dest(Icons.settings_outlined, Icons.settings_rounded, 'Settings', const SettingsScreen()),
+        _Dest(NavId.reports, Icons.insights_outlined, Icons.insights_rounded, 'Reports',
+            const ReportsScreen()),
     ];
-    final index = nav.index.clamp(0, all.length - 1);
+    final index = all.indexWhere((d) => d.id == nav.id).clamp(0, all.length - 1);
 
     final appBar = AppBar(
       title: Row(
@@ -72,6 +80,13 @@ class _HomeShellState extends State<HomeShell> {
         ],
       ),
       actions: [
+        if (user.isAdmin)
+          IconButton(
+            tooltip: 'Settings',
+            icon: const Icon(Icons.settings_outlined, size: 21),
+            onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const SettingsScreen())),
+          ),
         IconButton(
           tooltip: 'Change password',
           icon: const Icon(Icons.lock_reset_outlined, size: 21),
@@ -117,7 +132,7 @@ class _HomeShellState extends State<HomeShell> {
                       borderRadius: BorderRadius.circular(AppRadius.pill),
                     ),
                     child: Text(
-                      user.isAdmin ? 'Admin' : 'Cashier',
+                      user.isAdmin ? 'Manager' : 'Sales',
                       style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w700,
@@ -163,14 +178,12 @@ class _HomeShellState extends State<HomeShell> {
             children: [
               NavigationRail(
                 selectedIndex: index,
-                onDestinationSelected: (i) => nav.go(i),
+                onDestinationSelected: (i) => nav.goTo(all[i].id),
                 extended: extended,
                 minExtendedWidth: 192,
                 leading: Padding(
                   padding: const EdgeInsets.only(top: AppSpace.s4, bottom: AppSpace.s3),
-                  child: extended
-                      ? null
-                      : const SizedBox.shrink(),
+                  child: extended ? null : const SizedBox.shrink(),
                 ),
                 labelType: extended
                     ? NavigationRailLabelType.none
@@ -192,86 +205,23 @@ class _HomeShellState extends State<HomeShell> {
         );
       }
 
-      // narrow layout
+      // Phone layout: content + M3 bottom navigation bar.
       return Scaffold(
         appBar: appBar,
-        drawer: Drawer(
-          backgroundColor: Colors.white,
-          shape: const RoundedRectangleBorder(
-            borderRadius: BorderRadius.horizontal(right: Radius.circular(AppRadius.xl)), // M3 modal drawer
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Container(
-                padding: EdgeInsets.only(
-                    top: MediaQuery.of(context).padding.top + AppSpace.s5,
-                    left: AppSpace.s5,
-                    right: AppSpace.s5,
-                    bottom: AppSpace.s6),
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [Color(0xFF4338CA), Color(0xFF4F46E5), Color(0xFF6D28D9)],
-                  ),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      width: 44,
-                      height: 44,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.16),
-                        borderRadius: BorderRadius.circular(AppRadius.md),
-                      ),
-                      child: const Icon(Icons.storefront_rounded, color: Colors.white, size: 24),
-                    ),
-                    const SizedBox(height: AppSpace.s3),
-                    Text(settings.shopName,
-                        style: const TextStyle(
-                            fontFamily: 'Carlito',
-                            fontSize: 18,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.white)),
-                    const SizedBox(height: AppSpace.s1),
-                    Text('${user.name} · ${user.isAdmin ? 'Admin' : 'Cashier'}',
-                        style: TextStyle(
-                            fontFamily: 'Carlito',
-                            fontSize: 13,
-                            color: Colors.white.withValues(alpha: 0.8))),
-                  ],
-                ),
-              ),
-              Expanded(
-                child: ListView(
-                  padding: const EdgeInsets.symmetric(horizontal: AppSpace.s3, vertical: AppSpace.s3),
-                  children: [
-                    for (var i = 0; i < all.length; i++)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 2),
-                        child: ListTile(
-                          leading: Icon(i == index ? all[i].activeIcon : all[i].icon),
-                          title: Text(all[i].label),
-                          selected: i == index,
-                          selectedTileColor: AppColors.primarySoft,
-                          selectedColor: AppColors.primary,
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(AppRadius.md)),
-                          onTap: () {
-                            nav.go(i);
-                            Navigator.pop(context);
-                          },
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
         body: IndexedStack(index: index, children: [for (final d in all) d.page]),
+        bottomNavigationBar: NavigationBar(
+          selectedIndex: index,
+          onDestinationSelected: (i) => nav.goTo(all[i].id),
+          height: 68,
+          destinations: [
+            for (final d in all)
+              NavigationDestination(
+                icon: Icon(d.icon, size: 23),
+                selectedIcon: Icon(d.activeIcon, size: 23),
+                label: d.label,
+              ),
+          ],
+        ),
       );
     });
   }
