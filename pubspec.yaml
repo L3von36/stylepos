@@ -1,0 +1,53 @@
+name: stylepos
+description: "StylePOS - an offline-first point-of-sale app for clothing shops, built with Flutter (Android + Windows)."
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.13.3
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+
+  # State management
+  provider: ^6.1.2
+
+  # Local SQLite storage (sqflite on Android, FFI on Windows desktop)
+  sqflite: ^2.4.1
+  sqflite_common_ffi: ^2.3.4
+  path: ^1.9.1
+  path_provider: ^2.1.5
+
+  # Formatting
+  intl: ^0.20.2
+
+  # PDF receipts
+  pdf: ^3.11.2
+  printing: ^5.14.2
+
+  # Password hashing
+  crypto: ^3.0.6
+
+  # Charts for the reports screen
+  fl_chart: ^0.69.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/fonts/
+
+  # Fonts used by the PDF receipt generator (good unicode currency coverage)
+  fonts:
+    - family: ReceiptFont
+      fonts:
+        - asset: assets/fonts/Carlito-Regular.ttf
+        - asset: assets/fonts/Carlito-Bold.ttf
+          weight: 700
