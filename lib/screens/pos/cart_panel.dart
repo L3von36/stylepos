@@ -66,7 +66,21 @@ class CartPanel extends StatelessWidget {
               if (cart.isNotEmpty)
                 TextButton(
                   style: TextButton.styleFrom(foregroundColor: AppColors.danger, visualDensity: VisualDensity.compact),
-                  onPressed: () => cart.clear(),
+                  onPressed: () {
+                    // Undoable clear — an accidental tap never costs the
+                    // cashier a full re-scan of the basket.
+                    cart.stageUndo();
+                    cart.clear();
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                      content: const Text('Cart cleared'),
+                      behavior: SnackBarBehavior.floating,
+                      duration: const Duration(seconds: 4),
+                      action: SnackBarAction(
+                        label: 'Undo',
+                        onPressed: () => cart.undoClear(),
+                      ),
+                    ));
+                  },
                   child: const Text('Clear'),
                 ),
             ],
@@ -319,11 +333,50 @@ class CartPanel extends StatelessWidget {
                                 tooltip: 'Discard',
                                 icon: const Icon(Icons.delete_outline,
                                     size: 19, color: AppColors.danger),
-                                onPressed: () => cart.dropHeld(h),
+                                onPressed: () async {
+                                  // A held sale holds a customer's picks —
+                                  // never lose it to a single stray tap.
+                                  final ok = await showDialog<bool>(
+                                    context: sheetContext,
+                                    builder: (c) => AlertDialog(
+                                      title: const Text('Discard held sale?'),
+                                      content: const Text(
+                                          'Its items and customer link will be removed. This cannot be undone.'),
+                                      actions: [
+                                        TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')),
+                                        FilledButton(
+                                          style: FilledButton.styleFrom(backgroundColor: AppColors.danger),
+                                          onPressed: () => Navigator.pop(c, true),
+                                          child: const Text('Discard'),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                  if (ok == true) await cart.dropHeld(h);
+                                },
                               ),
                               const SizedBox(width: AppSpace.s1),
                               FilledButton.tonal(
                                 onPressed: () async {
+                                  // Resuming replaces whatever is in the
+                                  // cart — confirm rather than silently
+                                  // wiping an in-progress basket.
+                                  if (cart.isNotEmpty) {
+                                    final go = await showDialog<bool>(
+                                      context: sheetContext,
+                                      builder: (c) => AlertDialog(
+                                        title: const Text('Replace current cart?'),
+                                        content: const Text(
+                                            'Resuming this held sale will replace the items currently in the cart.'),
+                                        actions: [
+                                          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')),
+                                          FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('Replace')),
+                                        ],
+                                      ),
+                                    );
+                                    if (go != true) return;
+                                  }
+                                  if (!sheetContext.mounted) return;
                                   final ok = await cart.resumeHeld(
                                       h, catalog.findVariantById);
                                   if (sheetContext.mounted && !ok) {
@@ -443,12 +496,16 @@ class _CartTile extends StatelessWidget {
           ),
           const SizedBox(width: AppSpace.s2),
           SizedBox(
-            width: 84,
-            child: Text(
-              settings.money(item.lineTotal),
-              textAlign: TextAlign.right,
-              style: const TextStyle(
-                  fontFamily: 'Carlito', fontWeight: FontWeight.w700, fontSize: 13.5, color: AppColors.ink),
+            width: 88,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerRight,
+              child: Text(
+                settings.money(item.lineTotal),
+                maxLines: 1,
+                style: const TextStyle(
+                    fontFamily: 'Carlito', fontWeight: FontWeight.w700, fontSize: 13.5, color: AppColors.ink),
+              ),
             ),
           ),
         ],
@@ -466,19 +523,34 @@ class _DiscountField extends StatefulWidget {
 
 class _DiscountFieldState extends State<_DiscountField> {
   final _c = TextEditingController();
+  final _focus = FocusNode();
 
   @override
   void dispose() {
     _c.dispose();
+    _focus.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    // Keep the field in sync with cart state (hold / resume / clear all
+    // change the discount elsewhere) — but never fight the user while
+    // they are typing.
+    final discount = context.watch<CartProvider>().discount;
+    if (!_focus.hasFocus) {
+      final parsed = double.tryParse(_c.text) ?? 0;
+      if ((parsed - discount).abs() > 0.001) {
+        _c.text = discount == 0
+            ? ''
+            : (discount % 1 == 0 ? discount.toStringAsFixed(0) : discount.toString());
+      }
+    }
     return SizedBox(
       width: 110,
       child: TextField(
         controller: _c,
+        focusNode: _focus,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
         textAlign: TextAlign.right,
         style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700),

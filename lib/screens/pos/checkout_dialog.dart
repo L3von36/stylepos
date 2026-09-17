@@ -47,14 +47,25 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
   }
 
   Future<void> _completeSale() async {
+    final cart = context.read<CartProvider>();
+    final settings = context.read<AppSettings>();
+
+    // Cash guard: never record a cash sale that was not fully tendered.
+    final due = cart.total(settings.taxRate);
+    if (_method == 'cash' && _tenderedValue + 0.001 < due) {
+      setState(() {
+        _error = 'Cash received is less than the amount due — collect '
+            '${settings.money(due - _tenderedValue)} more.';
+      });
+      return;
+    }
+
     setState(() {
       _stage = _Stage.processing;
       _error = null;
     });
     try {
-      final cart = context.read<CartProvider>();
       final sales = context.read<SalesProvider>();
-      final settings = context.read<AppSettings>();
       final auth = context.read<AuthProvider>();
       final catalog = context.read<CatalogProvider>();
       final customers = context.read<CustomersProvider>();
@@ -318,7 +329,7 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
                 500.0,
                 1000.0,
                 2000.0,
-              ].where((q) => q >= total))
+              ].where((q) => q >= total).toSet())
                 ActionChip(
                   label: Text(settings.money(quick)),
                   labelStyle: const TextStyle(fontFamily: 'Carlito', fontSize: 12.5, fontWeight: FontWeight.w700),
@@ -336,23 +347,42 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: AppSpace.s4, vertical: AppSpace.s3),
               decoration: BoxDecoration(
-                color: AppColors.successSoft,
+                // Short payment shows red with the missing amount;
+                // fully covered shows green with the change.
+                color: _tenderedValue + 0.001 < total
+                    ? AppColors.dangerSoft
+                    : AppColors.successSoft,
                 borderRadius: BorderRadius.circular(AppRadius.sm),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.savings_outlined, size: 19, color: AppColors.success),
+                  Icon(
+                    _tenderedValue + 0.001 < total
+                        ? Icons.error_outline_rounded
+                        : Icons.savings_outlined,
+                    size: 19,
+                    color: _tenderedValue + 0.001 < total
+                        ? AppColors.danger
+                        : AppColors.success,
+                  ),
                   const SizedBox(width: AppSpace.s2),
-                  const Text('Change due',
-                      style: TextStyle(fontFamily: 'Carlito', fontSize: 13.5, color: AppColors.body)),
+                  Text(
+                      _tenderedValue + 0.001 < total
+                          ? 'Still owed'
+                          : 'Change due',
+                      style: const TextStyle(fontFamily: 'Carlito', fontSize: 13.5, color: AppColors.body)),
                   const Spacer(),
                   Text(
-                    settings.money(change),
-                    style: const TextStyle(
+                    settings.money(_tenderedValue + 0.001 < total
+                        ? total - _tenderedValue
+                        : change),
+                    style: TextStyle(
                         fontFamily: 'Carlito',
                         fontSize: 16,
                         fontWeight: FontWeight.w700,
-                        color: AppColors.success),
+                        color: _tenderedValue + 0.001 < total
+                            ? AppColors.danger
+                            : AppColors.success),
                   ),
                 ],
               ),

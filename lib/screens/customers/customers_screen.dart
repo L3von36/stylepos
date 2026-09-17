@@ -144,6 +144,36 @@ class _CustomerDetailState extends State<_CustomerDetail> {
     if (mounted) setState(() => _history = sales);
   }
 
+  /// Deleting a customer removes their loyalty record — always confirm.
+  Future<void> _confirmDelete(Customer c) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('Delete customer?'),
+        content: const Text(
+            'Their loyalty points and contact details will be removed. Past receipts are kept.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppColors.danger),
+            onPressed: () => Navigator.pop(c, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    final provider = context.read<CustomersProvider>();
+    final err = await provider.delete(c);
+    if (!mounted) return;
+    if (err != null) {
+      messenger.showSnackBar(SnackBar(content: Text(err)));
+    } else {
+      widget.onBack();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final settings = context.watch<AppSettings>();
@@ -162,8 +192,11 @@ class _CustomerDetailState extends State<_CustomerDetail> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            children: [
+          // Responsive header: on phones the three actions wrap to a
+          // second line instead of squeezing/overflowing the Row.
+          LayoutBuilder(builder: (context, hc) {
+            final narrow = hc.maxWidth < 640;
+            final who = <Widget>[
               IconButton(
                 icon: const Icon(Icons.arrow_back_rounded),
                 onPressed: widget.onBack,
@@ -184,39 +217,69 @@ class _CustomerDetailState extends State<_CustomerDetail> {
                   ],
                 ),
               ),
-              OutlinedButton.icon(
-                onPressed: () =>
-                    showDialog(context: context, builder: (_) => CustomerEditDialog(customer: c)),
-                icon: const Icon(Icons.edit_outlined, size: 17),
-                label: const Text('Edit'),
-              ),
-              const SizedBox(width: AppSpace.s2),
-              FilledButton.icon(
-                onPressed: () {
-                  context.read<CartProvider>().setCustomer(c);
-                  context.read<NavProvider>().goTo(NavId.pos); // jump to POS tab
-                },
-                icon: const Icon(Icons.point_of_sale_rounded, size: 18),
-                label: const Text('Start sale'),
-              ),
-              const SizedBox(width: AppSpace.s2),
-              OutlinedButton(
-                style: OutlinedButton.styleFrom(foregroundColor: AppColors.danger),
-                onPressed: () async {
-                  final messenger = ScaffoldMessenger.of(context);
-                  final provider = context.read<CustomersProvider>();
-                  final err = await provider.delete(c);
-                  if (!mounted) return;
-                  if (err != null) {
-                    messenger.showSnackBar(SnackBar(content: Text(err)));
-                  } else {
-                    widget.onBack();
-                  }
-                },
-                child: const Text('Delete'),
-              ),
-            ],
-          ),
+            ];
+            if (!narrow) {
+              return Row(
+                children: [
+                  ...who,
+                  const SizedBox(width: AppSpace.s4),
+                  OutlinedButton.icon(
+                    onPressed: () =>
+                        showDialog(context: context, builder: (_) => CustomerEditDialog(customer: c)),
+                    icon: const Icon(Icons.edit_outlined, size: 17),
+                    label: const Text('Edit'),
+                  ),
+                  const SizedBox(width: AppSpace.s2),
+                  FilledButton.icon(
+                    onPressed: () {
+                      context.read<CartProvider>().setCustomer(c);
+                      context.read<NavProvider>().goTo(NavId.pos); // jump to POS tab
+                    },
+                    icon: const Icon(Icons.point_of_sale_rounded, size: 18),
+                    label: const Text('Start sale'),
+                  ),
+                  const SizedBox(width: AppSpace.s2),
+                  OutlinedButton(
+                    style: OutlinedButton.styleFrom(foregroundColor: AppColors.danger),
+                    onPressed: () => _confirmDelete(c),
+                    child: const Text('Delete'),
+                  ),
+                ],
+              );
+            }
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(children: who),
+                const SizedBox(height: AppSpace.s3),
+                Wrap(
+                  spacing: AppSpace.s2,
+                  runSpacing: AppSpace.s2,
+                  children: [
+                    OutlinedButton.icon(
+                      onPressed: () =>
+                          showDialog(context: context, builder: (_) => CustomerEditDialog(customer: c)),
+                      icon: const Icon(Icons.edit_outlined, size: 17),
+                      label: const Text('Edit'),
+                    ),
+                    FilledButton.icon(
+                      onPressed: () {
+                        context.read<CartProvider>().setCustomer(c);
+                        context.read<NavProvider>().goTo(NavId.pos);
+                      },
+                      icon: const Icon(Icons.point_of_sale_rounded, size: 18),
+                      label: const Text('Start sale'),
+                    ),
+                    OutlinedButton(
+                      style: OutlinedButton.styleFrom(foregroundColor: AppColors.danger),
+                      onPressed: () => _confirmDelete(c),
+                      child: const Text('Delete'),
+                    ),
+                  ],
+                ),
+              ],
+            );
+          }),
           const SizedBox(height: AppSpace.s4),
           Row(
             children: [

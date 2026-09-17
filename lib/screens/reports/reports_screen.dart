@@ -158,8 +158,12 @@ class _ReportsScreenState extends State<ReportsScreen> {
               }),
               const SizedBox(height: AppSpace.s4),
 
-              // range selector
-              Row(
+              // range selector (Wrap: the segmented control can be wider
+              // than the label row on small phones)
+              Wrap(
+                spacing: AppSpace.s2,
+                runSpacing: AppSpace.s2,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
                   const Text('Period',
                       style: TextStyle(
@@ -167,7 +171,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
                           fontSize: 13,
                           fontWeight: FontWeight.w700,
                           color: AppColors.muted)),
-                  const SizedBox(width: AppSpace.s2),
                   SegmentedButton<int>(
                     showSelectedIcon: false,
                     segments: const [
@@ -200,50 +203,62 @@ class _ReportsScreenState extends State<ReportsScreen> {
                 ],
               ),
               const SizedBox(height: AppSpace.s4),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: SectionCard(
-                      icon: Icons.leaderboard_rounded,
-                      title: 'Top products',
-                      subtitle: 'Units sold in the selected period',
-                      children: [
-                        SizedBox(
-                          height: 230,
-                          child: _top == null || _top!.isEmpty
-                              ? const EmptyState(
-                                  icon: Icons.leaderboard_outlined,
-                                  title: 'No sales yet',
-                                  message: 'Best sellers will appear here.',
-                                )
-                              : _TopProductsBarChart(data: _top!),
-                        ),
-                      ],
+              // Charts side-by-side only when each gets enough width —
+              // 160px-wide charts are unreadable on phones.
+              LayoutBuilder(builder: (context, cc) {
+                final top = SectionCard(
+                  icon: Icons.leaderboard_rounded,
+                  title: 'Top products',
+                  subtitle: 'Units sold in the selected period',
+                  children: [
+                    SizedBox(
+                      height: 230,
+                      child: _top == null || _top!.isEmpty
+                          ? const EmptyState(
+                              icon: Icons.leaderboard_outlined,
+                              title: 'No sales yet',
+                              message: 'Best sellers will appear here.',
+                            )
+                          : _TopProductsBarChart(data: _top!),
                     ),
-                  ),
-                  const SizedBox(width: AppSpace.s4),
-                  Expanded(
-                    child: SectionCard(
-                      icon: Icons.pie_chart_outline_rounded,
-                      title: 'Category share',
-                      subtitle: 'Share of revenue by category',
-                      children: [
-                        SizedBox(
-                          height: 230,
-                          child: _categories == null || _categories!.isEmpty
-                              ? const EmptyState(
-                                  icon: Icons.pie_chart_outline_rounded,
-                                  title: 'No sales yet',
-                                  message: 'Category split will appear here.',
-                                )
-                              : _CategoryPie(data: _categories!),
-                        ),
-                      ],
+                  ],
+                );
+                final categories = SectionCard(
+                  icon: Icons.pie_chart_outline_rounded,
+                  title: 'Category share',
+                  subtitle: 'Share of revenue by category',
+                  children: [
+                    SizedBox(
+                      height: 230,
+                      child: _categories == null || _categories!.isEmpty
+                          ? const EmptyState(
+                              icon: Icons.pie_chart_outline_rounded,
+                              title: 'No sales yet',
+                              message: 'Category split will appear here.',
+                            )
+                          : _CategoryPie(data: _categories!),
                     ),
-                  ),
-                ],
-              ),
+                  ],
+                );
+                if (cc.maxWidth < 640) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      top,
+                      const SizedBox(height: AppSpace.s4),
+                      categories,
+                    ],
+                  );
+                }
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(child: top),
+                    const SizedBox(width: AppSpace.s4),
+                    Expanded(child: categories),
+                  ],
+                );
+              }),
               const SizedBox(height: AppSpace.s4),
 
               // manager insights: estimated profit + staff + payment methods

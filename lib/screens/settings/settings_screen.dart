@@ -59,9 +59,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
           receiptFooter: _footer.text.trim(),
           currencyCode: _curCode.text.trim(),
           currencySymbol: _curSymbol.text.trim(),
-          taxRate: double.tryParse(_tax.text) ?? 0,
-          lowStockDefault: int.tryParse(_lowStock.text) ?? 5,
-          loyaltyStep: int.tryParse(_loyalty.text) ?? 0,
+          taxRate: (double.tryParse(_tax.text) ?? 0).clamp(0.0, 100.0),
+          lowStockDefault: (int.tryParse(_lowStock.text) ?? 5).clamp(0, 999),
+          loyaltyStep: (int.tryParse(_loyalty.text) ?? 0).clamp(0, 1000000),
         );
     if (mounted) {
       ScaffoldMessenger.of(context)

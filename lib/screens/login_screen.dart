@@ -299,6 +299,7 @@ class _LoginForm extends StatelessWidget {
             TextFormField(
               controller: state._email,
               keyboardType: TextInputType.emailAddress,
+              textInputAction: TextInputAction.next,
               autofocus: true,
               decoration: const InputDecoration(
                 labelText: 'Email',

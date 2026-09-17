@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -20,6 +22,7 @@ class _SalesScreenState extends State<SalesScreen> {
   final _search = TextEditingController();
   String _query = '';
   List<Sale>? _sales;
+  Timer? _debounce;
 
   @override
   void initState() {
@@ -29,6 +32,7 @@ class _SalesScreenState extends State<SalesScreen> {
 
   @override
   void dispose() {
+    _debounce?.cancel();
     _search.dispose();
     super.dispose();
   }
@@ -58,40 +62,57 @@ class _SalesScreenState extends State<SalesScreen> {
                 : '${_sales!.length} receipt${_sales!.length == 1 ? '' : 's'}'
                     ' · ${settings.money(totalRevenue)} revenue',
           ),
-          Row(
-            children: [
-              Expanded(
-                child: SearchField(
-                  controller: _search,
-                  hint: 'Search receipt no, customer or cashier…',
-                  onChanged: (v) {
-                    _query = v;
-                    _load();
-                  },
-                  onClear: () {
-                    _search.clear();
-                    _query = '';
-                    _load();
-                  },
-                ),
-              ),
-              const SizedBox(width: AppSpace.s3),
-              SegmentedButton<int>(
-                showSelectedIcon: false,
-                segments: const [
-                  ButtonSegment(value: 1, label: Text('Today')),
-                  ButtonSegment(value: 7, label: Text('7 days')),
-                  ButtonSegment(value: 30, label: Text('30 days')),
-                  ButtonSegment(value: 0, label: Text('All')),
+          // Responsive: on phones the period picker moves under the
+          // search field (a 4-segment button + search overflows 360dp).
+          LayoutBuilder(builder: (context, fc) {
+            final search = SearchField(
+              controller: _search,
+              hint: 'Search receipt no, customer or cashier…',
+              onChanged: (v) {
+                _query = v;
+                // Debounced: one query per pause, not one per keystroke.
+                _debounce?.cancel();
+                _debounce = Timer(const Duration(milliseconds: 350), _load);
+              },
+              onClear: () {
+                _debounce?.cancel();
+                _search.clear();
+                _query = '';
+                _load();
+              },
+            );
+            final periods = SegmentedButton<int>(
+              showSelectedIcon: false,
+              segments: const [
+                ButtonSegment(value: 1, label: Text('Today')),
+                ButtonSegment(value: 7, label: Text('7 days')),
+                ButtonSegment(value: 30, label: Text('30 days')),
+                ButtonSegment(value: 0, label: Text('All')),
+              ],
+              selected: {_days},
+              onSelectionChanged: (s) {
+                setState(() => _days = s.first);
+                _load();
+              },
+            );
+            if (fc.maxWidth < 560) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  search,
+                  const SizedBox(height: AppSpace.s2),
+                  periods,
                 ],
-                selected: {_days},
-                onSelectionChanged: (s) {
-                  setState(() => _days = s.first);
-                  _load();
-                },
-              ),
-            ],
-          ),
+              );
+            }
+            return Row(
+              children: [
+                Expanded(child: search),
+                const SizedBox(width: AppSpace.s3),
+                periods,
+              ],
+            );
+          }),
           const SizedBox(height: AppSpace.s4),
           Expanded(
             child: _sales == null

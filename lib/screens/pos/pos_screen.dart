@@ -55,12 +55,15 @@ class _PosScreenState extends State<PosScreen> {
 
   void _toast(String msg, Color color) {
     if (!mounted) return;
+    // Fixed-width snackbars overflow small phones — only use the compact
+    // centered shape when the screen is wide enough for it.
+    final screenW = MediaQuery.sizeOf(context).width;
     ScaffoldMessenger.of(context)
       ..clearSnackBars()
       ..showSnackBar(SnackBar(
         content: Text(msg),
         behavior: SnackBarBehavior.floating,
-        width: 380,
+        width: screenW >= 428 ? 380 : null,
         backgroundColor: color,
         duration: const Duration(milliseconds: 1600),
       ));
@@ -248,11 +251,13 @@ class _PosScreenState extends State<PosScreen> {
         if (user != null) _MyTodayStrip(userId: user.id!),
         const SizedBox(height: AppSpace.s3),
 
-        // scan / search bar
+        // scan / search bar. No autofocus on camera devices: the
+        // on-screen keyboard would cover half the product grid the
+        // moment the Sell tab opens. Desktop (scanner-wedge) keeps it.
         TextField(
           controller: _search,
           focusNode: _scanFocus,
-          autofocus: true,
+          autofocus: !_cameraAvailable,
           textInputAction: TextInputAction.search,
           onSubmitted: _onSearchSubmit,
           onChanged: (v) => setState(() => _query = v),

@@ -139,6 +139,36 @@ class CartProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  // ---- clear-with-undo (shop-floor safety) ----
+
+  List<CartItem>? _undoSnapshot;
+  Customer? _undoCustomer;
+  double _undoDiscount = 0;
+
+  /// Captures the current cart so the next [clear] can be reversed with
+  /// [undoClear]. Only the cart's Clear button stages this — never the
+  /// checkout flow (there the clear must be final: stock is already
+  /// decremented and the receipt exists).
+  void stageUndo() {
+    _undoSnapshot = items;
+    _undoCustomer = customer;
+    _undoDiscount = orderDiscount;
+  }
+
+  /// Restores the cart captured by [stageUndo], replacing whatever is in
+  /// the cart now. No-op when nothing was staged.
+  void undoClear() {
+    final snap = _undoSnapshot;
+    if (snap == null) return;
+    _undoSnapshot = null;
+    _items
+      ..clear()
+      ..addEntries([for (final i in snap) MapEntry(i.key, i)]);
+    customer = _undoCustomer;
+    orderDiscount = _undoDiscount;
+    notifyListeners();
+  }
+
   // ---- held / parked sales ----
 
   /// Loads held sales persisted in the settings store (survive restarts).

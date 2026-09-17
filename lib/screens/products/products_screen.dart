@@ -104,58 +104,79 @@ class _ProductsScreenState extends State<ProductsScreen> {
                 ),
             ],
           ),
-          Row(
-            children: [
-              Expanded(child: SearchField(
-                controller: _search,
-                hint: 'Search products, SKU or barcode…',
-                onChanged: (v) => setState(() => _query = v),
-                onClear: () {
-                  _search.clear();
-                  setState(() => _query = '');
-                },
-              )),
-              const SizedBox(width: AppSpace.s2),
-              SizedBox(
-                width: 192,
-                child: DropdownButtonFormField<int>(
-                  initialValue: _categoryFilter,
-                  isDense: true,
-                  icon: const Icon(Icons.expand_more_rounded, size: 19),
-                  decoration: const InputDecoration(
-                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12)),
-                  items: [
-                    const DropdownMenuItem(value: -1, child: Text('All categories')),
-                    for (final c in catalog.categories)
-                      DropdownMenuItem(value: c.id, child: Text(c.name)),
-                  ],
-                  onChanged: (v) => setState(() => _categoryFilter = v ?? -1),
-                ),
+          // Responsive filter bar: on phones the search gets its own row
+          // and the category dropdown expands, instead of an overflow.
+          LayoutBuilder(builder: (context, fc) {
+            final narrow = fc.maxWidth < 560;
+            final search = SearchField(
+              controller: _search,
+              hint: 'Search products, SKU or barcode…',
+              onChanged: (v) => setState(() => _query = v),
+              onClear: () {
+                _search.clear();
+                setState(() => _query = '');
+              },
+            );
+            final dropdown = DropdownButtonFormField<int>(
+              initialValue: _categoryFilter,
+              isDense: true,
+              isExpanded: true,
+              icon: const Icon(Icons.expand_more_rounded, size: 19),
+              decoration: const InputDecoration(
+                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12)),
+              items: [
+                const DropdownMenuItem(value: -1, child: Text('All categories')),
+                for (final c in catalog.categories)
+                  DropdownMenuItem(value: c.id, child: Text(c.name)),
+              ],
+              onChanged: (v) => setState(() => _categoryFilter = v ?? -1),
+            );
+            final chip = FilterChip(
+              label: const Text('Low stock'),
+              selected: _lowOnly,
+              showCheckmark: false,
+              labelStyle: TextStyle(
+                fontFamily: 'Carlito',
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: _lowOnly ? AppColors.warning : AppColors.muted,
               ),
-              const SizedBox(width: AppSpace.s2),
-              FilterChip(
-                label: const Text('Low stock'),
-                selected: _lowOnly,
-                showCheckmark: false,
-                labelStyle: TextStyle(
-                  fontFamily: 'Carlito',
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  color: _lowOnly ? AppColors.warning : AppColors.muted,
-                ),
-                selectedColor: AppColors.warningSoft,
-                checkmarkColor: AppColors.warning,
-                side: BorderSide(
-                    color: _lowOnly ? AppColors.warning.withValues(alpha: 0.35) : AppColors.border),
-                avatar: Icon(
-                  Icons.warning_amber_rounded,
-                  size: 15,
-                  color: _lowOnly ? AppColors.warning : AppColors.faint,
-                ),
-                onSelected: (v) => setState(() => _lowOnly = v),
+              selectedColor: AppColors.warningSoft,
+              checkmarkColor: AppColors.warning,
+              side: BorderSide(
+                  color: _lowOnly ? AppColors.warning.withValues(alpha: 0.35) : AppColors.border),
+              avatar: Icon(
+                Icons.warning_amber_rounded,
+                size: 15,
+                color: _lowOnly ? AppColors.warning : AppColors.faint,
               ),
-            ],
-          ),
+              onSelected: (v) => setState(() => _lowOnly = v),
+            );
+            if (narrow) {
+              return Column(
+                children: [
+                  search,
+                  const SizedBox(height: AppSpace.s2),
+                  Row(
+                    children: [
+                      Expanded(child: dropdown),
+                      const SizedBox(width: AppSpace.s2),
+                      chip,
+                    ],
+                  ),
+                ],
+              );
+            }
+            return Row(
+              children: [
+                Expanded(child: search),
+                const SizedBox(width: AppSpace.s2),
+                SizedBox(width: 192, child: dropdown),
+                const SizedBox(width: AppSpace.s2),
+                chip,
+              ],
+            );
+          }),
           const SizedBox(height: 12),
           Expanded(
             child: products.isEmpty
