@@ -10,6 +10,7 @@ import 'state/customers.dart';
 import 'state/nav.dart';
 import 'state/sales.dart';
 import 'state/settings.dart';
+import 'widgets/ui.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -74,56 +75,8 @@ class StylePosApp extends StatelessWidget {
       child: MaterialApp(
         title: 'StylePOS',
         debugShowCheckedModeBanner: false,
-        theme: _buildTheme(),
+        theme: AppTheme.build(),
         home: const _Root(),
-      ),
-    );
-  }
-
-  ThemeData _buildTheme() {
-    const seed = Color(0xFF3F51B5); // indigo
-    final scheme = ColorScheme.fromSeed(seedColor: seed);
-    return ThemeData(
-      useMaterial3: true,
-      colorScheme: scheme,
-      scaffoldBackgroundColor: const Color(0xFFF5F6FA),
-      appBarTheme: AppBarTheme(
-        backgroundColor: scheme.surface,
-        foregroundColor: scheme.onSurface,
-        elevation: 0,
-        centerTitle: false,
-      ),
-      cardTheme: CardThemeData(
-        elevation: 0,
-        color: Colors.white,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-          side: BorderSide(color: Colors.grey.shade200),
-        ),
-        margin: EdgeInsets.zero,
-      ),
-      inputDecorationTheme: InputDecorationTheme(
-        filled: true,
-        fillColor: Colors.white,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(color: Colors.grey.shade300),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(color: Colors.grey.shade300),
-        ),
-        isDense: true,
-      ),
-      filledButtonTheme: FilledButtonThemeData(
-        style: FilledButton.styleFrom(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        ),
-      ),
-      chipTheme: ChipThemeData(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        side: BorderSide(color: Colors.grey.shade300),
       ),
     );
   }

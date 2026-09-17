@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../models/user.dart';
 import '../../state/auth.dart';
+import '../../widgets/ui.dart';
 
 /// Staff account management (admin only).
 class UsersScreen extends StatefulWidget {
@@ -37,53 +38,75 @@ class _UsersScreenState extends State<UsersScreen> {
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
-    final theme = Theme.of(context);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Staff accounts')),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _edit(),
-        icon: const Icon(Icons.person_add_alt),
+        icon: const Icon(Icons.person_add_alt_rounded, size: 20),
         label: const Text('Add staff'),
       ),
       body: _users == null
           ? const Center(child: CircularProgressIndicator())
           : Center(
               child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 640),
+                constraints: const BoxConstraints(maxWidth: 660),
                 child: ListView.separated(
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.all(16),
                   itemCount: _users!.length,
-                  separatorBuilder: (_, _) => const SizedBox(height: 6),
+                  separatorBuilder: (_, _) => const SizedBox(height: 8),
                   itemBuilder: (context, i) {
                     final u = _users![i];
                     final isSelf = u.id == auth.user?.id;
                     return Card(
                       child: ListTile(
-                        leading: CircleAvatar(
-                          backgroundColor: u.isAdmin
-                              ? theme.colorScheme.primaryContainer
-                              : theme.colorScheme.secondaryContainer,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                        leading: Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            color: u.isAdmin ? AppColors.primarySoft : AppColors.infoSoft,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
                           child: Icon(
                             u.isAdmin
                                 ? Icons.admin_panel_settings_outlined
                                 : Icons.badge_outlined,
-                            color: u.isAdmin
-                                ? theme.colorScheme.primary
-                                : theme.colorScheme.secondary,
+                            color: u.isAdmin ? AppColors.primary : AppColors.info,
+                            size: 22,
                           ),
                         ),
-                        title: Text(
-                          '${u.name}${isSelf ? " (you)" : ""}',
-                          style: TextStyle(
-                              fontWeight: FontWeight.w600,
-                              color: u.active ? null : theme.colorScheme.error),
+                        title: Row(
+                          children: [
+                            Text(
+                              u.name,
+                              style: TextStyle(
+                                  fontFamily: 'Carlito',
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 14.5,
+                                  color: u.active ? AppColors.ink : AppColors.faint),
+                            ),
+                            if (isSelf) ...[
+                              const SizedBox(width: 7),
+                              StatusPill.build(context,
+                                  label: 'You',
+                                  foreground: AppColors.primary,
+                                  background: AppColors.primarySoft),
+                            ],
+                            if (!u.active) ...[
+                              const SizedBox(width: 7),
+                              StatusPill.build(context,
+                                  label: 'Inactive',
+                                  foreground: AppColors.danger,
+                                  background: AppColors.dangerSoft),
+                            ],
+                          ],
                         ),
                         subtitle: Text(
-                            '${u.email} · ${u.isAdmin ? "Admin" : "Cashier"}'
-                            '${u.active ? "" : " · deactivated"}',
-                            style: const TextStyle(fontSize: 12)),
+                            '${u.email} · ${u.isAdmin ? "Admin" : "Cashier"}',
+                            style: const TextStyle(fontFamily: 'Carlito', fontSize: 12.5)),
                         trailing: PopupMenuButton<String>(
+                          icon: const Icon(Icons.more_vert_rounded, size: 20, color: AppColors.muted),
                           onSelected: (v) async {
                             final a = context.read<AuthProvider>();
                             if (v == 'edit') {
@@ -212,17 +235,38 @@ class _UserEditDialogState extends State<_UserEditDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Text(_isNew ? 'Add staff account' : 'Edit staff account'),
+      titlePadding: const EdgeInsets.fromLTRB(24, 22, 24, 0),
+      contentPadding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
+      actionsPadding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+      title: Row(children: [
+        Container(
+          width: 34,
+          height: 34,
+          decoration: BoxDecoration(
+            color: AppColors.primarySoft,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(
+            _isNew ? Icons.person_add_alt_rounded : Icons.manage_accounts_outlined,
+            size: 19,
+            color: AppColors.primary,
+          ),
+        ),
+        const SizedBox(width: 11),
+        Text(_isNew ? 'Add staff account' : 'Edit staff account'),
+      ]),
       content: SizedBox(
-        width: 380,
+        width: 400,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
               controller: _name,
-              decoration: const InputDecoration(labelText: 'Full name *'),
+              decoration: const InputDecoration(
+                  labelText: 'Full name *',
+                  prefixIcon: Icon(Icons.person_outline_rounded, size: 20)),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 13),
             TextField(
               controller: _email,
               enabled: _isNew,
@@ -230,11 +274,13 @@ class _UserEditDialogState extends State<_UserEditDialog> {
               decoration: InputDecoration(
                 labelText: 'Email (login) *',
                 helperText: _isNew ? null : 'Email cannot be changed',
+                prefixIcon: const Icon(Icons.alternate_email_rounded, size: 20),
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 13),
             DropdownButtonFormField<String>(
               initialValue: _role,
+              icon: const Icon(Icons.expand_more_rounded, size: 19),
               decoration: const InputDecoration(labelText: 'Role'),
               items: const [
                 DropdownMenuItem(value: 'cashier', child: Text('Cashier — sell & customers')),
@@ -243,20 +289,36 @@ class _UserEditDialogState extends State<_UserEditDialog> {
               onChanged: (v) => setState(() => _role = v ?? 'cashier'),
             ),
             if (_isNew) ...[
-              const SizedBox(height: 12),
+              const SizedBox(height: 13),
               TextField(
                 controller: _password,
                 obscureText: true,
                 decoration: const InputDecoration(
-                    labelText: 'Password * (min 6 chars)'),
+                    labelText: 'Password * (min 6 chars)',
+                    prefixIcon: Icon(Icons.lock_outline_rounded, size: 20)),
               ),
             ],
-            if (_error != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 10),
-                child: Text(_error!,
-                    style: TextStyle(color: Theme.of(context).colorScheme.error)),
+            if (_error != null) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(11),
+                decoration: BoxDecoration(
+                  color: AppColors.dangerSoft,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.error_outline_rounded, size: 17, color: AppColors.danger),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(_error!,
+                          style: const TextStyle(
+                              fontFamily: 'Carlito', fontSize: 12.5, color: AppColors.danger)),
+                    ),
+                  ],
+                ),
               ),
+            ],
           ],
         ),
       ),

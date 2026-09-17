@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../state/auth.dart';
 import '../../state/settings.dart';
+import '../../widgets/ui.dart';
 import 'users_screen.dart';
 
 /// Shop settings (admin): profile, currency, tax, loyalty.
@@ -71,151 +72,139 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
-    final theme = Theme.of(context);
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 24),
       child: Center(
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 640),
+          constraints: const BoxConstraints(maxWidth: 660),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // --- shop profile ---
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          const Icon(Icons.storefront_outlined, size: 20),
-                          const SizedBox(width: 8),
-                          Text('Shop profile',
-                              style: theme.textTheme.titleMedium
-                                  ?.copyWith(fontWeight: FontWeight.bold)),
-                        ],
-                      ),
-                      const SizedBox(height: 14),
-                      TextField(
-                        controller: _shopName,
-                        decoration: const InputDecoration(
-                            labelText: 'Shop name (shown on receipts)'),
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: _address,
-                        decoration:
-                            const InputDecoration(labelText: 'Address (receipts)'),
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: _phone,
-                        keyboardType: TextInputType.phone,
-                        decoration:
-                            const InputDecoration(labelText: 'Phone (receipts)'),
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: _footer,
-                        decoration: const InputDecoration(
-                            labelText: 'Receipt footer message'),
-                      ),
-                    ],
-                  ),
-                ),
+              const PageHeader(
+                title: 'Settings',
+                subtitle: 'Shop profile, currency, tax and loyalty configuration',
               ),
-              const SizedBox(height: 12),
+
+              // --- shop profile ---
+              SectionCard(
+                icon: Icons.storefront_outlined,
+                title: 'Shop profile',
+                subtitle: 'Shown on receipts and around the app',
+                children: [
+                  TextField(
+                    controller: _shopName,
+                    decoration: const InputDecoration(
+                        labelText: 'Shop name (shown on receipts)'),
+                  ),
+                  const SizedBox(height: 13),
+                  TextField(
+                    controller: _address,
+                    decoration:
+                        const InputDecoration(labelText: 'Address (receipts)'),
+                  ),
+                  const SizedBox(height: 13),
+                  TextField(
+                    controller: _phone,
+                    keyboardType: TextInputType.phone,
+                    decoration:
+                        const InputDecoration(labelText: 'Phone (receipts)'),
+                  ),
+                  const SizedBox(height: 13),
+                  TextField(
+                    controller: _footer,
+                    decoration: const InputDecoration(
+                        labelText: 'Receipt footer message'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
 
               // --- currency & tax ---
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+              SectionCard(
+                icon: Icons.payments_outlined,
+                title: 'Currency & tax',
+                subtitle: 'Applied to all prices, totals and reports',
+                children: [
+                  Row(
                     children: [
-                      Row(
-                        children: [
-                          const Icon(Icons.payments_outlined, size: 20),
-                          const SizedBox(width: 8),
-                          Text('Currency & tax',
-                              style: theme.textTheme.titleMedium
-                                  ?.copyWith(fontWeight: FontWeight.bold)),
-                        ],
+                      Expanded(
+                        child: TextField(
+                          controller: _curCode,
+                          decoration: const InputDecoration(
+                              labelText: 'Currency code (e.g. KES, USD)'),
+                        ),
                       ),
-                      const SizedBox(height: 14),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: TextField(
-                              controller: _curCode,
-                              decoration: const InputDecoration(
-                                  labelText: 'Currency code (e.g. KES, USD)'),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: TextField(
-                              controller: _curSymbol,
-                              decoration: const InputDecoration(
-                                  labelText: 'Symbol (e.g. KSh, \$, €)'),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: TextField(
-                              controller: _tax,
-                              keyboardType:
-                                  const TextInputType.numberWithOptions(decimal: true),
-                              decoration: const InputDecoration(
-                                  labelText: 'Tax rate (%)', helperText: '0 disables tax'),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: TextField(
-                              controller: _lowStock,
-                              keyboardType: TextInputType.number,
-                              decoration: const InputDecoration(
-                                  labelText: 'Default low-stock threshold'),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: _loyalty,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(
-                          labelText: 'Loyalty: 1 point per this amount spent',
-                          helperText: '0 disables loyalty points',
+                      const SizedBox(width: 13),
+                      Expanded(
+                        child: TextField(
+                          controller: _curSymbol,
+                          decoration: const InputDecoration(
+                              labelText: 'Symbol (e.g. KSh, \$, €)'),
                         ),
                       ),
                     ],
                   ),
-                ),
+                  const SizedBox(height: 13),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _tax,
+                          keyboardType:
+                              const TextInputType.numberWithOptions(decimal: true),
+                          decoration: const InputDecoration(
+                              labelText: 'Tax rate (%)', helperText: '0 disables tax'),
+                        ),
+                      ),
+                      const SizedBox(width: 13),
+                      Expanded(
+                        child: TextField(
+                          controller: _lowStock,
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(
+                              labelText: 'Default low-stock threshold'),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 13),
+                  TextField(
+                    controller: _loyalty,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Loyalty: 1 point per this amount spent',
+                      helperText: '0 disables loyalty points',
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  FilledButton.icon(
+                    style: FilledButton.styleFrom(minimumSize: const Size(0, 46)),
+                    onPressed: _save,
+                    icon: const Icon(Icons.save_outlined, size: 18),
+                    label: const Text('Save settings'),
+                  ),
+                ],
               ),
-              const SizedBox(height: 12),
-
-              FilledButton.icon(
-                onPressed: _save,
-                icon: const Icon(Icons.save_outlined, size: 18),
-                label: const Text('Save settings'),
-              ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 14),
 
               // --- users ---
               Card(
                 child: ListTile(
-                  leading: const Icon(Icons.manage_accounts_outlined),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  leading: Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      color: AppColors.primarySoft,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(Icons.manage_accounts_outlined,
+                        color: AppColors.primary, size: 22),
+                  ),
                   title: const Text('Staff accounts'),
                   subtitle: const Text('Add cashiers, reset passwords, deactivate'),
-                  trailing: const Icon(Icons.chevron_right),
+                  trailing: const Icon(Icons.chevron_right_rounded, color: AppColors.faint),
                   onTap: () => Navigator.of(context).push(
                       MaterialPageRoute(builder: (_) => const UsersScreen())),
                 ),
@@ -223,15 +212,48 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
               // --- about ---
               Card(
-                child: ListTile(
-                  leading: const Icon(Icons.info_outline),
-                  title: const Text('StylePOS'),
-                  subtitle: Text(
-                      'Offline point of sale for clothing shops\n'
-                      'Signed in as ${auth.user?.name ?? "-"} '
-                      '(${(auth.user?.isAdmin ?? false) ? "admin" : "cashier"})',
-                      style: const TextStyle(fontSize: 12)),
-                  isThreeLine: true,
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 42,
+                        height: 42,
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [Color(0xFF4F46E5), Color(0xFF6D28D9)],
+                          ),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(Icons.storefront_rounded,
+                            color: Colors.white, size: 22),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('StylePOS',
+                                style: TextStyle(
+                                    fontFamily: 'Carlito',
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.ink)),
+                            const SizedBox(height: 2),
+                            Text(
+                              'Offline point of sale for clothing shops\n'
+                              'Signed in as ${auth.user?.name ?? "-"} '
+                              '(${(auth.user?.isAdmin ?? false) ? "admin" : "cashier"})',
+                              style: const TextStyle(
+                                  fontFamily: 'Carlito', fontSize: 12.5, color: AppColors.muted, height: 1.4),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
               const SizedBox(height: 24),

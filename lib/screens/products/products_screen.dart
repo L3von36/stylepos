@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../models/product.dart';
 import '../../state/catalog.dart';
 import '../../state/settings.dart';
+import '../../widgets/ui.dart';
 import 'product_edit_screen.dart';
 import 'stock_adjust_dialog.dart';
 
@@ -53,7 +54,11 @@ class _ProductsScreenState extends State<ProductsScreen> {
             '"${p.name}" will be hidden from the POS and inventory. Past sales are kept.'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('Archive')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppColors.danger),
+            onPressed: () => Navigator.pop(c, true),
+            child: const Text('Archive'),
+          ),
         ],
       ),
     );
@@ -67,52 +72,52 @@ class _ProductsScreenState extends State<ProductsScreen> {
     final catalog = context.watch<CatalogProvider>();
     final settings = context.watch<AppSettings>();
     final products = _filtered(catalog);
+    final lowCount = catalog.products.where((p) => p.hasLowStock).length;
 
     return Padding(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
       child: Column(
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _search,
-                  onChanged: (v) => setState(() => _query = v),
-                  decoration: InputDecoration(
-                    hintText: 'Search products, SKU or barcode…',
-                    prefixIcon: const Icon(Icons.search),
-                    suffixIcon: _query.isEmpty
-                        ? null
-                        : IconButton(
-                            icon: const Icon(Icons.clear),
-                            onPressed: () {
-                              _search.clear();
-                              setState(() => _query = '');
-                            },
-                          ),
-                  ),
-                ),
+          PageHeader(
+            title: 'Products',
+            subtitle:
+                '${catalog.products.length} in catalog · $lowCount need restocking',
+            actions: [
+              OutlinedButton.icon(
+                onPressed: () => _manageCategories(context),
+                icon: const Icon(Icons.category_outlined, size: 17),
+                label: const Text('Categories'),
               ),
-              const SizedBox(width: 10),
               FilledButton.icon(
                 onPressed: () async {
                   await Navigator.of(context).push(MaterialPageRoute(
                       builder: (_) => const ProductEditScreen()));
                 },
-                icon: const Icon(Icons.add),
+                icon: const Icon(Icons.add_rounded, size: 19),
                 label: const Text('New product'),
               ),
             ],
           ),
-          const SizedBox(height: 8),
           Row(
             children: [
-              Flexible(
+              Expanded(child: SearchField(
+                controller: _search,
+                hint: 'Search products, SKU or barcode…',
+                onChanged: (v) => setState(() => _query = v),
+                onClear: () {
+                  _search.clear();
+                  setState(() => _query = '');
+                },
+              )),
+              const SizedBox(width: 10),
+              SizedBox(
+                width: 190,
                 child: DropdownButtonFormField<int>(
                   initialValue: _categoryFilter,
                   isDense: true,
+                  icon: const Icon(Icons.expand_more_rounded, size: 19),
                   decoration: const InputDecoration(
-                      labelText: 'Category', contentPadding: EdgeInsets.symmetric(horizontal: 10)),
+                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12)),
                   items: [
                     const DropdownMenuItem(value: -1, child: Text('All categories')),
                     for (final c in catalog.categories)
@@ -125,32 +130,42 @@ class _ProductsScreenState extends State<ProductsScreen> {
               FilterChip(
                 label: const Text('Low stock'),
                 selected: _lowOnly,
+                showCheckmark: false,
+                labelStyle: TextStyle(
+                  fontFamily: 'Carlito',
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: _lowOnly ? AppColors.warning : AppColors.muted,
+                ),
+                selectedColor: AppColors.warningSoft,
+                checkmarkColor: AppColors.warning,
+                side: BorderSide(
+                    color: _lowOnly ? AppColors.warning.withValues(alpha: 0.35) : AppColors.border),
+                avatar: Icon(
+                  Icons.warning_amber_rounded,
+                  size: 15,
+                  color: _lowOnly ? AppColors.warning : AppColors.faint,
+                ),
                 onSelected: (v) => setState(() => _lowOnly = v),
-              ),
-              const SizedBox(width: 10),
-              TextButton.icon(
-                onPressed: () => _manageCategories(context),
-                icon: const Icon(Icons.category_outlined, size: 18),
-                label: const Text('Categories'),
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
           Expanded(
             child: products.isEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.inventory_2_outlined, size: 48, color: Colors.grey.shade400),
-                        const SizedBox(height: 8),
-                        const Text('No products found'),
-                      ],
-                    ),
+                ? EmptyState(
+                    icon: Icons.inventory_2_outlined,
+                    title: 'No products found',
+                    message: _query.isNotEmpty || _lowOnly || _categoryFilter >= 0
+                        ? 'Try clearing the search or filters.'
+                        : 'Add your first product to start tracking stock.',
+                    actionLabel: 'New product',
+                    onAction: () => Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const ProductEditScreen())),
                   )
                 : ListView.separated(
                     itemCount: products.length,
-                    separatorBuilder: (_, _) => const SizedBox(height: 6),
+                    separatorBuilder: (_, _) => const SizedBox(height: 8),
                     itemBuilder: (context, i) => _ProductTile(
                   product: products[i],
                   settings: settings,
@@ -184,65 +199,77 @@ class _ProductTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final lowVariants =
-        product.variants.where((v) => v.stock <= product.lowStock).length;
+    final p = product;
+    final lowVariants = p.variants.where((v) => v.stock <= p.lowStock).length;
 
     return Card(
       child: InkWell(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(14),
         onTap: () async {
           await Navigator.of(context).push(MaterialPageRoute(
               builder: (_) => ProductEditScreen(product: product)));
         },
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
           child: Row(
             children: [
               Container(
-                width: 44,
-                height: 44,
+                width: 46,
+                height: 46,
                 decoration: BoxDecoration(
-                  color: theme.colorScheme.primaryContainer.withValues(alpha: 0.4),
-                  borderRadius: BorderRadius.circular(10),
+                  color: AppColors.primarySoft,
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                child: Icon(Icons.checkroom, color: theme.colorScheme.primary),
+                child: Icon(Icons.checkroom_rounded, color: AppColors.primary, size: 22),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 13),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(product.name,
-                        style: const TextStyle(fontWeight: FontWeight.w600)),
+                        style: const TextStyle(
+                            fontFamily: 'Carlito',
+                            fontWeight: FontWeight.w700,
+                            fontSize: 14.5,
+                            color: AppColors.ink)),
                     const SizedBox(height: 2),
                     Text(
                       '${product.variants.length} variants'
                       ' · ${settings.currencySymbol} ${product.priceLabel}'
                       ' · ${product.barcode ?? 'no barcode'}',
-                      style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                      style: const TextStyle(fontFamily: 'Carlito', fontSize: 12.5, color: AppColors.muted),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ),
               ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    '${product.totalStock} pcs',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: lowVariants > 0 ? theme.colorScheme.error : null,
-                    ),
+              if (lowVariants > 0) ...[
+                const SizedBox(width: 8),
+                StatusPill.build(context,
+                    label: '$lowVariants low', foreground: AppColors.warning, background: AppColors.warningSoft),
+              ],
+              const SizedBox(width: 10),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceTint,
+                  borderRadius: BorderRadius.circular(9),
+                  border: Border.all(color: AppColors.borderSoft),
+                ),
+                child: Text(
+                  '${product.totalStock} pcs',
+                  style: TextStyle(
+                    fontFamily: 'Carlito',
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: lowVariants > 0 ? AppColors.warning : AppColors.body,
                   ),
-                  if (lowVariants > 0)
-                    Text('$lowVariants low',
-                        style: TextStyle(fontSize: 11, color: theme.colorScheme.error)),
-                ],
+                ),
               ),
               const SizedBox(width: 8),
               PopupMenuButton<String>(
+                icon: const Icon(Icons.more_vert_rounded, size: 20, color: AppColors.muted),
                 onSelected: (v) async {
                   if (v == 'stock') {
                     showDialog(
@@ -287,10 +314,17 @@ class _CategoriesDialogState extends State<_CategoriesDialog> {
     final catalog = context.watch<CatalogProvider>();
 
     return AlertDialog(
-      title: const Text('Categories'),
+      titlePadding: const EdgeInsets.fromLTRB(24, 22, 24, 0),
+      contentPadding: const EdgeInsets.fromLTRB(24, 14, 24, 0),
+      actionsPadding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+      title: const Row(children: [
+        Icon(Icons.category_outlined, size: 22, color: AppColors.primary),
+        SizedBox(width: 10),
+        Text('Categories'),
+      ]),
       content: SizedBox(
-        width: 360,
-        height: 380,
+        width: 380,
+        height: 390,
         child: Column(
           children: [
             Expanded(
@@ -299,7 +333,10 @@ class _CategoriesDialogState extends State<_CategoriesDialog> {
                 itemBuilder: (context, i) {
                   final c = catalog.categories[i];
                   return ListTile(
-                    leading: const Icon(Icons.category_outlined),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(11),
+                        side: const BorderSide(color: AppColors.borderSoft)),
+                    leading: const Icon(Icons.label_outline, size: 19, color: AppColors.muted),
                     title: Text(c.name),
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
@@ -331,8 +368,8 @@ class _CategoriesDialogState extends State<_CategoriesDialog> {
                           },
                         ),
                         IconButton(
-                          icon: Icon(Icons.delete_outline,
-                              size: 18, color: Theme.of(context).colorScheme.error),
+                          icon: const Icon(Icons.delete_outline,
+                              size: 18, color: AppColors.danger),
                           onPressed: () async {
                             final err = await catalog.deleteCategory(c);
                             if (err != null && context.mounted) {
@@ -347,7 +384,7 @@ class _CategoriesDialogState extends State<_CategoriesDialog> {
                 },
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 10),
             Row(
               children: [
                 Expanded(
@@ -356,13 +393,15 @@ class _CategoriesDialogState extends State<_CategoriesDialog> {
                     decoration: const InputDecoration(labelText: 'New category'),
                   ),
                 ),
-                IconButton(
-                  icon: const Icon(Icons.add_circle),
+                const SizedBox(width: 10),
+                FilledButton.tonalIcon(
                   onPressed: () async {
                     if (_new.text.trim().isEmpty) return;
                     await catalog.addCategory(_new.text);
                     _new.clear();
                   },
+                  icon: const Icon(Icons.add_rounded, size: 18),
+                  label: const Text('Add'),
                 ),
               ],
             ),

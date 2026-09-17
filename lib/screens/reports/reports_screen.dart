@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../state/sales.dart';
 import '../../state/settings.dart';
+import '../../widgets/ui.dart';
 
 /// Reports: KPI cards + revenue line chart + top products + category share.
 class ReportsScreen extends StatefulWidget {
@@ -56,66 +57,108 @@ class _ReportsScreenState extends State<ReportsScreen> {
   @override
   Widget build(BuildContext context) {
     final settings = context.watch<AppSettings>();
-    final theme = Theme.of(context);
     final today = _summaries?['today'];
     final d7 = _summaries?['7d'];
     final d30 = _summaries?['30d'];
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 24),
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 1100),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // KPI cards
-              Wrap(
-                spacing: 10,
-                runSpacing: 10,
-                children: [
-                  StatCard(
-                    label: 'Revenue today',
-                    value: settings.money(today?.revenue ?? 0),
-                    icon: Icons.today_outlined,
-                  ),
-                  StatCard(
-                    label: 'Orders today',
-                    value: '${today?.orders ?? 0}',
-                    icon: Icons.receipt_long_outlined,
-                  ),
-                  StatCard(
-                    label: 'Revenue 7 days',
-                    value: settings.money(d7?.revenue ?? 0),
-                    icon: Icons.date_range_outlined,
-                  ),
-                  StatCard(
-                    label: 'Revenue 30 days',
-                    value: settings.money(d30?.revenue ?? 0),
-                    icon: Icons.calendar_month_outlined,
-                  ),
-                  StatCard(
-                    label: 'Avg basket (30d)',
-                    value: settings.money(
-                        d30 != null && d30.orders > 0 ? d30.revenue / d30.orders : 0),
-                    icon: Icons.shopping_basket_outlined,
-                  ),
-                  StatCard(
-                    label: 'Low stock items',
-                    value: '$_lowStock',
-                    icon: Icons.warning_amber_outlined,
-                    highlight: _lowStock > 0,
-                  ),
-                ],
+              const PageHeader(
+                title: 'Reports',
+                subtitle: 'Revenue, best sellers and inventory health at a glance',
               ),
-              const SizedBox(height: 12),
+
+              // KPI cards
+              LayoutBuilder(builder: (context, c) {
+                final cols = (c.maxWidth / 200).floor().clamp(2, 6);
+                const gap = 12.0;
+                final w = (c.maxWidth - gap * (cols - 1)) / cols;
+                return Wrap(
+                  spacing: gap,
+                  runSpacing: gap,
+                  children: [
+                    SizedBox(
+                      width: w,
+                      child: KpiCard(
+                        label: 'Revenue today',
+                        value: settings.money(today?.revenue ?? 0),
+                        icon: Icons.today_rounded,
+                      ),
+                    ),
+                    SizedBox(
+                      width: w,
+                      child: KpiCard(
+                        label: 'Orders today',
+                        value: '${today?.orders ?? 0}',
+                        icon: Icons.receipt_long_rounded,
+                        color: AppColors.info,
+                        soft: AppColors.infoSoft,
+                      ),
+                    ),
+                    SizedBox(
+                      width: w,
+                      child: KpiCard(
+                        label: 'Revenue 7 days',
+                        value: settings.money(d7?.revenue ?? 0),
+                        icon: Icons.date_range_rounded,
+                        color: AppColors.success,
+                        soft: AppColors.successSoft,
+                      ),
+                    ),
+                    SizedBox(
+                      width: w,
+                      child: KpiCard(
+                        label: 'Revenue 30 days',
+                        value: settings.money(d30?.revenue ?? 0),
+                        icon: Icons.calendar_month_rounded,
+                        color: const Color(0xFF7C3AED),
+                        soft: const Color(0xFFEDE9FE),
+                      ),
+                    ),
+                    SizedBox(
+                      width: w,
+                      child: KpiCard(
+                        label: 'Avg basket (30d)',
+                        value: settings.money(
+                            d30 != null && d30.orders > 0 ? d30.revenue / d30.orders : 0),
+                        icon: Icons.shopping_basket_rounded,
+                        color: const Color(0xFF0D9488),
+                        soft: const Color(0xFFCCFBF1),
+                      ),
+                    ),
+                    SizedBox(
+                      width: w,
+                      child: KpiCard(
+                        label: 'Low stock items',
+                        value: '$_lowStock',
+                        icon: Icons.warning_amber_rounded,
+                        color: _lowStock > 0 ? AppColors.danger : AppColors.success,
+                        soft: _lowStock > 0 ? AppColors.dangerSoft : AppColors.successSoft,
+                      ),
+                    ),
+                  ],
+                );
+              }),
+              const SizedBox(height: 16),
 
               // range selector
               Row(
                 children: [
-                  Text('Period:', style: theme.textTheme.bodyMedium),
-                  const SizedBox(width: 8),
+                  const Text('Period',
+                      style: TextStyle(
+                          fontFamily: 'Carlito',
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.muted)),
+                  const SizedBox(width: 10),
                   SegmentedButton<int>(
+                    showSelectedIcon: false,
                     segments: const [
                       ButtonSegment(value: 7, label: Text('7 days')),
                       ButtonSegment(value: 30, label: Text('30 days')),
@@ -129,82 +172,63 @@ class _ReportsScreenState extends State<ReportsScreen> {
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 14),
 
               // revenue chart
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Revenue trend',
-                          style: theme.textTheme.titleMedium
-                              ?.copyWith(fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 16),
-                      SizedBox(
-                        height: 220,
-                        child: _revenue == null
-                            ? const Center(child: CircularProgressIndicator())
-                            : _RevenueLineChart(data: _revenue!),
-                      ),
-                    ],
+              SectionCard(
+                icon: Icons.show_chart_rounded,
+                title: 'Revenue trend',
+                subtitle: 'Daily revenue over the selected period',
+                children: [
+                  SizedBox(
+                    height: 230,
+                    child: _revenue == null
+                        ? const Center(child: CircularProgressIndicator())
+                        : _RevenueLineChart(data: _revenue!, settings: settings),
                   ),
-                ),
+                ],
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 14),
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Expanded(
-                    child: Card(
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('Top products (units sold)',
-                                style: theme.textTheme.titleMedium
-                                    ?.copyWith(fontWeight: FontWeight.bold)),
-                            const SizedBox(height: 16),
-                            SizedBox(
-                              height: 220,
-                              child: _top == null || _top!.isEmpty
-                                  ? Center(
-                                      child: Text('No sales yet',
-                                          style: TextStyle(
-                                              color: Colors.grey.shade500)))
-                                  : _TopProductsBarChart(data: _top!),
-                            ),
-                          ],
+                    child: SectionCard(
+                      icon: Icons.leaderboard_rounded,
+                      title: 'Top products',
+                      subtitle: 'Units sold in the selected period',
+                      children: [
+                        SizedBox(
+                          height: 230,
+                          child: _top == null || _top!.isEmpty
+                              ? const EmptyState(
+                                  icon: Icons.leaderboard_outlined,
+                                  title: 'No sales yet',
+                                  message: 'Best sellers will appear here.',
+                                )
+                              : _TopProductsBarChart(data: _top!),
                         ),
-                      ),
+                      ],
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: 14),
                   Expanded(
-                    child: Card(
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('Category share (revenue)',
-                                style: theme.textTheme.titleMedium
-                                    ?.copyWith(fontWeight: FontWeight.bold)),
-                            const SizedBox(height: 16),
-                            SizedBox(
-                              height: 220,
-                              child: _categories == null || _categories!.isEmpty
-                                  ? Center(
-                                      child: Text('No sales yet',
-                                          style: TextStyle(
-                                              color: Colors.grey.shade500)))
-                                  : _CategoryPie(data: _categories!),
-                            ),
-                          ],
+                    child: SectionCard(
+                      icon: Icons.pie_chart_outline_rounded,
+                      title: 'Category share',
+                      subtitle: 'Share of revenue by category',
+                      children: [
+                        SizedBox(
+                          height: 230,
+                          child: _categories == null || _categories!.isEmpty
+                              ? const EmptyState(
+                                  icon: Icons.pie_chart_outline_rounded,
+                                  title: 'No sales yet',
+                                  message: 'Category split will appear here.',
+                                )
+                              : _CategoryPie(data: _categories!),
                         ),
-                      ),
+                      ],
                     ),
                   ),
                 ],
@@ -222,7 +246,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
 
 class _RevenueLineChart extends StatelessWidget {
   final List<(DateTime, double)> data;
-  const _RevenueLineChart({required this.data});
+  final AppSettings settings;
+  const _RevenueLineChart({required this.data, required this.settings});
 
   @override
   Widget build(BuildContext context) {
@@ -238,7 +263,7 @@ class _RevenueLineChart extends StatelessWidget {
         gridData: FlGridData(
           drawVerticalLine: false,
           getDrawingHorizontalLine: (v) => const FlLine(
-            color: Color(0x22000000),
+            color: AppColors.borderSoft,
             strokeWidth: 1,
           ),
         ),
@@ -249,15 +274,17 @@ class _RevenueLineChart extends StatelessWidget {
           bottomTitles: AxisTitles(
             sideTitles: SideTitles(
               showTitles: true,
+              reservedSize: 26,
               interval: (data.length / 6).clamp(1, 100).toDouble(),
               getTitlesWidget: (v, meta) {
                 final idx = v.toInt();
                 if (idx < 0 || idx >= data.length) return const SizedBox.shrink();
                 final d = data[idx].$1;
                 return Padding(
-                  padding: const EdgeInsets.only(top: 4),
+                  padding: const EdgeInsets.only(top: 6),
                   child: Text('${d.day}/${d.month}',
-                      style: const TextStyle(fontSize: 10)),
+                      style: const TextStyle(
+                          fontFamily: 'Carlito', fontSize: 11, color: AppColors.muted)),
                 );
               },
             ),
@@ -269,16 +296,35 @@ class _RevenueLineChart extends StatelessWidget {
             spots: spots,
             isCurved: true,
             barWidth: 3,
-            color: Theme.of(context).colorScheme.primary,
+            color: AppColors.primary,
             dotData: const FlDotData(show: false),
             belowBarData: BarAreaData(
               show: true,
-              color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.12),
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  AppColors.primary.withValues(alpha: 0.18),
+                  AppColors.primary.withValues(alpha: 0.02),
+                ],
+              ),
             ),
           ),
         ],
         lineTouchData: LineTouchData(
-          touchTooltipData: LineTouchTooltipData(),
+          touchTooltipData: LineTouchTooltipData(
+            getTooltipItems: (spots) => [
+              for (final s in spots)
+                LineTooltipItem(
+                  settings.money(s.y),
+                  const TextStyle(
+                      fontFamily: 'Carlito',
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white),
+                ),
+            ],
+          ),
         ),
       ),
     );
@@ -306,14 +352,17 @@ class _TopProductsBarChart extends StatelessWidget {
           bottomTitles: AxisTitles(
             sideTitles: SideTitles(
               showTitles: true,
+              reservedSize: 28,
               getTitlesWidget: (v, meta) {
                 final idx = v.toInt();
                 if (idx < 0 || idx >= data.length) return const SizedBox.shrink();
                 final name = data[idx].$1;
                 final short = name.length > 10 ? '${name.substring(0, 10)}…' : name;
                 return Padding(
-                  padding: const EdgeInsets.only(top: 4),
-                  child: Text(short, style: const TextStyle(fontSize: 9)),
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Text(short,
+                      style: const TextStyle(
+                          fontFamily: 'Carlito', fontSize: 10, color: AppColors.muted)),
                 );
               },
             ),
@@ -326,15 +375,31 @@ class _TopProductsBarChart extends StatelessWidget {
               barRods: [
                 BarChartRodData(
                   toY: data[i].$2.toDouble(),
-                  width: 22,
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
-                  color: Theme.of(context).colorScheme.primary,
+                  width: 24,
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(6)),
+                  gradient: const LinearGradient(
+                    begin: Alignment.bottomCenter,
+                    end: Alignment.topCenter,
+                    colors: [Color(0xFF6366F1), Color(0xFF4F46E5)],
+                  ),
                 ),
               ],
+              showingTooltipIndicators: [0],
             ),
         ],
         barTouchData: BarTouchData(
-          touchTooltipData: BarTouchTooltipData(),
+          touchTooltipData: BarTouchTooltipData(
+            getTooltipItem: (group, groupIndex, rod, rodIndex) =>
+                BarTooltipItem(
+                  '${data[group.x].$1}\n${data[group.x].$2} sold',
+                  const TextStyle(
+                      fontFamily: 'Carlito',
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white),
+                  textAlign: TextAlign.center,
+                ),
+          ),
         ),
       ),
     );
@@ -345,11 +410,6 @@ class _CategoryPie extends StatelessWidget {
   final List<(String, double)> data;
   const _CategoryPie({required this.data});
 
-  static const palette = [
-    Color(0xFF3F51B5), Color(0xFF009688), Color(0xFFFF9800), Color(0xFFE91E63),
-    Color(0xFF795548), Color(0xFF607D8B), Color(0xFF9C27B0), Color(0xFF8BC34A),
-  ];
-
   @override
   Widget build(BuildContext context) {
     final total = data.fold(0.0, (s, d) => s + d.$2);
@@ -359,30 +419,31 @@ class _CategoryPie extends StatelessWidget {
         Expanded(
           child: PieChart(
             PieChartData(
-              sectionsSpace: 2,
-              centerSpaceRadius: 34,
+              sectionsSpace: 3,
+              centerSpaceRadius: 40,
               sections: [
                 for (var i = 0; i < data.length; i++)
                   PieChartSectionData(
                     value: data[i].$2,
-                    title: total > 0
+                    title: total > 0 && data[i].$2 / total >= 0.04
                         ? '${(data[i].$2 / total * 100).round()}%'
                         : '',
                     titleStyle: const TextStyle(
-                        fontSize: 10,
+                        fontFamily: 'Carlito',
+                        fontSize: 11,
                         color: Colors.white,
-                        fontWeight: FontWeight.bold),
-                    radius: 52,
-                    color: palette[i % palette.length],
+                        fontWeight: FontWeight.w700),
+                    radius: 56,
+                    color: AppColors.chart[i % AppColors.chart.length],
                   ),
               ],
             ),
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 10),
         Wrap(
-          spacing: 10,
-          runSpacing: 4,
+          spacing: 12,
+          runSpacing: 5,
           children: [
             for (var i = 0; i < data.length; i++)
               Row(
@@ -392,69 +453,18 @@ class _CategoryPie extends StatelessWidget {
                     width: 10,
                     height: 10,
                     decoration: BoxDecoration(
-                      color: palette[i % palette.length],
+                      color: AppColors.chart[i % AppColors.chart.length],
                       shape: BoxShape.circle,
                     ),
                   ),
-                  const SizedBox(width: 4),
-                  Text(data[i].$1, style: const TextStyle(fontSize: 11)),
+                  const SizedBox(width: 5),
+                  Text(data[i].$1,
+                      style: const TextStyle(fontFamily: 'Carlito', fontSize: 11.5, color: AppColors.body)),
                 ],
               ),
           ],
         ),
       ],
-    );
-  }
-}
-
-// ---------- shared KPI card ----------
-
-class StatCard extends StatelessWidget {
-  final String label;
-  final String value;
-  final IconData icon;
-  final bool highlight;
-
-  const StatCard({
-    super.key,
-    required this.label,
-    required this.value,
-    required this.icon,
-    this.highlight = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Card(
-      child: Container(
-        width: 172,
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(icon,
-                    size: 18,
-                    color: highlight ? theme.colorScheme.error : theme.colorScheme.primary),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(label,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(value,
-                style: theme.textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: highlight ? theme.colorScheme.error : null,
-                )),
-          ],
-        ),
-      ),
     );
   }
 }

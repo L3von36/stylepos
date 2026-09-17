@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../models/product.dart';
 import '../../state/auth.dart';
 import '../../state/catalog.dart';
+import '../../widgets/ui.dart';
 
 /// Stock in / out for a product's variants. Records an audited
 /// stock movement with a note.
@@ -34,7 +35,6 @@ class _StockAdjustDialogState extends State<StockAdjustDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final product = widget.product;
     final variants = product.variants;
     if (variants.isEmpty) {
@@ -49,9 +49,24 @@ class _StockAdjustDialogState extends State<StockAdjustDialog> {
     final newStock = (variant.stock + _delta).clamp(0, 1 << 30);
 
     return AlertDialog(
-      title: Text('Adjust stock · ${product.name}'),
+      titlePadding: const EdgeInsets.fromLTRB(24, 22, 24, 0),
+      contentPadding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
+      actionsPadding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+      title: Row(children: [
+        Container(
+          width: 34,
+          height: 34,
+          decoration: BoxDecoration(
+            color: AppColors.primarySoft,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: const Icon(Icons.inventory_rounded, size: 19, color: AppColors.primary),
+        ),
+        const SizedBox(width: 11),
+        Expanded(child: Text('Adjust stock · ${product.name}', overflow: TextOverflow.ellipsis)),
+      ]),
       content: SizedBox(
-        width: 420,
+        width: 430,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -60,6 +75,7 @@ class _StockAdjustDialogState extends State<StockAdjustDialog> {
               DropdownButtonFormField<int>(
                 initialValue: _variantIndex,
                 isExpanded: true,
+                icon: const Icon(Icons.expand_more_rounded, size: 19),
                 decoration: const InputDecoration(labelText: 'Variant'),
                 items: [
                   for (var i = 0; i < variants.length; i++)
@@ -75,22 +91,60 @@ class _StockAdjustDialogState extends State<StockAdjustDialog> {
                 }),
               ),
             const SizedBox(height: 14),
-            Text(
-              '${variant.descriptor}: ${variant.stock} → $newStock pcs',
-              style: theme.textTheme.titleMedium?.copyWith(
-                color: _delta == 0 ? null : (_delta > 0 ? Colors.green.shade700 : theme.colorScheme.error),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                color: AppColors.surfaceTint,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.borderSoft),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(variant.descriptor,
+                            style: const TextStyle(
+                                fontFamily: 'Carlito',
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.body)),
+                        const SizedBox(height: 2),
+                        Text('Current stock: ${variant.stock} pcs',
+                            style: const TextStyle(fontFamily: 'Carlito', fontSize: 12, color: AppColors.muted)),
+                      ],
+                    ),
+                  ),
+                  Icon(Icons.arrow_forward_rounded, size: 18, color: Colors.grey.shade400),
+                  const SizedBox(width: 12),
+                  Text(
+                    '$newStock pcs',
+                    style: TextStyle(
+                      fontFamily: 'Carlito',
+                      fontSize: 17,
+                      fontWeight: FontWeight.w700,
+                      color: _delta == 0
+                          ? AppColors.ink
+                          : (_delta > 0 ? AppColors.success : AppColors.danger),
+                    ),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 12),
             Wrap(
-              spacing: 6,
-              runSpacing: 6,
+              spacing: 7,
+              runSpacing: 7,
               children: [
                 for (final d in [-10, -5, -1, 1, 5, 10])
                   OutlinedButton(
                     onPressed: () => setState(() => _delta += d),
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: d > 0 ? Colors.green.shade700 : theme.colorScheme.error,
+                      minimumSize: const Size(52, 38),
+                      backgroundColor: d > 0 ? AppColors.successSoft : AppColors.dangerSoft,
+                      foregroundColor: d > 0 ? AppColors.success : AppColors.danger,
+                      side: BorderSide.none,
                     ),
                     child: Text(d > 0 ? '+$d' : '$d'),
                   ),
@@ -101,7 +155,7 @@ class _StockAdjustDialogState extends State<StockAdjustDialog> {
                   ),
               ],
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 12),
             TextField(
               controller: _note,
               decoration: const InputDecoration(

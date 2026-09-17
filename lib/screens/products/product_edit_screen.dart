@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../models/product.dart';
 import '../../state/catalog.dart';
 import '../../state/settings.dart';
+import '../../widgets/ui.dart';
 
 /// Full-screen editor for a product and its size/color variants.
 /// Open without [product] to create a new one.
@@ -77,7 +78,22 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
       context: context,
       builder: (c) => StatefulBuilder(
         builder: (c, setD) => AlertDialog(
-          title: Text(isNew ? 'Add variant' : 'Edit variant'),
+          titlePadding: const EdgeInsets.fromLTRB(24, 22, 24, 0),
+          contentPadding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
+          actionsPadding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+          title: Row(children: [
+            Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                color: AppColors.primarySoft,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(Icons.style_outlined, size: 19, color: AppColors.primary),
+            ),
+            const SizedBox(width: 11),
+            Text(isNew ? 'Add variant' : 'Edit variant'),
+          ]),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -91,7 +107,7 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
                             labelText: 'Size (S/M/L/…)'), // clothing sizes
                       ),
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 10),
                     Expanded(
                       child: TextField(
                         controller: color,
@@ -100,27 +116,27 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 12),
                 TextField(
                   controller: sku,
                   decoration: InputDecoration(
                     labelText: 'SKU *',
                     suffixIcon: IconButton(
                       tooltip: 'Generate SKU',
-                      icon: const Icon(Icons.auto_awesome),
+                      icon: const Icon(Icons.auto_awesome_outlined, size: 19),
                       onPressed: () {
                         sku.text = _autoSku(sku.text.split('-').first);
                       },
                     ),
                   ),
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 12),
                 TextField(
                   controller: barcode,
                   decoration: const InputDecoration(
                       labelText: 'Barcode (optional, scanner-friendly)'),
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 12),
                 Row(
                   children: [
                     Expanded(
@@ -132,7 +148,7 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
                             labelText: 'Price (${settings.currencySymbol}) *'),
                       ),
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 10),
                     Expanded(
                       child: TextField(
                         controller: cost,
@@ -144,7 +160,7 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 12),
                 TextField(
                   controller: stock,
                   enabled: isNew,
@@ -154,12 +170,27 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
                     helperText: isNew ? null : 'Edit stock from the product menu',
                   ),
                 ),
-                if (err != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 10),
-                    child: Text(err!,
-                        style: TextStyle(color: Theme.of(c).colorScheme.error)),
+                if (err != null) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(11),
+                    decoration: BoxDecoration(
+                      color: AppColors.dangerSoft,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.error_outline_rounded, size: 17, color: AppColors.danger),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(err!,
+                              style: const TextStyle(
+                                  fontFamily: 'Carlito', fontSize: 12.5, color: AppColors.danger)),
+                        ),
+                      ],
+                    ),
                   ),
+                ],
               ],
             ),
           ),
@@ -248,162 +279,174 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
         title: Text(_isNew ? 'New product' : 'Edit product'),
         actions: [
           Padding(
-            padding: const EdgeInsets.only(right: 12),
+            padding: const EdgeInsets.only(right: 14),
             child: FilledButton.icon(
               onPressed: _save,
-              icon: const Icon(Icons.save_outlined, size: 18),
+              icon: const Icon(Icons.check_rounded, size: 18),
               label: const Text('Save'),
             ),
           ),
         ],
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(18),
         child: Center(
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 760),
+            constraints: const BoxConstraints(maxWidth: 780),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 // --- details card ---
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
+                SectionCard(
+                  icon: Icons.edit_note_outlined,
+                  title: 'Product details',
+                  children: [
+                    TextField(
+                      controller: _name,
+                      decoration: const InputDecoration(
+                          labelText: 'Product name *',
+                          hintText: 'e.g. Classic Cotton Tee'),
+                    ),
+                    const SizedBox(height: 13),
+                    Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Details', style: theme.textTheme.titleMedium),
-                        const SizedBox(height: 12),
-                        TextField(
-                          controller: _name,
-                          decoration: const InputDecoration(
-                              labelText: 'Product name *',
-                              hintText: 'e.g. Classic Cotton Tee'),
+                        Expanded(
+                          child: DropdownButtonFormField<int?>(
+                            initialValue: _categoryId,
+                            icon: const Icon(Icons.expand_more_rounded, size: 19),
+                            decoration:
+                                const InputDecoration(labelText: 'Category'),
+                            items: [
+                              const DropdownMenuItem(
+                                  value: null, child: Text('Uncategorized')),
+                              for (final c in catalog.categories)
+                                DropdownMenuItem(value: c.id, child: Text(c.name)),
+                            ],
+                            onChanged: (v) => setState(() => _categoryId = v),
+                          ),
                         ),
-                        const SizedBox(height: 12),
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                        const SizedBox(width: 13),
+                        Expanded(
+                          child: TextField(
+                            controller: _barcode,
+                            decoration: const InputDecoration(
+                                labelText: 'Default barcode (optional)'),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 13),
+                    TextField(
+                      controller: _description,
+                      maxLines: 2,
+                      decoration: const InputDecoration(
+                          labelText: 'Description (optional)'),
+                    ),
+                    const SizedBox(height: 13),
+                    SizedBox(
+                      width: 220,
+                      child: TextField(
+                        controller: _lowStock,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                            labelText: 'Low stock alert at',
+                            helperText: 'Units per variant'),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+
+                // --- variants card ---
+                SectionCard(
+                  icon: Icons.style_outlined,
+                  title: 'Variants',
+                  subtitle: 'Each size/color combination tracks its own stock, price and barcode.',
+                  action: FilledButton.tonalIcon(
+                    onPressed: () {
+                      setState(() {
+                        _variants.add(ProductVariant(
+                          productId: widget.product?.id ?? 0,
+                          sku: _autoSku(''),
+                        ));
+                      });
+                    },
+                    icon: const Icon(Icons.add_rounded, size: 18),
+                    label: const Text('Add variant'),
+                  ),
+                  children: [
+                    for (final v in _variants)
+                      Container(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 9),
+                        decoration: BoxDecoration(
+                          color: AppColors.surfaceTint,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: AppColors.borderSoft),
+                        ),
+                        child: Row(
                           children: [
-                            Expanded(
-                              child: DropdownButtonFormField<int?>(
-                                initialValue: _categoryId,
-                                decoration:
-                                    const InputDecoration(labelText: 'Category'),
-                                items: [
-                                  const DropdownMenuItem(
-                                      value: null, child: Text('Uncategorized')),
-                                  for (final c in catalog.categories)
-                                    DropdownMenuItem(value: c.id, child: Text(c.name)),
-                                ],
-                                onChanged: (v) => setState(() => _categoryId = v),
+                            Container(
+                              width: 38,
+                              height: 38,
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(
+                                color: AppColors.primarySoft,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Text(
+                                v.size.isEmpty
+                                    ? (v.color.isEmpty ? '•' : v.color[0].toUpperCase())
+                                    : v.size,
+                                style: const TextStyle(
+                                    fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.primary),
                               ),
                             ),
                             const SizedBox(width: 12),
                             Expanded(
-                              child: TextField(
-                                controller: _barcode,
-                                decoration: const InputDecoration(
-                                    labelText: 'Default barcode (optional)'),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(v.descriptor,
+                                      style: const TextStyle(
+                                          fontFamily: 'Carlito',
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 14,
+                                          color: AppColors.ink)),
+                                  Text(
+                                    '${v.sku} · ${settings.money(v.price)} · stock: ${v.stock}',
+                                    style: const TextStyle(
+                                        fontFamily: 'Carlito', fontSize: 12, color: AppColors.muted),
+                                  ),
+                                ],
                               ),
                             ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        TextField(
-                          controller: _description,
-                          maxLines: 2,
-                          decoration: const InputDecoration(
-                              labelText: 'Description (optional)'),
-                        ),
-                        const SizedBox(height: 12),
-                        SizedBox(
-                          width: 160,
-                          child: TextField(
-                            controller: _lowStock,
-                            keyboardType: TextInputType.number,
-                            decoration: const InputDecoration(
-                                labelText: 'Low stock alert at',
-                                helperText: 'Units per variant'),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-
-                // --- variants card ---
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Expanded(
-                                child: Text('Variants',
-                                    style: theme.textTheme.titleMedium)),
-                            TextButton.icon(
+                            IconButton(
+                              tooltip: 'Edit',
+                              icon: const Icon(Icons.edit_outlined, size: 19),
+                              onPressed: () => _editVariant(v),
+                            ),
+                            IconButton(
+                              tooltip: 'Remove',
+                              icon: const Icon(Icons.delete_outline,
+                                  size: 19, color: AppColors.danger),
                               onPressed: () {
                                 setState(() {
-                                  _variants.add(ProductVariant(
-                                    productId: widget.product?.id ?? 0,
-                                    sku: _autoSku(''),
-                                  ));
+                                  _variants.removeWhere((x) => identical(x, v));
+                                  if (v.id != null) _removedIds.add(v.id!);
                                 });
                               },
-                              icon: const Icon(Icons.add, size: 18),
-                              label: const Text('Add variant'),
                             ),
                           ],
                         ),
-                        Text(
-                          'Each size/color combination tracks its own stock, price and barcode.',
-                          style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-                        ),
-                        const SizedBox(height: 8),
-                        for (final v in _variants)
-                          ListTile(
-                            contentPadding: EdgeInsets.zero,
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10)),
-                            title: Text(
-                              v.descriptor,
-                              style: const TextStyle(fontWeight: FontWeight.w600),
-                            ),
-                            subtitle: Text(
-                              '${v.sku} · ${settings.money(v.price)} · stock: ${v.stock}',
-                              style: const TextStyle(fontSize: 12),
-                            ),
-                            trailing: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                IconButton(
-                                  tooltip: 'Edit',
-                                  icon: const Icon(Icons.edit_outlined),
-                                  onPressed: () => _editVariant(v),
-                                ),
-                                IconButton(
-                                  tooltip: 'Remove',
-                                  icon: Icon(Icons.delete_outline,
-                                      color: theme.colorScheme.error),
-                                  onPressed: () {
-                                    setState(() {
-                                      _variants.removeWhere((x) => identical(x, v));
-                                      if (v.id != null) _removedIds.add(v.id!);
-                                    });
-                                  },
-                                ),
-                              ],
-                            ),
-                            onTap: () => _editVariant(v),
-                          ),
-                      ],
-                    ),
-                  ),
+                      ),
+                    if (_variants.isEmpty)
+                      Text('No variants yet — add at least one.',
+                          style: theme.textTheme.bodySmall),
+                  ],
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 24),
               ],
             ),
           ),

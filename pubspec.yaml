@@ -44,8 +44,14 @@ flutter:
   assets:
     - assets/fonts/
 
-  # Fonts used by the PDF receipt generator (good unicode currency coverage)
+  # App-wide UI font (also used by the PDF receipt generator for consistency;
+  # good unicode currency coverage, fully offline)
   fonts:
+    - family: Carlito
+      fonts:
+        - asset: assets/fonts/Carlito-Regular.ttf
+        - asset: assets/fonts/Carlito-Bold.ttf
+          weight: 700
     - family: ReceiptFont
       fonts:
         - asset: assets/fonts/Carlito-Regular.ttf

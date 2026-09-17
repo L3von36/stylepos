@@ -10,12 +10,14 @@ import 'settings/settings_screen.dart';
 import '../state/auth.dart';
 import '../state/nav.dart';
 import '../state/settings.dart';
+import '../widgets/ui.dart';
 
 class _Dest {
   final IconData icon;
+  final IconData activeIcon;
   final String label;
   final Widget page;
-  const _Dest(this.icon, this.label, this.page);
+  const _Dest(this.icon, this.activeIcon, this.label, this.page);
 }
 
 /// Adaptive app scaffold: NavigationRail on wide screens (desktop/tablet),
@@ -37,37 +39,99 @@ class _HomeShellState extends State<HomeShell> {
     if (user == null) return const SizedBox.shrink();
 
     final all = [
-      _Dest(Icons.point_of_sale_rounded, 'POS', const PosScreen()),
-      _Dest(Icons.inventory_2_outlined, 'Products', const ProductsScreen()),
-      _Dest(Icons.receipt_long_outlined, 'Sales', const SalesScreen()),
-      _Dest(Icons.people_outline, 'Customers', const CustomersScreen()),
-      if (user.isAdmin) _Dest(Icons.insights_outlined, 'Reports', const ReportsScreen()),
-      if (user.isAdmin) _Dest(Icons.settings_outlined, 'Settings', const SettingsScreen()),
+      _Dest(Icons.point_of_sale_outlined, Icons.point_of_sale_rounded, 'POS', const PosScreen()),
+      _Dest(Icons.inventory_2_outlined, Icons.inventory_2_rounded, 'Products', const ProductsScreen()),
+      _Dest(Icons.receipt_long_outlined, Icons.receipt_long_rounded, 'Sales', const SalesScreen()),
+      _Dest(Icons.people_outline, Icons.people_alt_rounded, 'Customers', const CustomersScreen()),
+      if (user.isAdmin)
+        _Dest(Icons.insights_outlined, Icons.insights_rounded, 'Reports', const ReportsScreen()),
+      if (user.isAdmin)
+        _Dest(Icons.settings_outlined, Icons.settings_rounded, 'Settings', const SettingsScreen()),
     ];
     final index = nav.index.clamp(0, all.length - 1);
 
     final appBar = AppBar(
-      title: Text(settings.shopName),
+      title: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 30,
+            height: 30,
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color(0xFF4F46E5), Color(0xFF6D28D9)],
+              ),
+              borderRadius: BorderRadius.circular(9),
+            ),
+            child: const Icon(Icons.storefront_rounded, size: 17, color: Colors.white),
+          ),
+          const SizedBox(width: 10),
+          Text(settings.shopName),
+        ],
+      ),
       actions: [
         IconButton(
           tooltip: 'Change password',
-          icon: const Icon(Icons.lock_reset_outlined),
+          icon: const Icon(Icons.lock_reset_outlined, size: 21),
           onPressed: () => _showChangePassword(context),
         ),
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8),
-          child: Chip(
-            avatar: Icon(
-              user.isAdmin ? Icons.admin_panel_settings_outlined : Icons.badge_outlined,
-              size: 18,
-              color: Theme.of(context).colorScheme.primary,
+          padding: const EdgeInsets.symmetric(horizontal: 6),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(22),
+            onTap: () => _showChangePassword(context),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: AppColors.surfaceTint,
+                borderRadius: BorderRadius.circular(22),
+                border: Border.all(color: AppColors.borderSoft),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 24,
+                    height: 24,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: AppColors.primarySoft,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      user.name.isEmpty ? '?' : user.name[0].toUpperCase(),
+                      style: const TextStyle(
+                          fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.primary),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(user.name,
+                      style: const TextStyle(
+                          fontFamily: 'Carlito', fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink)),
+                  const SizedBox(width: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1.5),
+                    decoration: BoxDecoration(
+                      color: user.isAdmin ? AppColors.primarySoft : AppColors.infoSoft,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      user.isAdmin ? 'Admin' : 'Cashier',
+                      style: TextStyle(
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w700,
+                          color: user.isAdmin ? AppColors.primaryDark : AppColors.info),
+                    ),
+                  ),
+                ],
+              ),
             ),
-            label: Text(user.name),
           ),
         ),
         IconButton(
           tooltip: 'Sign out',
-          icon: const Icon(Icons.logout),
+          icon: const Icon(Icons.logout_rounded, size: 21),
           onPressed: () async {
             final sure = await showDialog<bool>(
               context: context,
@@ -92,6 +156,7 @@ class _HomeShellState extends State<HomeShell> {
     return LayoutBuilder(builder: (context, constraints) {
       final wide = constraints.maxWidth >= 900;
       if (wide) {
+        final extended = constraints.maxWidth >= 1240;
         return Scaffold(
           appBar: appBar,
           body: Row(
@@ -99,22 +164,28 @@ class _HomeShellState extends State<HomeShell> {
               NavigationRail(
                 selectedIndex: index,
                 onDestinationSelected: (i) => nav.go(i),
-                extended: constraints.maxWidth >= 1200,
-                minExtendedWidth: 180,
-                labelType: constraints.maxWidth >= 1200
+                extended: extended,
+                minExtendedWidth: 190,
+                leading: Padding(
+                  padding: const EdgeInsets.only(top: 14, bottom: 10),
+                  child: extended
+                      ? null
+                      : const SizedBox.shrink(),
+                ),
+                labelType: extended
                     ? NavigationRailLabelType.none
                     : NavigationRailLabelType.all,
-                leading: const SizedBox(height: 8),
+                groupAlignment: -0.9,
                 destinations: [
                   for (final d in all)
                     NavigationRailDestination(
-                      icon: Icon(d.icon),
-                      selectedIcon: Icon(d.icon, color: Theme.of(context).colorScheme.primary),
+                      icon: Icon(d.icon, size: 23),
+                      selectedIcon: Icon(d.activeIcon, size: 23),
                       label: Text(d.label),
                     ),
                 ],
               ),
-              const VerticalDivider(width: 1),
+              const VerticalDivider(width: 1, thickness: 1, color: AppColors.borderSoft),
               Expanded(child: IndexedStack(index: index, children: [for (final d in all) d.page])),
             ],
           ),
@@ -125,30 +196,74 @@ class _HomeShellState extends State<HomeShell> {
       return Scaffold(
         appBar: appBar,
         drawer: Drawer(
-          child: ListView(
-            padding: EdgeInsets.zero,
+          backgroundColor: Colors.white,
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.horizontal(right: Radius.circular(20)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              DrawerHeader(
-                decoration: BoxDecoration(color: Theme.of(context).colorScheme.primaryContainer),
+              Container(
+                padding: EdgeInsets.only(
+                    top: MediaQuery.of(context).padding.top + 20, left: 20, right: 20, bottom: 22),
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [Color(0xFF4338CA), Color(0xFF4F46E5), Color(0xFF6D28D9)],
+                  ),
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(settings.shopName, style: Theme.of(context).textTheme.titleLarge),
-                    const SizedBox(height: 4),
-                    Text('${user.name} · ${user.isAdmin ? 'Admin' : 'Cashier'}'),
+                    Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.16),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(Icons.storefront_rounded, color: Colors.white, size: 24),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(settings.shopName,
+                        style: const TextStyle(
+                            fontFamily: 'Carlito',
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white)),
+                    const SizedBox(height: 3),
+                    Text('${user.name} · ${user.isAdmin ? 'Admin' : 'Cashier'}',
+                        style: TextStyle(
+                            fontFamily: 'Carlito',
+                            fontSize: 13,
+                            color: Colors.white.withValues(alpha: 0.8))),
                   ],
                 ),
               ),
-              for (var i = 0; i < all.length; i++)
-                ListTile(
-                  leading: Icon(all[i].icon),
-                  title: Text(all[i].label),
-                  selected: i == index,
-                  onTap: () {
-                    nav.go(i);
-                    Navigator.pop(context);
-                  },
+              Expanded(
+                child: ListView(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+                  children: [
+                    for (var i = 0; i < all.length; i++)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 2),
+                        child: ListTile(
+                          leading: Icon(i == index ? all[i].activeIcon : all[i].icon),
+                          title: Text(all[i].label),
+                          selected: i == index,
+                          selectedTileColor: AppColors.primarySoft,
+                          selectedColor: AppColors.primary,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          onTap: () {
+                            nav.go(i);
+                            Navigator.pop(context);
+                          },
+                        ),
+                      ),
+                  ],
                 ),
+              ),
             ],
           ),
         ),
@@ -167,7 +282,14 @@ class _HomeShellState extends State<HomeShell> {
       context: context,
       builder: (c) => StatefulBuilder(
         builder: (c, setD) => AlertDialog(
-          title: const Text('Change password'),
+          titlePadding: const EdgeInsets.fromLTRB(24, 22, 24, 0),
+          contentPadding: const EdgeInsets.fromLTRB(24, 16, 24, 4),
+          actionsPadding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+          title: const Row(children: [
+            Icon(Icons.lock_reset_outlined, size: 22, color: AppColors.primary),
+            SizedBox(width: 10),
+            Text('Change password'),
+          ]),
           content: SizedBox(
             width: 360,
             child: Column(
@@ -193,7 +315,7 @@ class _HomeShellState extends State<HomeShell> {
                 if (error != null)
                   Padding(
                     padding: const EdgeInsets.only(top: 10),
-                    child: Text(error!, style: TextStyle(color: Theme.of(c).colorScheme.error)),
+                    child: Text(error!, style: const TextStyle(color: AppColors.danger, fontSize: 13)),
                   ),
               ],
             ),

@@ -11,6 +11,7 @@ import '../../state/catalog.dart';
 import '../../state/customers.dart';
 import '../../state/sales.dart';
 import '../../state/settings.dart';
+import '../../widgets/ui.dart';
 
 enum _Stage { payment, processing, done }
 
@@ -39,6 +40,11 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
   }
 
   double get _tenderedValue => double.tryParse(_tendered.text) ?? 0;
+
+  double _changeDue(double total) {
+    final change = _tenderedValue - total;
+    return change > 0 ? change : 0.0;
+  }
 
   Future<void> _completeSale() async {
     setState(() {
@@ -141,38 +147,53 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
   Widget build(BuildContext context) {
     final settings = context.watch<AppSettings>();
     final cart = context.watch<CartProvider>();
-    final theme = Theme.of(context);
     final total = _sale?.total ?? cart.total(settings.taxRate);
 
     return PopScope(
       canPop: _stage != _Stage.processing && _stage != _Stage.done,
       child: AlertDialog(
+        titlePadding: const EdgeInsets.fromLTRB(24, 22, 24, 0),
+        contentPadding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
+        actionsPadding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
         title: Row(
           children: [
-            Icon(
-              _stage == _Stage.done ? Icons.check_circle : Icons.payments_outlined,
-              color: _stage == _Stage.done ? Colors.green.shade600 : theme.colorScheme.primary,
-            ),
-            const SizedBox(width: 8),
+            if (_stage == _Stage.done)
+              Container(
+                width: 34,
+                height: 34,
+                decoration: const BoxDecoration(color: AppColors.successSoft, shape: BoxShape.circle),
+                child: const Icon(Icons.check_rounded, size: 21, color: AppColors.success),
+              )
+            else
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: AppColors.primarySoft,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.payments_outlined, size: 19, color: AppColors.primary),
+              ),
+            const SizedBox(width: 11),
             Text(_stage == _Stage.done ? 'Sale complete' : 'Take payment'),
           ],
         ),
         content: SizedBox(
-          width: 400,
+          width: 410,
           child: switch (_stage) {
-            _Stage.done => _buildDone(context, theme, settings),
+            _Stage.done => _buildDone(context, settings),
             _Stage.processing => const Padding(
                 padding: EdgeInsets.all(40),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     CircularProgressIndicator(),
-                    SizedBox(height: 16),
+                    SizedBox(height: 18),
                     Text('Processing sale…'),
                   ],
                 ),
               ),
-            _Stage.payment => _buildPayment(context, theme, settings, total),
+            _Stage.payment => _buildPayment(context, settings, total),
           },
         ),
         actions: _stage == _Stage.done
@@ -180,22 +201,22 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
                 if (Platform.isAndroid || Platform.isIOS)
                   TextButton.icon(
                     onPressed: _sharePdf,
-                    icon: const Icon(Icons.share_outlined, size: 18),
+                    icon: const Icon(Icons.share_outlined, size: 17),
                     label: const Text('Share'),
                   ),
                 TextButton.icon(
                   onPressed: _savePdf,
-                  icon: const Icon(Icons.save_outlined, size: 18),
+                  icon: const Icon(Icons.save_outlined, size: 17),
                   label: const Text('Save PDF'),
                 ),
                 TextButton.icon(
                   onPressed: _printPdf,
-                  icon: const Icon(Icons.print_outlined, size: 18),
+                  icon: const Icon(Icons.print_outlined, size: 17),
                   label: const Text('Print'),
                 ),
                 FilledButton.icon(
                   onPressed: () => Navigator.pop(context),
-                  icon: const Icon(Icons.add_shopping_cart, size: 18),
+                  icon: const Icon(Icons.add_shopping_cart, size: 17),
                   label: const Text('New sale'),
                 ),
               ]
@@ -214,77 +235,82 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
     );
   }
 
-  Widget _buildPayment(
-      BuildContext context, ThemeData theme, AppSettings settings, double total) {
+  Widget _buildPayment(BuildContext context, AppSettings settings, double total) {
     final cart = context.watch<CartProvider>();
+    final change = _changeDue(total);
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         // totals summary
         Container(
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           decoration: BoxDecoration(
-            color: theme.colorScheme.primaryContainer.withValues(alpha: 0.35),
-            borderRadius: BorderRadius.circular(10),
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xFF4F46E5), Color(0xFF6D28D9)],
+            ),
+            borderRadius: BorderRadius.circular(13),
           ),
-          child: Row(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text('Amount due',
-                  style: TextStyle(fontSize: 13, color: Colors.grey.shade700)),
-              const Spacer(),
+                  style: TextStyle(
+                      fontFamily: 'Carlito',
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.4,
+                      color: Colors.white.withValues(alpha: 0.8))),
+              const SizedBox(height: 2),
               Text(
                 settings.money(total),
-                style: theme.textTheme.headlineSmall
-                    ?.copyWith(fontWeight: FontWeight.bold, color: theme.colorScheme.primary),
+                style: const TextStyle(
+                    fontFamily: 'Carlito',
+                    fontSize: 28,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white),
               ),
             ],
           ),
         ),
-        const SizedBox(height: 14),
+        const SizedBox(height: 16),
 
-        Text('Payment method', style: theme.textTheme.bodySmall),
-        const SizedBox(height: 6),
+        const Text('Payment method',
+            style: TextStyle(fontFamily: 'Carlito', fontSize: 12.5, fontWeight: FontWeight.w700, color: AppColors.muted)),
+        const SizedBox(height: 8),
         SegmentedButton<String>(
+          showSelectedIcon: false,
+          style: const ButtonStyle(
+            visualDensity: VisualDensity(vertical: 1.6),
+          ),
           segments: const [
-            ButtonSegment(value: 'cash', icon: Icon(Icons.payments_outlined), label: Text('Cash')),
-            ButtonSegment(value: 'card', icon: Icon(Icons.credit_card), label: Text('Card')),
+            ButtonSegment(value: 'cash', icon: Icon(Icons.payments_outlined, size: 18), label: Text('Cash')),
+            ButtonSegment(value: 'card', icon: Icon(Icons.credit_card_rounded, size: 18), label: Text('Card')),
             ButtonSegment(
-                value: 'mobile', icon: Icon(Icons.smartphone), label: Text('Mobile')),
+                value: 'mobile', icon: Icon(Icons.smartphone_rounded, size: 18), label: Text('Mobile')),
           ],
           selected: {_method},
           onSelectionChanged: (s) => setState(() => _method = s.first),
         ),
 
         if (_method == 'cash') ...[
-          const SizedBox(height: 14),
+          const SizedBox(height: 16),
           TextField(
             controller: _tendered,
             autofocus: true,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             onChanged: (_) => setState(() {}),
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
             decoration: InputDecoration(
               labelText: 'Cash received (${settings.currencySymbol})',
-              suffixIcon: _tenderedValue > 0
-                  ? Padding(
-                      padding: const EdgeInsets.only(right: 12),
-                      child: Center(
-                        widthFactor: 1,
-                        child: Text(
-                          'Change: ${settings.money((_tenderedValue - total).clamp(0, double.maxFinite))}',
-                          style: TextStyle(
-                              color: theme.colorScheme.primary,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 13),
-                        ),
-                      ),
-                    )
-                  : null,
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
           Wrap(
-            spacing: 6,
+            spacing: 7,
+            runSpacing: 7,
             children: [
               for (final quick in [
                 total.ceilToDouble(),
@@ -295,6 +321,9 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
               ].where((q) => q >= total))
                 ActionChip(
                   label: Text(settings.money(quick)),
+                  labelStyle: const TextStyle(fontFamily: 'Carlito', fontSize: 12.5, fontWeight: FontWeight.w700),
+                  backgroundColor: AppColors.primarySoft,
+                  side: BorderSide.none,
                   onPressed: () {
                     _tendered.text = quick.toStringAsFixed(0);
                     setState(() {});
@@ -302,76 +331,141 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
                 ),
             ],
           ),
+          if (_tenderedValue > 0) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: AppColors.successSoft,
+                borderRadius: BorderRadius.circular(11),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.savings_outlined, size: 19, color: AppColors.success),
+                  const SizedBox(width: 9),
+                  const Text('Change due',
+                      style: TextStyle(fontFamily: 'Carlito', fontSize: 13.5, color: AppColors.body)),
+                  const Spacer(),
+                  Text(
+                    settings.money(change),
+                    style: const TextStyle(
+                        fontFamily: 'Carlito',
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.success),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ],
 
         if (cart.customer != null && settings.loyaltyStep > 0) ...[
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              const Icon(Icons.loyalty_outlined, size: 16),
-              const SizedBox(width: 6),
-              Text(
-                '${cart.customer!.name} earns ${(total / settings.loyaltyStep).floor()} points',
-                style: const TextStyle(fontSize: 12),
-              ),
-            ],
+          const SizedBox(height: 13),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+            decoration: BoxDecoration(
+              color: AppColors.primarySoft,
+              borderRadius: BorderRadius.circular(11),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.loyalty_outlined, size: 17, color: AppColors.primary),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    '${cart.customer!.name} earns ${(total / settings.loyaltyStep).floor()} loyalty points',
+                    style: const TextStyle(fontFamily: 'Carlito', fontSize: 12.5, color: AppColors.primaryDark),
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
 
-        if (_error != null)
-          Padding(
-            padding: const EdgeInsets.only(top: 12),
-            child: Text(_error!, style: TextStyle(color: theme.colorScheme.error, fontSize: 13)),
+        if (_error != null) ...[
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(11),
+            decoration: BoxDecoration(
+              color: AppColors.dangerSoft,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.error_outline_rounded, size: 17, color: AppColors.danger),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(_error!,
+                      style: const TextStyle(fontFamily: 'Carlito', fontSize: 12.5, color: AppColors.danger)),
+                ),
+              ],
+            ),
           ),
+        ],
       ],
     );
   }
 
-  Widget _buildDone(BuildContext context, ThemeData theme, AppSettings settings) {
+  Widget _buildDone(BuildContext context, AppSettings settings) {
     final sale = _sale!;
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Container(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(18),
           decoration: BoxDecoration(
-            color: Colors.green.shade50,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.green.shade200),
+            color: AppColors.successSoft,
+            borderRadius: BorderRadius.circular(13),
+            border: Border.all(color: AppColors.success.withValues(alpha: 0.25)),
           ),
           child: Column(
             children: [
               Text(settings.money(sale.total),
-                  style: theme.textTheme.headlineMedium
-                      ?.copyWith(fontWeight: FontWeight.bold)),
+                  style: const TextStyle(
+                      fontFamily: 'Carlito',
+                      fontSize: 32,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.success)),
               const SizedBox(height: 4),
-              Text('${sale.receiptNo} · ${_methodLabel(sale.paymentMethod)}'),
+              Text('${sale.receiptNo} · ${_methodLabel(sale.paymentMethod)}',
+                  style: const TextStyle(fontFamily: 'Carlito', fontSize: 13, color: AppColors.body)),
               if (sale.changeDue > 0)
                 Padding(
-                  padding: const EdgeInsets.only(top: 6),
-                  child: Text(
-                    'Give change: ${settings.money(sale.changeDue)}',
-                    style: TextStyle(
-                        fontWeight: FontWeight.bold, color: theme.colorScheme.primary),
+                  padding: const EdgeInsets.only(top: 10),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      'Give change: ${settings.money(sale.changeDue)}',
+                      style: const TextStyle(
+                          fontFamily: 'Carlito',
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.success),
+                    ),
                   ),
                 ),
               if (_pointsEarned > 0)
                 Padding(
-                  padding: const EdgeInsets.only(top: 4),
+                  padding: const EdgeInsets.only(top: 8),
                   child: Text('+$_pointsEarned loyalty points',
-                      style: const TextStyle(fontSize: 12)),
+                      style: const TextStyle(fontFamily: 'Carlito', fontSize: 12.5, color: AppColors.success)),
                 ),
             ],
           ),
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 12),
         Text(
           _savedPdf == null
               ? 'Save or print the receipt below.'
               : 'Receipt saved: ${_savedPdf!.path.split('/').last}',
           textAlign: TextAlign.center,
-          style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+          style: const TextStyle(fontFamily: 'Carlito', fontSize: 12.5, color: AppColors.muted),
         ),
       ],
     );

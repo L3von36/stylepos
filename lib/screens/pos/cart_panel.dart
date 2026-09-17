@@ -6,6 +6,7 @@ import '../../state/cart.dart';
 import '../../state/customers.dart';
 import '../../state/nav.dart';
 import '../../state/settings.dart';
+import '../../widgets/ui.dart';
 import 'checkout_dialog.dart';
 
 /// Cart contents + totals + checkout button. Reused inside the wide layout
@@ -24,17 +25,22 @@ class CartPanel extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 14, 8, 0),
+          padding: const EdgeInsets.fromLTRB(16, 16, 8, 0),
           child: Row(
             children: [
-              const Icon(Icons.shopping_cart_outlined, size: 20),
+              const Icon(Icons.shopping_cart_outlined, size: 19, color: AppColors.primary),
               const SizedBox(width: 8),
-              Expanded(
+              const Expanded(
                 child: Text('Current Sale',
-                    style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+                    style: TextStyle(
+                        fontFamily: 'Carlito',
+                        fontSize: 15.5,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.ink)),
               ),
               if (!cart.isEmpty)
                 TextButton(
+                  style: TextButton.styleFrom(foregroundColor: AppColors.danger, visualDensity: VisualDensity.compact),
                   onPressed: () => cart.clear(),
                   child: const Text('Clear'),
                 ),
@@ -44,28 +50,38 @@ class CartPanel extends StatelessWidget {
 
         // customer selector
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 2),
           child: InkWell(
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(11),
             onTap: () => _pickCustomer(context),
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
               decoration: BoxDecoration(
-                color: theme.colorScheme.primaryContainer.withValues(alpha: 0.3),
-                borderRadius: BorderRadius.circular(10),
+                color: AppColors.surfaceTint,
+                borderRadius: BorderRadius.circular(11),
+                border: Border.all(color: AppColors.borderSoft),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.person_outline, size: 18),
-                  const SizedBox(width: 6),
+                  InitialsAvatar(cart.customer?.name ?? 'Walk-in', size: 26),
+                  const SizedBox(width: 9),
                   Expanded(
-                    child: Text(
-                      cart.customer?.name ?? 'Walk-in customer',
-                      style: const TextStyle(fontSize: 13),
-                      overflow: TextOverflow.ellipsis,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          cart.customer?.name ?? 'Walk-in customer',
+                          style: const TextStyle(
+                              fontFamily: 'Carlito', fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        if (cart.customer != null && cart.customer!.points > 0)
+                          Text('${cart.customer!.points} loyalty points',
+                              style: const TextStyle(fontFamily: 'Carlito', fontSize: 11, color: AppColors.muted)),
+                      ],
                     ),
                   ),
-                  const Icon(Icons.chevron_right, size: 18),
+                  const Icon(Icons.chevron_right_rounded, size: 19, color: AppColors.faint),
                 ],
               ),
             ),
@@ -75,62 +91,63 @@ class CartPanel extends StatelessWidget {
         // items
         Expanded(
           child: cart.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.shopping_basket_outlined,
-                          size: 44, color: Colors.grey.shade400),
-                      const SizedBox(height: 8),
-                      Text('Tap products to add them',
-                          style: TextStyle(color: Colors.grey.shade500)),
-                    ],
-                  ),
+              ? EmptyState(
+                  icon: Icons.shopping_basket_outlined,
+                  title: 'Cart is empty',
+                  message: 'Tap products or scan a barcode to add them.',
                 )
               : ListView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  padding: const EdgeInsets.fromLTRB(10, 6, 10, 4),
                   itemCount: cart.items.length,
-                  itemBuilder: (context, i) {
-                    final item = cart.items[i];
-                    return _CartTile(item: item);
-                  },
+                  itemBuilder: (context, i) => _CartTile(item: cart.items[i]),
                 ),
         ),
 
         // discount + totals
         if (!cart.isEmpty)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+          Container(
+            margin: const EdgeInsets.fromLTRB(14, 6, 14, 0),
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+            decoration: BoxDecoration(
+              color: AppColors.surfaceTint,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.borderSoft),
+            ),
             child: Column(
               children: [
                 Row(
                   children: [
                     Text('Discount (${settings.currencySymbol})',
-                        style: const TextStyle(fontSize: 13)),
+                        style: const TextStyle(fontFamily: 'Carlito', fontSize: 13, color: AppColors.muted)),
                     const Spacer(),
                     const _DiscountField(),
                   ],
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 8),
                 _totalRow(context, 'Subtotal', settings.money(cart.subtotal)),
                 if (cart.discount > 0)
-                  _totalRow(context, 'Discount', '- ${settings.money(cart.discount)}'),
+                  _totalRow(context, 'Discount', '- ${settings.money(cart.discount)}',
+                      color: AppColors.danger),
                 if (settings.taxRate > 0)
                   _totalRow(
                       context, 'Tax (${settings.taxRate.toStringAsFixed(0)}%)',
                       settings.money(cart.tax(settings.taxRate))),
-                const Divider(height: 16),
+                Divider(height: 16, color: Colors.grey.shade200, thickness: 1),
                 Row(
                   children: [
-                    Text('TOTAL',
-                        style: theme.textTheme.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.bold)),
+                    const Text('TOTAL',
+                        style: TextStyle(
+                            fontFamily: 'Carlito',
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.4,
+                            color: AppColors.muted)),
                     const Spacer(),
                     Text(
                       settings.money(cart.total(settings.taxRate)),
-                      style: theme.textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: theme.colorScheme.primary,
+                      style: theme.textTheme.headlineSmall?.copyWith(
+                        fontSize: 22,
+                        color: AppColors.primaryDark,
                       ),
                     ),
                   ],
@@ -140,8 +157,9 @@ class CartPanel extends StatelessWidget {
           ),
 
         Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(14),
           child: FilledButton.icon(
+            style: FilledButton.styleFrom(minimumSize: const Size(0, 50)),
             onPressed: cart.isEmpty
                 ? null
                 : () => showDialog(
@@ -149,8 +167,13 @@ class CartPanel extends StatelessWidget {
                       barrierDismissible: false,
                       builder: (_) => const CheckoutDialog(),
                     ),
-            icon: const Icon(Icons.payments_outlined),
-            label: const Text('Charge'),
+            icon: const Icon(Icons.payments_outlined, size: 20),
+            label: Text(
+              cart.isEmpty
+                  ? 'Charge'
+                  : 'Charge · ${settings.money(cart.total(settings.taxRate))}',
+              style: const TextStyle(fontSize: 15.5),
+            ),
           ),
         ),
       ],
@@ -168,14 +191,16 @@ class CartPanel extends StatelessWidget {
     );
   }
 
-  Widget _totalRow(BuildContext context, String label, String value) {
+  Widget _totalRow(BuildContext context, String label, String value, {Color? color}) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 1),
+      padding: const EdgeInsets.symmetric(vertical: 1.5),
       child: Row(
         children: [
-          Text(label, style: TextStyle(fontSize: 13, color: Colors.grey.shade700)),
+          Text(label, style: const TextStyle(fontFamily: 'Carlito', fontSize: 13, color: AppColors.muted)),
           const Spacer(),
-          Text(value, style: const TextStyle(fontSize: 13)),
+          Text(value, style: TextStyle(
+              fontFamily: 'Carlito', fontSize: 13, fontWeight: FontWeight.w600,
+              color: color ?? AppColors.body)),
         ],
       ),
     );
@@ -209,15 +234,14 @@ class _CartTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final settings = context.watch<AppSettings>();
     final cart = context.watch<CartProvider>();
-    final theme = Theme.of(context);
 
     return Container(
-      margin: const EdgeInsets.symmetric(vertical: 3, horizontal: 4),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      margin: const EdgeInsets.symmetric(vertical: 3, horizontal: 2),
+      padding: const EdgeInsets.fromLTRB(11, 9, 8, 9),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerLowest,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.grey.shade200),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(11),
+        border: Border.all(color: AppColors.borderSoft),
       ),
       child: Row(
         children: [
@@ -228,31 +252,29 @@ class _CartTile extends StatelessWidget {
                 Text(item.product.name,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                    style: const TextStyle(
+                        fontFamily: 'Carlito', fontWeight: FontWeight.w700, fontSize: 13.5, color: AppColors.ink)),
+                const SizedBox(height: 1),
                 Text(
                   '${item.variant.descriptor} · ${settings.money(item.variant.price)}',
-                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                  style: const TextStyle(fontFamily: 'Carlito', fontSize: 12, color: AppColors.muted),
                 ),
               ],
             ),
           ),
-          IconButton(
-            visualDensity: VisualDensity.compact,
-            icon: const Icon(Icons.remove_circle_outline, size: 20),
-            onPressed: () => cart.setQty(item.key, item.qty - 1),
+          QtyStepper(
+            qty: item.qty,
+            onMinus: () => cart.setQty(item.key, item.qty - 1),
+            onPlus: () => cart.setQty(item.key, item.qty + 1),
           ),
-          Text('${item.qty}', style: const TextStyle(fontWeight: FontWeight.bold)),
-          IconButton(
-            visualDensity: VisualDensity.compact,
-            icon: const Icon(Icons.add_circle_outline, size: 20),
-            onPressed: () => cart.setQty(item.key, item.qty + 1),
-          ),
+          const SizedBox(width: 8),
           SizedBox(
-            width: 84,
+            width: 86,
             child: Text(
               settings.money(item.lineTotal),
               textAlign: TextAlign.right,
-              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+              style: const TextStyle(
+                  fontFamily: 'Carlito', fontWeight: FontWeight.w700, fontSize: 13.5, color: AppColors.ink),
             ),
           ),
         ],
@@ -285,10 +307,26 @@ class _DiscountFieldState extends State<_DiscountField> {
         controller: _c,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
         textAlign: TextAlign.right,
-        decoration: const InputDecoration(
+        style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600),
+        decoration: InputDecoration(
           isDense: true,
-          contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          filled: true,
+          fillColor: Colors.white,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
           prefixText: '- ',
+          prefixStyle: const TextStyle(color: AppColors.danger, fontWeight: FontWeight.w700),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(9),
+            borderSide: const BorderSide(color: AppColors.border),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(9),
+            borderSide: const BorderSide(color: AppColors.border),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(9),
+            borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+          ),
         ),
         onChanged: (v) =>
             context.read<CartProvider>().setDiscount(double.tryParse(v) ?? 0),
@@ -313,39 +351,54 @@ class _CustomerPickerDialogState extends State<_CustomerPickerDialog> {
     final list = customers.search(_q);
 
     return AlertDialog(
-      title: const Text('Attach customer'),
+      titlePadding: const EdgeInsets.fromLTRB(24, 22, 24, 0),
+      contentPadding: const EdgeInsets.fromLTRB(24, 14, 24, 0),
+      actionsPadding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+      title: const Row(children: [
+        Icon(Icons.person_search_rounded, size: 22, color: AppColors.primary),
+        SizedBox(width: 10),
+        Text('Attach customer'),
+      ]),
       content: SizedBox(
-        width: 380,
-        height: 420,
+        width: 400,
+        height: 430,
         child: Column(
           children: [
             TextField(
               onChanged: (v) => setState(() => _q = v),
               decoration: const InputDecoration(
                 hintText: 'Search name or phone…',
-                prefixIcon: Icon(Icons.search),
+                prefixIcon: Icon(Icons.search_rounded, size: 20),
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 10),
             Expanded(
               child: ListView(
                 children: [
                   ListTile(
-                    leading: const Icon(Icons.person_off_outlined),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(11),
+                        side: const BorderSide(color: AppColors.borderSoft)),
+                    leading: const Icon(Icons.person_off_outlined, size: 21),
                     title: const Text('Walk-in customer'),
                     onTap: () => Navigator.pop(
                         context, const Customer(id: 0, name: 'Walk-in customer', createdAt: 0)),
                   ),
-                  const Divider(height: 1),
+                  const SizedBox(height: 6),
                   ...list.map(
                     (c) => ListTile(
-                      leading: CircleAvatar(
-                        child: Text(c.name.isEmpty ? '?' : c.name[0].toUpperCase()),
-                      ),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(11),
+                          side: const BorderSide(color: AppColors.borderSoft)),
+                      leading: InitialsAvatar(c.name, size: 34),
                       title: Text(c.name),
                       subtitle: Text(c.phone ?? ''),
                       trailing: Text('${c.points} pts',
-                          style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+                          style: const TextStyle(
+                              fontFamily: 'Carlito',
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.primary)),
                       onTap: () => Navigator.pop(context, c),
                     ),
                   ),

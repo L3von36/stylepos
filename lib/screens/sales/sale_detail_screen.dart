@@ -7,6 +7,7 @@ import '../../state/auth.dart';
 import '../../state/catalog.dart';
 import '../../state/sales.dart';
 import '../../state/settings.dart';
+import '../../widgets/ui.dart';
 
 /// Receipt view for one sale: items, totals, PDF actions and refund (admin).
 class SaleDetailScreen extends StatefulWidget {
@@ -53,14 +54,18 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (c) => AlertDialog(
-        title: const Text('Refund this sale?'),
+        title: const Row(children: [
+          Icon(Icons.undo_rounded, size: 21, color: AppColors.danger),
+          SizedBox(width: 10),
+          Text('Refund this sale?'),
+        ]),
         content: const Text(
             'All items will be returned to stock and the sale marked as refunded. This cannot be undone.'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')),
           FilledButton(
             style: FilledButton.styleFrom(
-                backgroundColor: Theme.of(c).colorScheme.error),
+                backgroundColor: AppColors.danger),
             onPressed: () => Navigator.pop(c, true),
             child: const Text('Refund'),
           ),
@@ -111,7 +116,6 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
   Widget build(BuildContext context) {
     final settings = context.watch<AppSettings>();
     final auth = context.watch<AuthProvider>();
-    final theme = Theme.of(context);
 
     if (!_loaded) {
       return Scaffold(
@@ -132,7 +136,7 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
           if (auth.user?.isAdmin == true && !sale.isRefunded)
             IconButton(
               tooltip: 'Refund',
-              icon: const Icon(Icons.undo),
+              icon: const Icon(Icons.undo_rounded),
               onPressed: _refund,
             ),
           const SizedBox(width: 8),
@@ -140,100 +144,181 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
       ),
       body: Center(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(18),
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 560),
+            constraints: const BoxConstraints(maxWidth: 580),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 // header
                 Card(
                   child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    padding: const EdgeInsets.all(18),
+                    child: Row(
                       children: [
-                        Row(
-                          children: [
-                            Text('Receipt ${sale.receiptNo}',
-                                style: theme.textTheme.titleLarge
-                                    ?.copyWith(fontWeight: FontWeight.bold)),
-                            const Spacer(),
-                            if (sale.isRefunded)
-                              Chip(
-                                label: const Text('REFUNDED'),
-                                backgroundColor: theme.colorScheme.errorContainer,
-                                labelStyle:
-                                    TextStyle(color: theme.colorScheme.error, fontSize: 11),
-                              ),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                        Text('$when · Cashier: ${sale.cashierName ?? '-'}'
-                            ' · Customer: ${sale.customerName ?? 'Walk-in'}',
-                            style: TextStyle(fontSize: 13, color: Colors.grey.shade700)),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 8),
-
-                // items
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 6),
-                    child: Column(
-                      children: [
-                        for (final it in _items)
-                          ListTile(
-                            dense: true,
-                            title: Text(it.productName),
-                            subtitle: Text(
-                                '${it.variantDesc} · ${settings.money(it.unitPrice)} × ${it.qty}'),
-                            trailing: Text(settings.money(it.lineTotal),
-                                style: const TextStyle(fontWeight: FontWeight.w600)),
+                        Container(
+                          width: 48,
+                          height: 48,
+                          decoration: BoxDecoration(
+                            color: sale.isRefunded ? AppColors.dangerSoft : AppColors.primarySoft,
+                            borderRadius: BorderRadius.circular(13),
                           ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 8),
-
-                // totals
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        _row('Subtotal', settings.money(sale.subtotal)),
-                        if (sale.discount > 0)
-                          _row('Discount', '- ${settings.money(sale.discount)}'),
-                        if (sale.tax > 0) _row('Tax', settings.money(sale.tax)),
-                        const Divider(height: 18),
-                        Row(
-                          children: [
-                            Text('TOTAL',
-                                style: theme.textTheme.titleMedium
-                                    ?.copyWith(fontWeight: FontWeight.bold)),
-                            const Spacer(),
-                            Text(settings.money(sale.total),
-                                style: theme.textTheme.titleLarge
-                                    ?.copyWith(fontWeight: FontWeight.bold)),
-                          ],
+                          child: Icon(
+                            sale.isRefunded ? Icons.undo_rounded : Icons.receipt_long_rounded,
+                            size: 23,
+                            color: sale.isRefunded ? AppColors.danger : AppColors.primary,
+                          ),
                         ),
-                        const SizedBox(height: 8),
-                        _row('Payment', sale.paymentMethod),
-                        if (sale.paymentMethod == 'cash') ...[
-                          _row('Tendered', settings.money(sale.amountPaid)),
-                          if (sale.changeDue > 0)
-                            _row('Change', settings.money(sale.changeDue)),
-                        ],
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Text('Receipt ${sale.receiptNo}',
+                                      style: const TextStyle(
+                                          fontFamily: 'Carlito',
+                                          fontSize: 17,
+                                          fontWeight: FontWeight.w700,
+                                          color: AppColors.ink)),
+                                  if (sale.isRefunded) ...[
+                                    const SizedBox(width: 8),
+                                    StatusPill.build(context,
+                                        label: 'REFUNDED',
+                                        foreground: AppColors.danger,
+                                        background: AppColors.dangerSoft),
+                                  ],
+                                ],
+                              ),
+                              const SizedBox(height: 3),
+                              Text('$when · Cashier: ${sale.cashierName ?? '-'}'
+                                  ' · Customer: ${sale.customerName ?? 'Walk-in'}',
+                                  style: const TextStyle(
+                                      fontFamily: 'Carlito', fontSize: 12.5, color: AppColors.muted)),
+                            ],
+                          ),
+                        ),
                       ],
                     ),
                   ),
                 ),
                 const SizedBox(height: 12),
+
+                // items
+                Card(
+                  clipBehavior: Clip.antiAlias,
+                  child: Column(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 13, 16, 9),
+                        child: Row(
+                          children: [
+                            const Text('Items',
+                                style: TextStyle(
+                                    fontFamily: 'Carlito',
+                                    fontSize: 13.5,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.ink)),
+                            const Spacer(),
+                            Text('${_items.length} line${_items.length == 1 ? '' : 's'}',
+                                style: const TextStyle(fontFamily: 'Carlito', fontSize: 12, color: AppColors.muted)),
+                          ],
+                        ),
+                      ),
+                      const Divider(indent: 16, endIndent: 16),
+                      for (final it in _items)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(it.productName,
+                                        style: const TextStyle(
+                                            fontFamily: 'Carlito',
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w700,
+                                            color: AppColors.ink)),
+                                    Text(
+                                        '${it.variantDesc} · ${settings.money(it.unitPrice)} × ${it.qty}',
+                                        style: const TextStyle(
+                                            fontFamily: 'Carlito', fontSize: 12.5, color: AppColors.muted)),
+                                  ],
+                                ),
+                              ),
+                              Text(settings.money(it.lineTotal),
+                                  style: const TextStyle(
+                                      fontFamily: 'Carlito',
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w700,
+                                      color: AppColors.body)),
+                            ],
+                          ),
+                        ),
+                      const SizedBox(height: 4),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                // totals
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(18),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _row('Subtotal', settings.money(sale.subtotal)),
+                        if (sale.discount > 0)
+                          _row('Discount', '- ${settings.money(sale.discount)}',
+                              color: AppColors.danger),
+                        if (sale.tax > 0) _row('Tax', settings.money(sale.tax)),
+                        const Divider(height: 20),
+                        Row(
+                          children: [
+                            const Text('TOTAL',
+                                style: TextStyle(
+                                    fontFamily: 'Carlito',
+                                    fontSize: 13.5,
+                                    fontWeight: FontWeight.w700,
+                                    letterSpacing: 0.4,
+                                    color: AppColors.muted)),
+                            const Spacer(),
+                            Text(settings.money(sale.total),
+                                style: const TextStyle(
+                                    fontFamily: 'Carlito',
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.primaryDark)),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: AppColors.surfaceTint,
+                            borderRadius: BorderRadius.circular(11),
+                          ),
+                          child: Column(
+                            children: [
+                              _row('Payment', _methodLabel(sale.paymentMethod)),
+                              if (sale.paymentMethod == 'cash') ...[
+                                _row('Tendered', settings.money(sale.amountPaid)),
+                                if (sale.changeDue > 0)
+                                  _row('Change', settings.money(sale.changeDue),
+                                      color: AppColors.success),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 14),
                 Row(
                   children: [
                     Expanded(
@@ -243,7 +328,7 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
                         label: const Text('Save PDF'),
                       ),
                     ),
-                    const SizedBox(width: 10),
+                    const SizedBox(width: 12),
                     Expanded(
                       child: FilledButton.icon(
                         onPressed: () => _saveOrPrint(printIt: true),
@@ -261,14 +346,19 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
     );
   }
 
-  Widget _row(String label, String value) {
+  String _methodLabel(String m) =>
+      m == 'cash' ? 'Cash' : m == 'card' ? 'Card' : 'Mobile money';
+
+  Widget _row(String label, String value, {Color? color}) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: Row(
         children: [
-          Text(label, style: TextStyle(fontSize: 13, color: Colors.grey.shade700)),
+          Text(label, style: const TextStyle(fontFamily: 'Carlito', fontSize: 13, color: AppColors.muted)),
           const Spacer(),
-          Text(value, style: const TextStyle(fontSize: 13)),
+          Text(value, style: TextStyle(
+              fontFamily: 'Carlito', fontSize: 13, fontWeight: FontWeight.w600,
+              color: color ?? AppColors.body)),
         ],
       ),
     );

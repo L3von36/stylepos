@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../models/customer.dart';
 import '../../state/customers.dart';
+import '../../widgets/ui.dart';
 
 /// Add / edit customer dialog.
 class CustomerEditDialog extends StatefulWidget {
@@ -62,34 +63,61 @@ class _CustomerEditDialogState extends State<CustomerEditDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Text(_isNew ? 'New customer' : 'Edit customer'),
+      titlePadding: const EdgeInsets.fromLTRB(24, 22, 24, 0),
+      contentPadding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
+      actionsPadding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+      title: Row(children: [
+        Container(
+          width: 34,
+          height: 34,
+          decoration: BoxDecoration(
+            color: AppColors.primarySoft,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(
+            _isNew ? Icons.person_add_alt_rounded : Icons.edit_outlined,
+            size: 19,
+            color: AppColors.primary,
+          ),
+        ),
+        const SizedBox(width: 11),
+        Text(_isNew ? 'New customer' : 'Edit customer'),
+      ]),
       content: SizedBox(
-        width: 380,
+        width: 400,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
               controller: _name,
               autofocus: _isNew,
-              decoration: const InputDecoration(labelText: 'Name *'),
+              decoration: const InputDecoration(
+                  labelText: 'Name *',
+                  prefixIcon: Icon(Icons.person_outline_rounded, size: 20)),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 13),
             TextField(
               controller: _phone,
               keyboardType: TextInputType.phone,
-              decoration: const InputDecoration(labelText: 'Phone'),
+              decoration: const InputDecoration(
+                  labelText: 'Phone',
+                  prefixIcon: Icon(Icons.phone_outlined, size: 20)),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 13),
             TextField(
               controller: _email,
               keyboardType: TextInputType.emailAddress,
-              decoration: const InputDecoration(labelText: 'Email'),
+              decoration: const InputDecoration(
+                  labelText: 'Email',
+                  prefixIcon: Icon(Icons.alternate_email_rounded, size: 20)),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 13),
             TextField(
               controller: _notes,
               maxLines: 2,
-              decoration: const InputDecoration(labelText: 'Notes'),
+              decoration: const InputDecoration(
+                  labelText: 'Notes',
+                  prefixIcon: Icon(Icons.notes_rounded, size: 20)),
             ),
           ],
         ),

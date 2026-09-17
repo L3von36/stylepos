@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../models/product.dart';
 import '../../state/cart.dart';
 import '../../state/settings.dart';
+import '../../widgets/ui.dart';
 
 /// Lets the cashier choose a size / color variant when a product has several.
 class VariantPickerDialog extends StatelessWidget {
@@ -15,16 +16,33 @@ class VariantPickerDialog extends StatelessWidget {
     final settings = context.watch<AppSettings>();
 
     return AlertDialog(
-      title: Text(product.name),
+      titlePadding: const EdgeInsets.fromLTRB(24, 22, 24, 0),
+      contentPadding: const EdgeInsets.fromLTRB(24, 14, 24, 0),
+      actionsPadding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+      title: Row(
+        children: [
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: AppColors.primarySoft,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(Icons.checkroom_rounded, size: 19, color: AppColors.primary),
+          ),
+          const SizedBox(width: 11),
+          Expanded(child: Text(product.name, overflow: TextOverflow.ellipsis)),
+        ],
+      ),
       content: SizedBox(
-        width: 420,
+        width: 430,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Choose a variant',
-                style: TextStyle(fontSize: 13, color: Colors.grey.shade600)),
-            const SizedBox(height: 10),
+            const Text('Choose a size / color variant',
+                style: TextStyle(fontFamily: 'Carlito', fontSize: 12.5, color: AppColors.muted)),
+            const SizedBox(height: 12),
             Flexible(
               child: ListView.builder(
                 shrinkWrap: true,
@@ -32,43 +50,62 @@ class VariantPickerDialog extends StatelessWidget {
                 itemBuilder: (context, i) {
                   final v = product.variants[i];
                   final soldOut = v.stock <= 0;
-                  return ListTile(
-                    enabled: !soldOut,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      side: BorderSide(color: Colors.grey.shade300),
-                    ),
-                    leading: CircleAvatar(
-                      backgroundColor: soldOut
-                          ? Colors.grey.shade200
-                          : Theme.of(context).colorScheme.primaryContainer,
-                      child: Text(
-                        v.size.isEmpty
-                            ? (v.color.isEmpty ? '•' : v.color[0].toUpperCase())
-                            : v.size,
-                        style: TextStyle(
-                          fontSize: v.size.length > 2 ? 10 : 14,
-                          fontWeight: FontWeight.bold,
-                          color: soldOut ? Colors.grey : null,
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 7),
+                    child: ListTile(
+                      enabled: !soldOut,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        side: BorderSide(
+                            color: soldOut ? AppColors.borderSoft : AppColors.border),
+                      ),
+                      tileColor: soldOut ? AppColors.surfaceTint : null,
+                      leading: Container(
+                        width: 40,
+                        height: 40,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: soldOut ? AppColors.borderSoft : AppColors.primarySoft,
+                          borderRadius: BorderRadius.circular(11),
+                        ),
+                        child: Text(
+                          v.size.isEmpty
+                              ? (v.color.isEmpty ? '•' : v.color[0].toUpperCase())
+                              : v.size,
+                          style: TextStyle(
+                            fontSize: v.size.length > 2 ? 10.5 : 14,
+                            fontWeight: FontWeight.w700,
+                            color: soldOut ? AppColors.faint : AppColors.primary,
+                          ),
                         ),
                       ),
-                    ),
-                    title: Text(v.descriptor),
-                    subtitle: Text(
-                      soldOut ? 'Out of stock' : '${v.stock} in stock · ${v.sku}',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: soldOut ? Theme.of(context).colorScheme.error : null,
+                      title: Text(v.descriptor,
+                          style: TextStyle(
+                              fontFamily: 'Carlito',
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: soldOut ? AppColors.faint : AppColors.ink)),
+                      subtitle: Text(
+                        soldOut ? 'Out of stock' : '${v.stock} in stock · ${v.sku}',
+                        style: TextStyle(
+                          fontFamily: 'Carlito',
+                          fontSize: 12,
+                          color: soldOut ? AppColors.danger : AppColors.muted,
+                        ),
                       ),
+                      trailing: Text(
+                        settings.money(v.price),
+                        style: TextStyle(
+                            fontFamily: 'Carlito',
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: soldOut ? AppColors.faint : AppColors.primaryDark),
+                      ),
+                      onTap: () {
+                        context.read<CartProvider>().add(product, v);
+                        Navigator.pop(context);
+                      },
                     ),
-                    trailing: Text(
-                      settings.money(v.price),
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    onTap: () {
-                      context.read<CartProvider>().add(product, v);
-                      Navigator.pop(context);
-                    },
                   );
                 },
               ),

@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../models/sale.dart';
 import '../../state/sales.dart';
 import '../../state/settings.dart';
+import '../../widgets/ui.dart';
 import 'sale_detail_screen.dart';
 
 /// Sales history with time filters and search by receipt / customer / cashier.
@@ -43,70 +44,69 @@ class _SalesScreenState extends State<SalesScreen> {
   @override
   Widget build(BuildContext context) {
     final settings = context.watch<AppSettings>();
+    final totalRevenue =
+        _sales?.where((s) => !s.isRefunded).fold(0.0, (sum, s) => sum + s.total) ?? 0.0;
 
     return Padding(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
       child: Column(
         children: [
-          TextField(
-            controller: _search,
-            onChanged: (v) {
-              _query = v;
-              _load();
-            },
-            decoration: InputDecoration(
-              hintText: 'Search receipt no, customer or cashier…',
-              prefixIcon: const Icon(Icons.search),
-              suffixIcon: _query.isEmpty
-                  ? null
-                  : IconButton(
-                      icon: const Icon(Icons.clear),
-                      onPressed: () {
-                        _search.clear();
-                        _query = '';
-                        _load();
-                      },
-                    ),
-            ),
+          PageHeader(
+            title: 'Sales',
+            subtitle: _sales == null
+                ? 'Loading…'
+                : '${_sales!.length} receipt${_sales!.length == 1 ? '' : 's'}'
+                    ' · ${settings.money(totalRevenue)} revenue',
           ),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 6,
+          Row(
             children: [
-              for (final (label, days) in const [
-                ('Today', 1), ('7 days', 7), ('30 days', 30), ('All', 0),
-              ])
-                ChoiceChip(
-                  label: Text(label),
-                  selected: _days == days,
-                  onSelected: (_) {
-                    setState(() => _days = days);
+              Expanded(
+                child: SearchField(
+                  controller: _search,
+                  hint: 'Search receipt no, customer or cashier…',
+                  onChanged: (v) {
+                    _query = v;
+                    _load();
+                  },
+                  onClear: () {
+                    _search.clear();
+                    _query = '';
                     _load();
                   },
                 ),
+              ),
+              const SizedBox(width: 12),
+              SegmentedButton<int>(
+                showSelectedIcon: false,
+                segments: const [
+                  ButtonSegment(value: 1, label: Text('Today')),
+                  ButtonSegment(value: 7, label: Text('7 days')),
+                  ButtonSegment(value: 30, label: Text('30 days')),
+                  ButtonSegment(value: 0, label: Text('All')),
+                ],
+                selected: {_days},
+                onSelectionChanged: (s) {
+                  setState(() => _days = s.first);
+                  _load();
+                },
+              ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 14),
           Expanded(
             child: _sales == null
                 ? const Center(child: CircularProgressIndicator())
                 : _sales!.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.receipt_long_outlined,
-                                size: 48, color: Colors.grey.shade400),
-                            const SizedBox(height: 8),
-                            const Text('No sales in this period yet'),
-                          ],
-                        ),
+                    ? EmptyState(
+                        icon: Icons.receipt_long_outlined,
+                        title: 'No sales in this period',
+                        message: 'Completed checkouts will appear here as receipts.',
                       )
                     : RefreshIndicator(
                         onRefresh: _load,
                         child: ListView.separated(
                           itemCount: _sales!.length,
-                          separatorBuilder: (_, _) => const SizedBox(height: 6),
+                          separatorBuilder: (_, _) => const SizedBox(height: 8),
                           itemBuilder: (context, i) =>
                               _SaleTile(sale: _sales![i], settings: settings),
                         ),
@@ -125,63 +125,88 @@ class _SaleTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final dt = DateTime.fromMillisecondsSinceEpoch(sale.createdAt * 1000);
     String two(int n) => n.toString().padLeft(2, '0');
     final when =
         '${two(dt.day)}/${two(dt.month)} ${two(dt.hour)}:${two(dt.minute)}';
 
     return Card(
-      child: ListTile(
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
         onTap: () async {
           await Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => SaleDetailScreen(saleId: sale.id!)));
           // refresh totals/stock if a refund happened in the detail screen
           if (context.mounted) {
-            // ignore: use_build_context_synchronously
             _reloadSales(context);
           }
         },
-        leading: CircleAvatar(
-          backgroundColor: sale.isRefunded
-              ? theme.colorScheme.errorContainer
-              : theme.colorScheme.primaryContainer,
-          child: Icon(
-            switch (sale.paymentMethod) {
-              'card' => Icons.credit_card,
-              'mobile' => Icons.smartphone,
-              _ => Icons.payments_outlined,
-            },
-            size: 20,
-            color: sale.isRefunded ? theme.colorScheme.error : theme.colorScheme.primary,
-          ),
-        ),
-        title: Row(
-          children: [
-            Text(sale.receiptNo, style: const TextStyle(fontWeight: FontWeight.w600)),
-            const SizedBox(width: 8),
-            if (sale.isRefunded)
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+          child: Row(
+            children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 1),
+                width: 44,
+                height: 44,
                 decoration: BoxDecoration(
-                  color: theme.colorScheme.errorContainer,
-                  borderRadius: BorderRadius.circular(20),
+                  color: sale.isRefunded ? AppColors.dangerSoft : AppColors.primarySoft,
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                child: Text('Refunded',
-                    style: TextStyle(fontSize: 10, color: theme.colorScheme.error)),
+                child: Icon(
+                  switch (sale.paymentMethod) {
+                    'card' => Icons.credit_card_rounded,
+                    'mobile' => Icons.smartphone_rounded,
+                    _ => Icons.payments_outlined,
+                  },
+                  size: 21,
+                  color: sale.isRefunded ? AppColors.danger : AppColors.primary,
+                ),
               ),
-          ],
-        ),
-        subtitle: Text(
-          '$when · ${sale.customerName ?? 'Walk-in'} · ${sale.cashierName ?? ''}',
-          overflow: TextOverflow.ellipsis,
-        ),
-        trailing: Text(
-          settings.money(sale.total),
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 15,
-            decoration: sale.isRefunded ? TextDecoration.lineThrough : null,
+              const SizedBox(width: 13),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(sale.receiptNo,
+                            style: const TextStyle(
+                                fontFamily: 'Carlito',
+                                fontWeight: FontWeight.w700,
+                                fontSize: 14,
+                                color: AppColors.ink)),
+                        if (sale.isRefunded) ...[
+                          const SizedBox(width: 8),
+                          StatusPill.build(context,
+                              label: 'Refunded',
+                              foreground: AppColors.danger,
+                              background: AppColors.dangerSoft,
+                              icon: Icons.undo_rounded),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '$when · ${sale.customerName ?? 'Walk-in'} · ${sale.cashierName ?? ''}',
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontFamily: 'Carlito', fontSize: 12.5, color: AppColors.muted),
+                    ),
+                  ],
+                ),
+              ),
+              Text(
+                settings.money(sale.total),
+                style: TextStyle(
+                  fontFamily: 'Carlito',
+                  fontWeight: FontWeight.w700,
+                  fontSize: 15.5,
+                  color: sale.isRefunded ? AppColors.faint : AppColors.ink,
+                  decoration: sale.isRefunded ? TextDecoration.lineThrough : null,
+                ),
+              ),
+              const SizedBox(width: 6),
+              const Icon(Icons.chevron_right_rounded, size: 20, color: AppColors.faint),
+            ],
           ),
         ),
       ),
