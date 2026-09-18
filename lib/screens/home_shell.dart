@@ -13,6 +13,7 @@ import '../models/user.dart';
 import '../services/cloud_auth.dart';
 import '../services/sync_service.dart';
 import '../state/auth.dart';
+import '../state/catalog.dart';
 import '../state/nav.dart';
 import '../state/settings.dart';
 import '../widgets/app_sidebar.dart';
@@ -207,6 +208,13 @@ class _HomeShellState extends State<HomeShell> {
     ];
     final index = all.indexWhere((d) => d.id == nav.id).clamp(0, all.length - 1);
 
+    // Low-stock alert badge on the Products destination (sidebar pill and
+    // phone bottom-bar badge). Catalog updates (sales, adjustments, sync)
+    // re-notify, so the count stays live.
+    final lowCount = context.watch<CatalogProvider>().lowStockItems().length;
+    int? productsBadge(int i) =>
+        (all[i].id == NavId.products && lowCount > 0) ? lowCount : null;
+
     return LayoutBuilder(builder: (context, constraints) {
       final wide = constraints.maxWidth >= 900;
       final narrow = MediaQuery.sizeOf(context).width < 720;
@@ -222,8 +230,13 @@ class _HomeShellState extends State<HomeShell> {
               AppSidebar(
                 extended: extended,
                 destinations: [
-                  for (final d in all)
-                    SidebarDest(icon: d.icon, activeIcon: d.activeIcon, label: d.label),
+                  for (var i = 0; i < all.length; i++)
+                    SidebarDest(
+                      icon: all[i].icon,
+                      activeIcon: all[i].activeIcon,
+                      label: all[i].label,
+                      badge: productsBadge(i),
+                    ),
                 ],
                 selectedIndex: index,
                 onSelect: (i) => nav.goTo(all[i].id),
@@ -260,11 +273,19 @@ class _HomeShellState extends State<HomeShell> {
           onDestinationSelected: (i) => nav.goTo(all[i].id),
           height: 68,
           destinations: [
-            for (final d in all)
+            for (var i = 0; i < all.length; i++)
               NavigationDestination(
-                icon: Icon(d.icon, size: 23),
-                selectedIcon: Icon(d.activeIcon, size: 23),
-                label: d.label,
+                icon: productsBadge(i) != null
+                    ? Badge.count(
+                        count: lowCount,
+                        child: Icon(all[i].icon, size: 23))
+                    : Icon(all[i].icon, size: 23),
+                selectedIcon: productsBadge(i) != null
+                    ? Badge.count(
+                        count: lowCount,
+                        child: Icon(all[i].activeIcon, size: 23))
+                    : Icon(all[i].activeIcon, size: 23),
+                label: all[i].label,
               ),
           ],
         ),

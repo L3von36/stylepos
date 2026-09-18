@@ -8,7 +8,11 @@ class SidebarDest {
   final IconData icon;
   final IconData activeIcon;
   final String label;
-  const SidebarDest({required this.icon, required this.activeIcon, required this.label});
+
+  /// Optional alert count (e.g. low-stock items) rendered as a red pill on
+  /// the row — null or <= 0 shows nothing.
+  final int? badge;
+  const SidebarDest({required this.icon, required this.activeIcon, required this.label, this.badge});
 }
 
 /// Desktop navigation sidebar — the M3 navigation-drawer pattern styled
@@ -137,9 +141,31 @@ class _AppSidebarState extends State<AppSidebar> {
     required VoidCallback onTap,
     required bool selected,
     String? tooltip,
+    int? badge,
   }) {
     final fg = selected ? AppColors.primaryDark : AppColors.muted;
     final hovered = _hover == label.hashCode && !selected;
+    final showBadge = badge != null && badge > 0;
+
+    Widget badgeChip({double fontSize = 10.5, double min = 18}) => Container(
+          constraints: BoxConstraints(minWidth: min),
+          height: 18,
+          padding: const EdgeInsets.symmetric(horizontal: 5),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: AppColors.danger,
+            borderRadius: BorderRadius.circular(AppRadius.pill),
+          ),
+          child: Text(
+            badge! > 99 ? '99+' : '$badge',
+            style: TextStyle(
+                fontFamily: 'Carlito',
+                fontSize: fontSize,
+                height: 1,
+                fontWeight: FontWeight.w700,
+                color: AppColors.onError),
+          ),
+        );
 
     final square = AnimatedContainer(
       duration: AppMotion.normal,
@@ -186,13 +212,21 @@ class _AppSidebarState extends State<AppSidebar> {
                     ),
                   ),
                 ),
+                if (showBadge) badgeChip(),
               ],
             )
-          : AnimatedSlide(
-              duration: AppMotion.fast,
-              curve: AppMotion.standard,
-              offset: hovered ? const Offset(0.14, 0) : Offset.zero,
-              child: Icon(selected ? activeIcon : icon, size: 22, color: fg),
+          : Stack(
+              clipBehavior: Clip.none,
+              children: [
+                AnimatedSlide(
+                  duration: AppMotion.fast,
+                  curve: AppMotion.standard,
+                  offset: hovered ? const Offset(0.14, 0) : Offset.zero,
+                  child: Icon(selected ? activeIcon : icon, size: 22, color: fg),
+                ),
+                if (showBadge)
+                  Positioned(top: -4, right: -6, child: badgeChip(fontSize: 9, min: 15)),
+              ],
             ),
     );
 
@@ -373,6 +407,7 @@ class _AppSidebarState extends State<AppSidebar> {
                       selected: i == widget.selectedIndex,
                       onTap: () => widget.onSelect(i),
                       tooltip: widget.destinations[i].label,
+                      badge: widget.destinations[i].badge,
                     ),
                   if (showManage) ...[
                     if (_extended)

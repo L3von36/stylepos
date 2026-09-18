@@ -2,6 +2,9 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../models/product.dart';
+import '../../state/catalog.dart';
+import '../../state/nav.dart';
 import '../../state/sales.dart';
 import '../../state/settings.dart';
 import '../../widgets/ui.dart';
@@ -291,6 +294,10 @@ class _ReportsScreenState extends State<ReportsScreen> {
                     : _revenue!.fold<double>(0.0, (s, d) => s + d.$2),
                 rangeDays: _range,
               ),
+              const SizedBox(height: AppSpace.s4),
+
+              // stock health: value of goods on hand + low-stock alerts
+              const _StockHealthCard(),
               const SizedBox(height: 12),
             ],
           ),
@@ -533,6 +540,208 @@ class _ManagerInsightsCard extends StatelessWidget {
                           fontSize: 13.5,
                           fontWeight: FontWeight.w700,
                           color: AppColors.body)),
+                ],
+              ),
+            ),
+      ],
+    );
+  }
+}
+
+// ---------- stock health (valuation + low-stock alerts) ----------
+
+/// Inventory valuation tiles plus the itemized low-stock alert list.
+/// Reads the live catalog, so sales/adjustments/sync update it instantly.
+class _StockHealthCard extends StatelessWidget {
+  const _StockHealthCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final catalog = context.watch<CatalogProvider>();
+    final settings = context.watch<AppSettings>();
+    final nav = context.read<NavProvider>();
+
+    var units = 0;
+    var costValue = 0.0;
+    var retailValue = 0.0;
+    for (final p in catalog.products) {
+      for (final v in p.variants) {
+        units += v.stock;
+        costValue += v.stock * v.cost;
+        retailValue += v.stock * v.price;
+      }
+    }
+    final low = catalog.lowStockItems();
+
+    final tiles = [
+      (Icons.scale_rounded, 'Units on hand', '$units', AppColors.info, AppColors.infoSoft),
+      (
+        Icons.payments_rounded,
+        'Value at cost',
+        settings.money(costValue),
+        AppColors.primary,
+        AppColors.primarySoft,
+      ),
+      (
+        Icons.storefront_rounded,
+        'Value at retail',
+        settings.money(retailValue),
+        AppColors.success,
+        AppColors.successSoft,
+      ),
+    ];
+
+    return SectionCard(
+      icon: Icons.inventory_rounded,
+      title: 'Stock health',
+      subtitle: 'Value of goods on hand and items running low',
+      children: [
+        LayoutBuilder(builder: (context, c) {
+          const gap = 12.0;
+          final cols = c.maxWidth >= 3 * 190 + 2 * gap
+              ? 3
+              : c.maxWidth >= 2 * 170 + gap
+                  ? 2
+                  : 1;
+          final w = (c.maxWidth - gap * (cols - 1)) / cols;
+          return Wrap(
+            spacing: gap,
+            runSpacing: gap,
+            children: [
+              for (final t in tiles)
+                SizedBox(
+                  width: w,
+                  child: Container(
+                    padding: const EdgeInsets.all(AppSpace.s3),
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceTint,
+                      borderRadius: BorderRadius.circular(AppRadius.md),
+                      border: Border.all(color: AppColors.borderSoft),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 34,
+                          height: 34,
+                          decoration: BoxDecoration(
+                            color: t.$5,
+                            borderRadius: BorderRadius.circular(AppRadius.sm),
+                          ),
+                          child: Icon(t.$1, size: 18, color: t.$4),
+                        ),
+                        const SizedBox(width: AppSpace.s2),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(t.$2.toUpperCase(),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                      fontFamily: 'Carlito',
+                                      fontSize: 10.5,
+                                      letterSpacing: 0.4,
+                                      fontWeight: FontWeight.w700,
+                                      color: AppColors.muted)),
+                              Text(t.$3,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                      fontFamily: 'Carlito',
+                                      fontSize: 16.5,
+                                      fontWeight: FontWeight.w700,
+                                      color: AppColors.ink)),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
+          );
+        }),
+        const SizedBox(height: AppSpace.s3),
+        const Divider(),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                low.isEmpty
+                    ? 'Nothing is running low'
+                    : 'Running low (${low.length})',
+                style: TextStyle(
+                    fontFamily: 'Carlito',
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: low.isEmpty ? AppColors.success : AppColors.ink),
+              ),
+            ),
+            if (low.length > 5)
+              TextButton(
+                onPressed: () => nav.goTo(NavId.products),
+                child: const Text('View all in Products'),
+              ),
+          ],
+        ),
+        if (low.isEmpty)
+          Row(
+            children: [
+              Icon(Icons.check_circle_outline_rounded,
+                  size: 16, color: AppColors.success),
+              const SizedBox(width: AppSpace.s2),
+              Expanded(
+                child: Text(
+                  'Every product is above its low-stock threshold. '
+                  'Adjust thresholds per product in the product editor.',
+                  style: TextStyle(
+                      fontFamily: 'Carlito',
+                      fontSize: 12.5,
+                      color: AppColors.muted,
+                      height: 1.4),
+                ),
+              ),
+            ],
+          )
+        else
+          for (final (Product, ProductVariant) item in low.take(5))
+            Container(
+              margin: const EdgeInsets.only(bottom: AppSpace.s2),
+              padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpace.s3, vertical: AppSpace.s2),
+              decoration: BoxDecoration(
+                color: AppColors.surfaceTint,
+                borderRadius: BorderRadius.circular(AppRadius.sm),
+                border: Border.all(color: AppColors.borderSoft),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(item.$1.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                                fontFamily: 'Carlito',
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.ink)),
+                        if (item.$2.descriptor.isNotEmpty)
+                          Text(item.$2.descriptor,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                  fontFamily: 'Carlito',
+                                  fontSize: 11.5,
+                                  color: AppColors.muted)),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: AppSpace.s2),
+                  StatusPill.stock(context, item.$2.stock,
+                      lowThreshold: item.$1.lowStock),
                 ],
               ),
             ),

@@ -1,9 +1,18 @@
 import 'dart:async';
+import 'dart:convert' show utf8;
+import 'dart:io' show File, Platform;
+import 'dart:typed_data' show Uint8List;
 
+import 'package:file_selector/file_selector.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../models/sale.dart';
+import '../../state/auth.dart';
 import '../../state/sales.dart';
 import '../../state/settings.dart';
 import '../../widgets/ui.dart';
@@ -47,6 +56,71 @@ class _SalesScreenState extends State<SalesScreen> {
     if (mounted) setState(() => _sales = sales);
   }
 
+  /// Manager-only: exports the currently filtered sales list as CSV —
+  /// browser download on web, share sheet on phones, save dialog on desktop.
+  Future<void> _exportCsv() async {
+    final rows = _sales;
+    if (rows == null || rows.isEmpty) return;
+    final messenger = ScaffoldMessenger.of(context);
+
+    String esc(String v) {
+      if (v.contains(',') || v.contains('"') || v.contains('\n')) {
+        return '"${v.replaceAll('"', '""')}"';
+      }
+      return v;
+    }
+
+    String two(int n) => n.toString().padLeft(2, '0');
+    final buf = StringBuffer(
+        'receipt,date,customer,cashier,payment,status,subtotal,discount,tax,total\n');
+    for (final s in rows) {
+      final dt = DateTime.fromMillisecondsSinceEpoch(s.createdAt * 1000);
+      final date =
+          '${dt.year}-${two(dt.month)}-${two(dt.day)} ${two(dt.hour)}:${two(dt.minute)}';
+      buf.writeln([
+        s.receiptNo,
+        date,
+        s.customerName ?? '',
+        s.cashierName ?? '',
+        s.paymentMethod,
+        s.status,
+        s.subtotal.toStringAsFixed(2),
+        s.discount.toStringAsFixed(2),
+        s.tax.toStringAsFixed(2),
+        s.total.toStringAsFixed(2),
+      ].map(esc).join(','));
+    }
+
+    final name =
+        'Sami-sales-${DateTime.now().toIso8601String().substring(0, 10)}.csv';
+    final data = Uint8List.fromList(utf8.encode(buf.toString()));
+    try {
+      if (kIsWeb) {
+        // Browser download (cross_file writes the object URL to the name).
+        await XFile.fromData(data, mimeType: 'text/csv', name: name)
+            .saveTo(name);
+        messenger.showSnackBar(const SnackBar(content: Text('CSV downloaded')));
+      } else if (Platform.isAndroid || Platform.isIOS) {
+        final dir = await getTemporaryDirectory();
+        final f = File(p.join(dir.path, name));
+        await f.writeAsBytes(data, flush: true);
+        await SharePlus.instance.share(ShareParams(
+          files: [XFile(f.path, mimeType: 'text/csv')],
+          subject: name,
+          text: 'Sales export from Sami',
+        ));
+      } else {
+        final loc = await getSaveLocation(suggestedName: name);
+        if (loc == null) return;
+        await File(loc.path).writeAsBytes(data, flush: true);
+        messenger.showSnackBar(const SnackBar(content: Text('CSV saved')));
+      }
+    } catch (_) {
+      messenger.showSnackBar(const SnackBar(
+          content: Text('Export failed — please try again')));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final settings = context.watch<AppSettings>();
@@ -62,6 +136,7 @@ class _SalesScreenState extends State<SalesScreen> {
     }
     final totalRevenue =
         _sales?.where((s) => !s.isRefunded).fold(0.0, (sum, s) => sum + s.total) ?? 0.0;
+    final isAdmin = context.watch<AuthProvider>().user?.isAdmin ?? false;
 
     return Padding(
       padding: const EdgeInsets.all(AppSpace.s4),
@@ -73,6 +148,14 @@ class _SalesScreenState extends State<SalesScreen> {
                 ? 'Loading…'
                 : '${_sales!.length} receipt${_sales!.length == 1 ? '' : 's'}'
                     ' · ${settings.money(totalRevenue)} revenue',
+            actions: [
+              if (isAdmin && _sales != null && _sales!.isNotEmpty)
+                IconButton(
+                  tooltip: 'Export CSV',
+                  icon: const Icon(Icons.file_download_outlined, size: 21),
+                  onPressed: _exportCsv,
+                ),
+            ],
           ),
           // Responsive: on phones the period picker moves under the
           // search field (a 4-segment button + search overflows 360dp).
