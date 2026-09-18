@@ -6,8 +6,9 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:stylepos/data/database.dart';
 import 'package:stylepos/models/product.dart';
 
-/// Verifies the v1 -> v2 migration: existing installations get the
-/// products.image column added without losing any data.
+/// Verifies schema upgrades. Since DB v5 the upgrade path also performs a
+/// one-time purge of the hardcoded demo catalog + demo sales history, so
+/// upgraded devices converge with the cleaned cloud.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -26,11 +27,10 @@ void main() {
     } catch (_) {}
   });
 
-  test('v1 database is upgraded to v4 and gains sync columns', () async {
-    // -- arrange: build a minimal version-1 database by hand --
-    final v1 = await databaseFactory.openDatabase(
-      p.join(tempDir.path, 'stylepos.db'),
-      options: OpenDatabaseOptions(version: 1, onCreate: (db, _) async {
+  Future<Database> createLegacySchemaDb(String dir, int version) async {
+    final db = await databaseFactory.openDatabase(
+      p.join(dir, 'stylepos.db'),
+      options: OpenDatabaseOptions(version: version, onCreate: (db, _) async {
         await db.execute('''
           CREATE TABLE categories (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -129,28 +129,34 @@ void main() {
         await db.execute('''
           CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT)
         ''');
-        await db.insert('products', {
-          'name': 'Legacy Tee',
-          'low_stock': 5,
-          'archived': 0,
-          'created_at': 1700000000,
-        });
-        await db.insert('customers', {
-          'name': 'Legacy Customer',
-          'created_at': 1700000000,
-        });
       }),
     );
+    return db;
+  }
+
+  test('v1 database is upgraded to v5 and gains all sync columns', () async {
+    // -- arrange: build a minimal version-1 database by hand --
+    final v1 = await createLegacySchemaDb(tempDir.path, 1);
+    await v1.insert('products', {
+      'name': 'Legacy Tee',
+      'low_stock': 5,
+      'archived': 0,
+      'created_at': 1700000000,
+    });
+    await v1.insert('customers', {
+      'name': 'Legacy Customer',
+      'created_at': 1700000000,
+    });
     await v1.close();
 
-    // -- act: open through the app (triggers onUpgrade 1 -> 4) --
+    // -- act: open through the app (triggers onUpgrade 1 -> 5) --
     final db = await DB.instance();
     final version = await db.getVersion();
     final cols = await db.rawQuery('PRAGMA table_info(products)');
     final colNames = cols.map((c) => c['name']).toSet();
 
     // -- assert --
-    expect(version, 4);
+    expect(version, 5);
     expect(colNames, containsAll(['image', 'cloud_id', 'dirty', 'deleted']));
     // v4: sales tables gained their sync bookkeeping too
     final saleCols = (await db.rawQuery('PRAGMA table_info(sales)'))
@@ -161,27 +167,119 @@ void main() {
         .map((c) => c['name'] as String)
         .toSet();
     expect(userCols, contains('cloud_id'));
-    // pre-existing row survived
-    final legacy = await db.query('products');
-    expect(legacy.single['name'], 'Legacy Tee');
-    expect(legacy.single['image'], isNull);
-    // sync bookkeeping: timestamped, cloud identity left open for adoption
-    expect(legacy.single['cloud_id'], isNull);
-    expect(legacy.single['updated_at'], greaterThan(0));
+    // v5 purge: the demo catalog is gone, the walk-in customer stays.
+    final products = await db.query('products');
+    expect(products, isEmpty);
     final legacyCust = await db.query('customers');
     expect(legacyCust.single['name'], 'Legacy Customer');
-    expect(legacyCust.single['cloud_id'], isNull);
 
-    // image writes work on the migrated schema
-    final updated = Product(
-      id: legacy.single['id'] as int,
-      name: 'Legacy Tee',
-      image: 'img_test.jpg',
-      createdAt: 1700000000,
-    );
-    await db.update('products', updated.toMap(),
-        where: 'id = ?', whereArgs: [legacy.single['id']]);
-    final after = await db.query('products');
-    expect(after.single['image'], 'img_test.jpg');
+    // the migrated schema still accepts real products
+    final id = await db.insert('products', Product(
+      name: 'Fresh Tee',
+      lowStock: 5,
+      createdAt: 1700000001,
+    ).toMap());
+    expect(id, greaterThan(0));
+  });
+
+  test('v4 to v5 wipes the demo catalog, sales history and pull cursors',
+      () async {
+    final tempDir2 = await Directory.systemTemp.createTemp('stylepos_mig45');
+    DB.useDirectory(tempDir2.path);
+    DB.closeAndReset();
+    addTearDown(() {
+      DB.closeAndReset();
+      tempDir2.deleteSync(recursive: true);
+    });
+
+    // -- arrange: a v4 database full of "demo" data + sync cursors --
+    final v4 = await createLegacySchemaDb(tempDir2.path, 4);
+    await v4.insert('users', {
+      'name': 'Admin',
+      'email': 'admin@stylepos.app',
+      'pass_hash': 'x',
+      'salt': 'y',
+      'role': 'admin',
+      'active': 1,
+      'created_at': 1700000000,
+    });
+    final catId = await v4
+        .insert('categories', {'name': 'T-Shirts'});
+    final pid = await v4.insert('products', {
+      'name': 'Classic Cotton Tee',
+      'category_id': catId,
+      'barcode': '600123400001',
+      'low_stock': 5,
+      'archived': 0,
+      'created_at': 1700000000,
+    });
+    final vid = await v4.insert('variants', {
+      'product_id': pid,
+      'size': 'M',
+      'color': 'Black',
+      'sku': '600123400001-M-1',
+      'price': 850,
+      'cost': 400,
+      'stock': 12,
+      'archived': 0,
+    });
+    final sid = await v4.insert('sales', {
+      'receipt_no': 'R-ABC123-000001',
+      'user_id': 1,
+      'subtotal': 850,
+      'total': 850,
+      'amount_paid': 1000,
+      'change_due': 150,
+      'status': 'completed',
+      'created_at': 1700000000,
+    });
+    await v4.insert('sale_items', {
+      'sale_id': sid,
+      'variant_id': vid,
+      'product_name': 'Classic Cotton Tee',
+      'variant_desc': 'M / Black',
+      'unit_price': 850,
+      'qty': 1,
+      'line_total': 850,
+    });
+    await v4.insert('stock_movements', {
+      'variant_id': vid,
+      'qty': -1,
+      'reason': 'sale',
+      'created_at': 1700000000,
+    });
+    await v4.insert('customers', {
+      'name': 'Walk-in Customer',
+      'created_at': 1700000000,
+    });
+    await v4.insert('settings', {'key': 'sync_last_pull_products', 'value': '99'});
+    await v4.insert('settings', {'key': 'sync_last_pull_sales', 'value': '99'});
+    await v4.close();
+
+    // -- act: open through the app (triggers onUpgrade 4 -> 5) --
+    final db = await DB.instance();
+    expect(await db.getVersion(), 5);
+
+    // -- assert: catalog + history wiped, cursors forgotten --
+    for (final t in [
+      'categories',
+      'products',
+      'variants',
+      'sales',
+      'sale_items',
+      'stock_movements',
+    ]) {
+      final n = (await db.rawQuery('SELECT COUNT(*) AS n FROM $t'))
+          .first['n'] as int? ?? 0;
+      expect(n, 0, reason: '$t must be wiped by the v5 purge');
+    }
+    // functional data survives
+    final cust = await db.query('customers');
+    expect(cust.single['name'], 'Walk-in Customer');
+    final users = await db.query('users');
+    expect(users, hasLength(1));
+    final cursors = await db.query('settings',
+        where: "key LIKE 'sync_last_pull_%'");
+    expect(cursors, isEmpty);
   });
 }

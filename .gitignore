@@ -46,3 +46,7 @@ app.*.map.json
 
 # Widget Preview related
 .widget_preview/
+
+# local test/build artifacts (not part of the app)
+_serve/
+ui-review/

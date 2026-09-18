@@ -44,6 +44,16 @@ void main() {
     });
     final photoBytes = [1, 2, 3, 42, 250, 128, 7];
     File(p.join(imgA.path, 'dress_red.jpg')).writeAsBytesSync(photoBytes);
+    await dbA.insert('products', {
+      'name': 'Backup Hoodie',
+      'barcode': 'BKP-0001',
+      'low_stock': 5,
+      'archived': 0,
+      'deleted': 0,
+      'created_at': 12345,
+      'dirty': 0,
+      'updated_at': 12345,
+    });
 
     // --- export ---
     final zipPath = p.join(shopA.path, 'backup.stylepos');
@@ -76,10 +86,11 @@ void main() {
     expect(restored.existsSync(), isTrue, reason: 'photo must be restored');
     expect(restored.readAsBytesSync(), photoBytes);
 
-    // seeded catalog came along too (A was seeded on first open)
-    final products = await dbB.query('products');
-    expect(products, isNotEmpty,
-        reason: 'seed products must be included in the backup');
+    // the created catalog row came along (no demo seed exists anymore)
+    final products = await dbB.query('products',
+        where: 'barcode = ?', whereArgs: ['BKP-0001']);
+    expect(products, hasLength(1),
+        reason: 'created products must be included in the backup');
   });
 
   test('restore rejects files that are not StylePOS backups', () async {

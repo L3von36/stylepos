@@ -2,15 +2,17 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:stylepos/data/database.dart';
+import 'package:stylepos/models/product.dart';
 import 'package:stylepos/state/cart.dart';
 import 'package:stylepos/state/catalog.dart';
 import 'package:stylepos/state/customers.dart';
 import 'package:stylepos/state/sales.dart';
 import 'package:stylepos/state/settings.dart';
 
-/// End-to-end test of the POS core: schema + seed data, cart -> checkout
-/// transaction (stock decrement + receipt number + loyalty), refund and
-/// report queries. Runs against a throwaway SQLite database via FFI.
+/// End-to-end test of the POS core: schema + functional defaults, product
+/// creation through the real saveProduct flow, cart -> checkout transaction
+/// (stock decrement + receipt number + loyalty), refund and report queries.
+/// Runs against a throwaway SQLite database via FFI.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -22,6 +24,32 @@ void main() {
   setUpAll(() async {
     tempDir = await Directory.systemTemp.createTemp('stylepos_e2e');
     DB.useDirectory(tempDir.path);
+    catalog = CatalogProvider();
+    await catalog.reload();
+
+    // The shop adds its own products (no demo catalog is seeded anymore).
+    await catalog.saveProduct(const Product(
+      name: 'Test Hoodie',
+      barcode: 'TST-0001',
+      lowStock: 5,
+      createdAt: 0,
+      variants: [
+        ProductVariant(
+            productId: 0,
+            sku: 'TST-0001-S',
+            barcode: 'TST-0001-S1',
+            price: 100,
+            cost: 40,
+            stock: 10),
+        ProductVariant(
+            productId: 0,
+            sku: 'TST-0001-M',
+            barcode: 'TST-0001-M1',
+            price: 100,
+            cost: 40,
+            stock: 12),
+      ],
+    ));
   });
 
   tearDownAll(() async {
@@ -38,17 +66,17 @@ void main() {
     await settings.load();
   });
 
-  test('database seeds admin, categories, products and variants', () async {
+  test('fresh database seeds only functional defaults, no demo catalog', () async {
     final db = await DB.instance();
     Future<int> count(String table) async =>
         (await db.rawQuery('SELECT COUNT(*) AS n FROM $table')).first['n'] as int;
     expect(await count('users'), 1); // default admin
-    expect(await count('categories'), 7);
-    expect(await count('products'), 8);
-    expect(await count('variants'), greaterThan(10));
     expect(await count('customers'), 1); // walk-in
-    expect(catalog.products, isNotEmpty);
-    expect(catalog.products.first.variants, isNotEmpty);
+    expect(await count('categories'), 0); // NO demo categories
+    expect(await count('products'), 1); // only what this test created
+    expect(await count('variants'), 2);
+    expect(catalog.products, hasLength(1));
+    expect(catalog.products.first.variants, hasLength(2));
   });
 
   test('barcode lookup finds the right variant', () {

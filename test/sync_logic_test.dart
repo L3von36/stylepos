@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:stylepos/data/database.dart';
+import 'package:stylepos/models/product.dart';
 import 'package:stylepos/services/sync_service.dart';
 import 'package:stylepos/state/cart.dart';
 import 'package:stylepos/state/catalog.dart';
@@ -105,47 +106,130 @@ void main() {
     if (tmp.existsSync()) tmp.deleteSync(recursive: true);
   });
 
-  group('bootstrap', () {
-    test('empty cloud + seeded device pushes the whole catalog once', () async {
+  /// Creates a small catalog through the REAL app flow (provider methods).
+  /// Replaces the hardcoded demo seed the tests used to rely on.
+  Future<void> seedTestCatalog() async {
+    final catalog = CatalogProvider();
+    await catalog.reload();
+    await catalog.addCategory('Test Cat');
+    await catalog.reload();
+    await catalog.saveProduct(Product(
+      name: 'Test Tee',
+      categoryId: catalog.categories.first.id,
+      barcode: 'TST-0001',
+      lowStock: 5,
+      createdAt: 0,
+      variants: const [
+        ProductVariant(
+            productId: 0,
+            sku: 'TST-0001-S',
+            barcode: 'TST-0001-S1',
+            price: 100,
+            cost: 40,
+            stock: 10),
+        ProductVariant(
+            productId: 0,
+            sku: 'TST-0001-M',
+            barcode: 'TST-0001-M1',
+            price: 100,
+            cost: 40,
+            stock: 12),
+      ],
+    ));
+  }
+
+  /// Inserts the same catalog rows the way PRE-SYNC local data looks:
+  /// cloud_id NULL and not dirty, so the pull must adopt them onto the
+  /// cloud rows instead of duplicating or re-pushing them.
+  Future<void> insertUnsyncedCatalog() async {
+    final dbh = await db();
+    final now = _now();
+    final catId = await dbh.insert('categories', {
+      'name': 'Test Cat',
+      'dirty': 0,
+      'deleted': 0,
+      'updated_at': now,
+    });
+    final pid = await dbh.insert('products', {
+      'name': 'Test Tee',
+      'category_id': catId,
+      'barcode': 'TST-0001',
+      'low_stock': 5,
+      'archived': 0,
+      'deleted': 0,
+      'created_at': now,
+      'dirty': 0,
+      'updated_at': now,
+    });
+    for (final (sku, barcode) in const [
+      ('TST-0001-S', 'TST-0001-S1'),
+      ('TST-0001-M', 'TST-0001-M1'),
+    ]) {
+      await dbh.insert('variants', {
+        'product_id': pid,
+        'size': 'S',
+        'color': '',
+        'sku': sku,
+        'barcode': barcode,
+        'price': 100.0,
+        'cost': 40.0,
+        'stock': 10,
+        'archived': 0,
+        'dirty': 0,
+        'updated_at': now,
+      });
+    }
+  }
+
+  group('deletion sticks (no cloud-empty bootstrap)', () {
+    test('a fresh device with an empty cloud pushes no catalog', () async {
       await sync.run();
-
-      expect(cloud.tables['categories']!.length, 7);
-      expect(cloud.tables['products']!.length, 8);
-      expect(cloud.tables['customers']!.length, 1);
-      expect(cloud.tables['variants']!.length, greaterThan(10));
-
-      final dbh = await db();
-      final countRows = await dbh
-          .rawQuery('SELECT COUNT(*) AS n FROM products WHERE dirty = 1');
-      final dirty = countRows.first['n'] as int? ?? 0;
-      expect(dirty, 0);
+      expect(cloud.tables['products']!, isEmpty);
+      expect(cloud.tables['categories']!, isEmpty);
+      expect(cloud.tables['variants']!, isEmpty);
+      expect(cloud.tables['customers']!.length, 1); // walk-in only
     });
 
-    test('second run is a no-op (nothing dirty)', () async {
-      await sync.run();
-      final before = cloud.tables['products']!.length;
+    test('hard-deleted cloud catalog is NOT re-pushed by leftover devices',
+        () async {
+      await seedTestCatalog();
+      await sync.run(); // catalog is now in the cloud
+      expect(cloud.tables['products']!.length, 1);
+
+      // The manager wipes the cloud (e.g. SQL editor). The device keeps
+      // its local mirror — the old bootstrap re-pushed everything here.
       cloud.clear();
       await sync.run();
-      // Nothing dirty -> nothing re-pushed, but pull saw nothing new.
-      expect(cloud.tables['products']!.length, before);
+
+      expect(cloud.tables['products']!, isEmpty);
+      expect(cloud.tables['categories']!, isEmpty);
+      expect(cloud.tables['variants']!, isEmpty);
+      // Locally the rows stay (they are the offline mirror) but they are
+      // never re-uploaded on their own.
+      final dbh = await db();
+      final n = (await dbh.rawQuery('SELECT COUNT(*) AS n FROM products'))
+          .first['n'] as int? ?? 0;
+      expect(n, 1);
     });
   });
 
   group('adoption (two independently seeded devices converge)', () {
     test('device B adopts cloud rows by barcode instead of duplicating',
         () async {
-      // Device A already pushed its catalog to the cloud.
+      // Device A creates its catalog through the app and pushes it.
+      await seedTestCatalog();
       await sync.run();
       final cloudProducts = Map<String, Map<String, dynamic>>.from(
           cloud.tables['products']!);
       final cloudCats =
           Map<String, Map<String, dynamic>>.from(cloud.tables['categories']!);
 
-      // Device B: fresh database, own seeds, points at the same cloud.
+      // Device B: fresh database, same unsynced local rows, same cloud.
       final tmpB = await Directory.systemTemp.createTemp('stylepos_sync_b');
       DB.closeAndReset();
       DB.useDirectory(tmpB.path);
       await db();
+      await insertUnsyncedCatalog();
 
       await sync.run();
 
@@ -153,8 +237,8 @@ void main() {
       final countRows =
           await dbh.rawQuery('SELECT COUNT(*) AS n FROM products');
       final n = countRows.first['n'] as int? ?? 0;
-      // No duplicates: still exactly the 8 seed products.
-      expect(n, 8);
+      // No duplicates: still exactly the one shared product.
+      expect(n, 1);
       // Every product now carries the cloud identity of device A.
       final adopted = await dbh.query('products',
           columns: ['barcode', 'cloud_id'], where: 'barcode IS NOT NULL');
@@ -179,7 +263,8 @@ void main() {
   group('pull', () {
     test('cloud-only rows are inserted; category mapping resolves',
         () async {
-      await sync.run(); // push seeds first
+      await seedTestCatalog();
+      await sync.run(); // push the local catalog first
       final catId = cloud.tables['categories']!.keys.first;
       final prodId = 'pppppppp-1111-2222-3333-444444444444';
       final varId = 'vvvvvvvv-1111-2222-3333-444444444444';
@@ -230,10 +315,11 @@ void main() {
   group('last-write-wins', () {
     test('dirty local edit newer than cloud survives and is pushed',
         () async {
+      await seedTestCatalog();
       await sync.run();
       final dbh = await db();
       final seed = (await dbh.query('products',
-          where: 'barcode = ?', whereArgs: ['600123400001'], limit: 1)).first;
+          where: 'barcode = ?', whereArgs: ['TST-0001'], limit: 1)).first;
 
       // Local edit, newer than the cloud copy.
       await dbh.update('products', {
@@ -257,10 +343,11 @@ void main() {
     });
 
     test('clean local row takes a newer cloud edit (cloud wins)', () async {
+      await seedTestCatalog();
       await sync.run();
       final dbh = await db();
       final seed = (await dbh.query('products',
-          where: 'barcode = ?', whereArgs: ['600123400001'], limit: 1)).first;
+          where: 'barcode = ?', whereArgs: ['TST-0001'], limit: 1)).first;
 
       // Another device edited the row after our last push.
       final cloudId = seed['cloud_id'] as String;
@@ -281,10 +368,11 @@ void main() {
       // legitimate local history), then the equal-timestamp merge settles
       // it. The row must end consistent on both sides and never resurrect
       // as dirty.
+      await seedTestCatalog();
       await sync.run();
       final dbh = await db();
       final seed = (await dbh.query('products',
-          where: 'barcode = ?', whereArgs: ['600123400001'], limit: 1)).first;
+          where: 'barcode = ?', whereArgs: ['TST-0001'], limit: 1)).first;
 
       await dbh.update('products', {
         'name': 'Offline Rename',
@@ -340,6 +428,7 @@ void main() {
 
   group('local write paths', () {
     test('adjustStock marks the variant dirty for the next sync', () async {
+      await seedTestCatalog();
       final dbh = await db();
       final v = (await dbh.query('variants', limit: 1)).first;
       await dbh.update('variants', {'dirty': 0, 'cloud_id': 'x'},
@@ -362,6 +451,7 @@ void main() {
   group('sales sync (Phase 2)', () {
     test('checkout stores a device-coded dirty sale and pushes everything',
         () async {
+      await seedTestCatalog();
       final settings = AppSettings();
       await settings.load();
       final catalog = CatalogProvider();
@@ -406,15 +496,18 @@ void main() {
       final item = cloud.tables['sale_items']!.values.first;
       expect(item['sale_id'], pushed['id']);
       expect(item['qty'], 1);
-      expect(cloud.tables['stock_movements']!.length, 1);
-      expect(cloud.tables['stock_movements']!.values.first['qty'], -1);
-      expect(cloud.tables['stock_movements']!.values.first['note'],
-          sale.receiptNo);
+      // 2 opening-stock movements (from saveProduct) + 1 sale movement.
+      final movs = cloud.tables['stock_movements']!.values.toList();
+      expect(movs.length, 3);
+      final saleMov = movs.firstWhere((m) => m['reason'] == 'sale');
+      expect(saleMov['qty'], -1);
+      expect(saleMov['note'], sale.receiptNo);
     });
 
     test('another device pulls the sale with cashier, customer, items '
         'and movements mapped', () async {
-      // Device A pushes its seeded catalog (adoptable by barcode/SKU/name).
+      // Device A pushes its catalog (adoptable by barcode/SKU/name).
+      await seedTestCatalog();
       await sync.run();
       final varCloud = cloud.tables['variants']!.values.first;
       final custCloud = cloud.tables['customers']!.values.first;
@@ -469,11 +562,12 @@ void main() {
         'updated_at': iso(_now() + 10),
       };
 
-      // Device B: fresh seeds, same cloud.
+      // Device B: fresh database with the same unsynced rows, same cloud.
       final tmpB = await Directory.systemTemp.createTemp('stylepos_sync_b2');
       DB.closeAndReset();
       DB.useDirectory(tmpB.path);
       await db();
+      await insertUnsyncedCatalog();
       await sync.run();
 
       final dbh = await db();

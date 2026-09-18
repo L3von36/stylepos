@@ -5,13 +5,15 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart';
 
-import '../models/category.dart';
-import '../models/product.dart';
 import '../services/hash.dart';
 import 'db_factory.dart';
 
 /// Opens (and creates/seeds on first run) the local SQLite database.
 /// Uses sqflite on Android and sqlite3 FFI on desktop (Windows).
+///
+/// Only functional defaults are seeded (settings, the local admin login
+/// and the Walk-in Customer). NO demo catalog: the shop adds its own
+/// products, and the cloud pull brings the shop's real catalog.
 class DB {
   static Database? _instance;
 
@@ -46,7 +48,7 @@ class DB {
 
     _instance = await openDatabase(
       dbPath,
-      version: 4,
+      version: 5,
       onConfigure: (db) => db.execute('PRAGMA foreign_keys = ON'),
       onUpgrade: (db, oldVersion, newVersion) async {
         // v2: product photos (relative filename inside the app images dir).
@@ -92,6 +94,16 @@ class DB {
           }
           // Keep the original order of history rows.
           await db.execute('UPDATE sales SET updated_at = created_at');
+        }
+        // v5: one-time purge of the hardcoded demo catalog + demo history.
+        // Older versions seeded 7 categories / 8 products / 56 variants and
+        // the sync engine kept re-pushing them (fresh installs seeded again;
+        // an empty cloud triggered a full local-catalog re-push). The shop
+        // must own its catalog: wipe the local copy and let the (now clean)
+        // cloud pull bring back only real data. Deleting in the cloud sticks
+        // from this version on.
+        if (oldVersion < 5) {
+          await _purgeCatalogAndHistory(db);
         }
       },
       onCreate: (db, version) async {
@@ -236,6 +248,54 @@ class DB {
     return _instance!;
   }
 
+  /// One-time (DB v5) purge of the demo catalog and demo sales history.
+  /// Deletes every category/product/variant and every sale locally —
+  /// including rows that never made it to the cloud — so nothing can be
+  /// re-pushed after the cloud cleanup. Pull cursors reset so the next
+  /// sync re-downloads the shop's real data from scratch.
+  static Future<void> _purgeCatalogAndHistory(Database db) async {
+    await db.transaction((txn) async {
+      for (final t in const [
+        'sale_items',
+        'stock_movements',
+        'sales',
+        'variants',
+        'products',
+        'categories',
+      ]) {
+        await txn.execute('DELETE FROM $t');
+      }
+      // Reset autoincrement counters so fresh rows start from 1.
+      for (final t in const [
+        'sale_items',
+        'stock_movements',
+        'sales',
+        'variants',
+        'products',
+        'categories',
+      ]) {
+        // Missing rows are fine; ignore errors per table.
+        try {
+          await txn.execute(
+              "DELETE FROM sqlite_sequence WHERE name = '$t'");
+        } catch (_) {}
+      }
+      // Forget pull cursors: the next sync re-reads the whole cloud
+      // (tombstones for unknown rows are skipped, real rows re-downloaded).
+      for (final t in const [
+        'categories',
+        'products',
+        'variants',
+        'sales',
+        'sale_items',
+        'stock_movements',
+      ]) {
+        await txn.delete('settings',
+            where: 'key = ?', whereArgs: ['sync_last_pull_$t']);
+      }
+    });
+  }
+
   /// Erases EVERYTHING from the local database (used by the Manager's
   /// "start fresh" tool when a device holds old pre-cloud data). Settings
   /// get their defaults back; no demo catalog is re-seeded — the cloud
@@ -304,129 +364,10 @@ class DB {
       'created_at': now,
     });
 
-    // --- starter catalog so the shop can start selling immediately ---
-    const cats = [
-      'T-Shirts', 'Shirts', 'Dresses', 'Jeans', 'Jackets', 'Shoes', 'Accessories',
-    ];
-    final catIds = <String, int>{};
-    for (final c in cats) {
-      catIds[c] = await db.insert('categories', Category(name: c).toMap());
-    }
+    // NO demo catalog: the shop adds its own products (or pulls the
+    // catalog its manager already created on another device).
 
-    Future<void> addProduct({
-      required String name,
-      required String category,
-      required String barcode,
-      required double price,
-      required double cost,
-      required List<(String, String, int)> variants, // (size, color, stock)
-    }) async {
-      final pid = await db.insert('products', Product(
-        name: name,
-        categoryId: catIds[category],
-        barcode: barcode,
-        lowStock: 5,
-        createdAt: now,
-      ).toMap());
-      var i = 0;
-      for (final (size, color, stock) in variants) {
-        i++;
-        await db.insert('variants', ProductVariant(
-          productId: pid,
-          size: size,
-          color: color,
-          sku: '$barcode-${size.isNotEmpty ? size : "OS"}-$i',
-          barcode: '$barcode$i',
-          price: price,
-          cost: cost,
-          stock: stock,
-        ).toMap());
-      }
-    }
-
-    await addProduct(
-      name: 'Classic Cotton Tee',
-      category: 'T-Shirts',
-      barcode: '600123400001',
-      price: 850,
-      cost: 400,
-      variants: const [
-        ('S', 'Black', 12), ('M', 'Black', 18), ('L', 'Black', 15),
-        ('M', 'White', 20), ('L', 'White', 9),
-      ],
-    );
-    await addProduct(
-      name: 'Oxford Button-Down Shirt',
-      category: 'Shirts',
-      barcode: '600123400002',
-      price: 2200,
-      cost: 1100,
-      variants: const [
-        ('M', 'Blue', 8), ('L', 'Blue', 6), ('M', 'White', 7), ('XL', 'White', 3),
-      ],
-    );
-    await addProduct(
-      name: 'Floral Summer Dress',
-      category: 'Dresses',
-      barcode: '600123400003',
-      price: 3200,
-      cost: 1500,
-      variants: const [
-        ('S', 'Red', 5), ('M', 'Red', 8), ('L', 'Red', 4), ('M', 'Navy', 6),
-      ],
-    );
-    await addProduct(
-      name: 'Slim Fit Jeans',
-      category: 'Jeans',
-      barcode: '600123400004',
-      price: 2800,
-      cost: 1400,
-      variants: const [
-        ('30', 'Blue', 10), ('32', 'Blue', 14), ('34', 'Blue', 11), ('36', 'Black', 6),
-      ],
-    );
-    await addProduct(
-      name: 'Denim Jacket',
-      category: 'Jackets',
-      barcode: '600123400005',
-      price: 4500,
-      cost: 2400,
-      variants: const [
-        ('M', 'Blue', 4), ('L', 'Blue', 3), ('XL', 'Blue', 2),
-      ],
-    );
-    await addProduct(
-      name: 'Canvas Sneakers',
-      category: 'Shoes',
-      barcode: '600123400006',
-      price: 2600,
-      cost: 1300,
-      variants: const [
-        ('40', 'White', 7), ('41', 'White', 9), ('42', 'Black', 8), ('43', 'Black', 4),
-      ],
-    );
-    await addProduct(
-      name: 'Leather Belt',
-      category: 'Accessories',
-      barcode: '600123400007',
-      price: 1200,
-      cost: 500,
-      variants: const [
-        ('', 'Brown', 15), ('', 'Black', 12),
-      ],
-    );
-    await addProduct(
-      name: 'Wool Beanie',
-      category: 'Accessories',
-      barcode: '600123400008',
-      price: 650,
-      cost: 250,
-      variants: const [
-        ('', 'Grey', 3), ('', 'Red', 2),
-      ],
-    );
-
-    // one sample customer
+    // one functional customer — the default counter customer
     await db.insert('customers', {
       'name': 'Walk-in Customer',
       'phone': null,
@@ -436,12 +377,9 @@ class DB {
       'created_at': now,
     });
 
-    // Sync bookkeeping for the seeded rows: timestamped, but cloud_id
-    // stays NULL so the first pull can adopt them onto cloud rows
-    // (matched by barcode / SKU / name) instead of duplicating.
-    await db.execute('UPDATE categories SET updated_at = $now');
-    await db.execute('UPDATE products SET updated_at = $now');
-    await db.execute('UPDATE variants SET updated_at = $now');
+    // The walk-in customer is created offline-first: cloud_id stays NULL
+    // so the first pull can adopt it onto an existing cloud row instead
+    // of duplicating it.
     await db.execute('UPDATE customers SET updated_at = $now');
   }
 }

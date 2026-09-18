@@ -147,8 +147,8 @@ enum SyncPhase { idle, syncing, error }
 ///  * Rows created independently on two devices are matched by natural key
 ///    (category name / product barcode / variant SKU / customer name+phone)
 ///    so both devices converge on one cloud identity.
-///  * If the cloud is empty but this device has data, the whole catalog is
-///    pushed once (bootstrap).
+///  * An empty cloud never triggers a bulk re-push: deletions must stick.
+///    Only dirty rows (and rows that never matched a cloud row) go up.
 class SyncService extends ChangeNotifier {
   SyncService({CloudGateway? gateway, this.signedInCheck})
       : _gateway = gateway ?? SupabaseGateway();
@@ -382,7 +382,6 @@ class SyncService extends ChangeNotifier {
       // Another device may have cleared the sales history — honour that
       // before anything else so old sales never resurrect here.
       await _applySalesClearMarker();
-      await _bootstrapIfNeeded();
       // Push order respects foreign keys: parents before children.
       await _pushCategories();
       await _pushProducts();
@@ -522,27 +521,12 @@ class SyncService extends ChangeNotifier {
     return db.query(table, where: 'cloud_id = ?', whereArgs: [id], limit: 1);
   }
 
-  /// First sync against an empty cloud pushes the whole local catalog once.
-  Future<void> _bootstrapIfNeeded() async {
-    final cloudRows =
-        await _gateway.fetchUpdated('products', DateTime.fromMillisecondsSinceEpoch(0, isUtc: true));
-    if (cloudRows.isNotEmpty) return;
-    final db = await _db;
-    final countRows = await db.rawQuery(
-        'SELECT COUNT(*) AS n FROM products WHERE deleted = 0');
-    final n = countRows.first['n'] as int? ?? 0;
-    if (n == 0) return;
-    for (final t in kSyncTables) {
-      await db.execute('UPDATE $t SET dirty = 1 WHERE deleted = 0');
-    }
-    for (final t in kSalesTables) {
-      await db.execute('UPDATE $t SET dirty = 1');
-    }
-    await _pushCategories();
-    await _pushProducts();
-    await _pushVariants();
-    await _pushCustomers();
-  }
+  /// NOTE: there is deliberately NO "empty cloud ⇒ re-push the local
+  /// catalog" bootstrap. That behavior resurrected deleted products: as
+  /// soon as the cloud looked empty (right after a cleanup), every device
+  /// with leftover local rows re-uploaded its whole catalog. Local rows
+  /// reach the cloud only when they are dirty (created/edited in the app)
+  /// or have no cloud_id yet (see the second push round in [run]).
 
   Future<void> _pushCategories() async {
     final db = await _db;
