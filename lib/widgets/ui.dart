@@ -78,6 +78,9 @@ abstract final class AppColors {
   static const primarySoft = Color(0xFFEEF2FF); // indigo 50
   static const primaryContainer = Color(0xFFE0E7FF); // indigo 100
 
+  /// Brand gradient for logo tiles (app bar, sidebar header, receipts).
+  static const List<Color> brandGradient = [Color(0xFF4F46E5), Color(0xFF6D28D9)];
+
   // Neutrals (slate)
   static const ink = Color(0xFF0F172A); // headings
   static const body = Color(0xFF334155); // body text
@@ -326,16 +329,27 @@ abstract final class AppTheme {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.lg)),
       ),
 
-      // -- Navigation rail: primaryContainer indicator pill --
-      navigationRailTheme: NavigationRailThemeData(
+      // -- Bottom navigation (phones): primaryContainer indicator pill so the
+      //    selected tab matches the desktop sidebar's primary selection —
+      //    mint (secondaryContainer) stays reserved for success/money --
+      navigationBarTheme: NavigationBarThemeData(
         backgroundColor: Colors.white,
         indicatorColor: AppColors.primaryContainer,
-        selectedIconTheme: const IconThemeData(color: AppColors.primaryDark),
-        unselectedIconTheme: const IconThemeData(color: AppColors.muted),
-        selectedLabelTextStyle: const TextStyle(
-            fontFamily: 'Carlito', fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.primaryDark),
-        unselectedLabelTextStyle:
-            const TextStyle(fontFamily: 'Carlito', fontSize: 13, color: AppColors.muted),
+        iconTheme: WidgetStateProperty.resolveWith((states) => IconThemeData(
+              color: states.contains(WidgetState.selected)
+                  ? AppColors.primaryDark
+                  : AppColors.muted,
+            )),
+        labelTextStyle: WidgetStateProperty.resolveWith((states) => TextStyle(
+              fontFamily: 'Carlito',
+              fontSize: 12,
+              fontWeight: states.contains(WidgetState.selected)
+                  ? FontWeight.w700
+                  : FontWeight.w400,
+              color: states.contains(WidgetState.selected)
+                  ? AppColors.primaryDark
+                  : AppColors.muted,
+            )),
       ),
 
       // -- List items: 16dp horizontal content padding (M3 list metrics) --

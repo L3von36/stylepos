@@ -15,6 +15,7 @@ import '../services/sync_service.dart';
 import '../state/auth.dart';
 import '../state/nav.dart';
 import '../state/settings.dart';
+import '../widgets/app_sidebar.dart';
 import '../widgets/ui.dart';
 import 'sync_status_pill.dart';
 
@@ -191,9 +192,6 @@ class _HomeShellState extends State<HomeShell> {
     final user = auth.user;
     if (user == null) return const SizedBox.shrink();
 
-    // Role-aware destinations: the shop manager sees reports too, while
-    // the sales person gets a focused selling workspace. Settings lives
-    // in the app bar (manager only) to keep the bottom bar at 4-5 tabs.
     final all = [
       _Dest(NavId.pos, Icons.point_of_sale_outlined, Icons.point_of_sale_rounded, 'Sell',
           const PosScreen()),
@@ -209,164 +207,45 @@ class _HomeShellState extends State<HomeShell> {
     ];
     final index = all.indexWhere((d) => d.id == nav.id).clamp(0, all.length - 1);
 
-    // Phones cannot fit gear + password + name pill + logout next to the
-    // shop name — they collapse to gear (manager) + one avatar button that
-    // opens an account sheet.
-    final narrow = MediaQuery.sizeOf(context).width < 720;
-
-    final appBar = AppBar(
-      title: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 30,
-            height: 30,
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [Color(0xFF4F46E5), Color(0xFF6D28D9)],
-              ),
-              borderRadius: BorderRadius.circular(AppRadius.sm),
-            ),
-            child: const Icon(Icons.storefront_rounded, size: 17, color: Colors.white),
-          ),
-          const SizedBox(width: AppSpace.s2 + 2),
-          Flexible(child: Text(settings.shopName, overflow: TextOverflow.ellipsis)),
-        ],
-      ),
-      actions: [
-        const SyncStatusPill(),
-        if (user.isAdmin)
-          IconButton(
-            tooltip: 'Settings',
-            icon: const Icon(Icons.settings_outlined, size: 21),
-            onPressed: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const SettingsScreen())),
-          ),
-        if (narrow)
-          Padding(
-            padding: const EdgeInsets.only(right: AppSpace.s2),
-            child: InkWell(
-              borderRadius: BorderRadius.circular(AppRadius.pill),
-              onTap: () => _showAccountSheet(context, user),
-              child: Container(
-                width: 36,
-                height: 36,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: AppColors.primarySoft,
-                  borderRadius: BorderRadius.circular(AppRadius.pill),
-                  border: Border.all(color: AppColors.primary.withValues(alpha: 0.25)),
-                ),
-                child: Text(
-                  user.name.isEmpty ? '?' : user.name[0].toUpperCase(),
-                  style: const TextStyle(
-                      fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.primaryDark),
-                ),
-              ),
-            ),
-          )
-        else ...[
-          IconButton(
-            tooltip: 'Change password',
-            icon: const Icon(Icons.lock_reset_outlined, size: 21),
-            onPressed: () => _showChangePassword(context),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: AppSpace.s1 + 2),
-            child: InkWell(
-              borderRadius: BorderRadius.circular(AppRadius.pill),
-              onTap: () => _showChangePassword(context),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: AppSpace.s3, vertical: AppSpace.s1),
-                decoration: BoxDecoration(
-                  color: AppColors.surfaceTint,
-                  borderRadius: BorderRadius.circular(AppRadius.pill),
-                  border: Border.all(color: AppColors.borderSoft),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 24,
-                      height: 24,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: AppColors.primarySoft,
-                        borderRadius: BorderRadius.circular(AppRadius.sm),
-                      ),
-                      child: Text(
-                        user.name.isEmpty ? '?' : user.name[0].toUpperCase(),
-                        style: const TextStyle(
-                            fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.primary),
-                      ),
-                    ),
-                    const SizedBox(width: AppSpace.s2),
-                    Text(user.name,
-                        style: const TextStyle(
-                            fontFamily: 'Carlito', fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink)),
-                    const SizedBox(width: AppSpace.s2),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: AppSpace.s2, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: user.isAdmin ? AppColors.primarySoft : AppColors.infoSoft,
-                        borderRadius: BorderRadius.circular(AppRadius.pill),
-                      ),
-                      child: Text(
-                        user.isAdmin ? 'Manager' : 'Sales',
-                        style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            color: user.isAdmin ? AppColors.primaryDark : AppColors.info),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          IconButton(
-            tooltip: 'Sign out',
-            icon: const Icon(Icons.logout_rounded, size: 21),
-            onPressed: () => _confirmSignOut(context),
-          ),
-        ],
-        const SizedBox(width: AppSpace.s1),
-      ],
-    );
-
     return LayoutBuilder(builder: (context, constraints) {
       final wide = constraints.maxWidth >= 900;
+      final narrow = MediaQuery.sizeOf(context).width < 720;
+      final appBar = _buildAppBar(context, user: user, settings: settings, desktop: wide, narrow: narrow);
+
       if (wide) {
         final extended = constraints.maxWidth >= 1240;
+        // Desktop layout: full-height design-system sidebar + the app bar
+        // spanning only the content area (standard desktop app anatomy).
         return Scaffold(
-          appBar: appBar,
           body: Row(
             children: [
-              NavigationRail(
-                selectedIndex: index,
-                onDestinationSelected: (i) => nav.goTo(all[i].id),
+              AppSidebar(
                 extended: extended,
-                minExtendedWidth: 192,
-                leading: Padding(
-                  padding: const EdgeInsets.only(top: AppSpace.s4, bottom: AppSpace.s3),
-                  child: extended ? null : const SizedBox.shrink(),
-                ),
-                labelType: extended
-                    ? NavigationRailLabelType.none
-                    : NavigationRailLabelType.all,
-                groupAlignment: -0.9,
                 destinations: [
                   for (final d in all)
-                    NavigationRailDestination(
-                      icon: Icon(d.icon, size: 23),
-                      selectedIcon: Icon(d.activeIcon, size: 23),
-                      label: Text(d.label),
-                    ),
+                    SidebarDest(icon: d.icon, activeIcon: d.activeIcon, label: d.label),
                 ],
+                selectedIndex: index,
+                onSelect: (i) => nav.goTo(all[i].id),
+                user: user,
+                onSettings: user.isAdmin
+                    ? () => Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const SettingsScreen()))
+                    : null,
+                onStaff: user.isAdmin
+                    ? () => Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const UsersScreen()))
+                    : null,
+                onChangePassword: () => _showChangePassword(context),
+                onSignOut: () => _confirmSignOut(context),
               ),
               const VerticalDivider(width: 1, thickness: 1, color: AppColors.borderSoft),
-              Expanded(child: IndexedStack(index: index, children: [for (final d in all) d.page])),
+              Expanded(
+                child: Scaffold(
+                  appBar: appBar,
+                  body: IndexedStack(index: index, children: [for (final d in all) d.page]),
+                ),
+              ),
             ],
           ),
         );
@@ -391,6 +270,146 @@ class _HomeShellState extends State<HomeShell> {
         ),
       );
     });
+  }
+
+  /// The app bar. On desktop it spans only the content column — identity,
+  /// settings and sign-out live in the sidebar, so it stays minimal
+  /// (shop name + sync pill). Phones keep the full set of actions.
+  PreferredSizeWidget _buildAppBar(
+    BuildContext context, {
+    required AppUser user,
+    required AppSettings settings,
+    required bool desktop,
+    required bool narrow,
+  }) {
+    final appBar = AppBar(
+      title: desktop
+          ? Text(settings.shopName, overflow: TextOverflow.ellipsis)
+          : Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 30,
+                  height: 30,
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: AppColors.brandGradient,
+                    ),
+                    borderRadius: BorderRadius.circular(AppRadius.sm),
+                  ),
+                  child: const Icon(Icons.storefront_rounded, size: 17, color: Colors.white),
+                ),
+                const SizedBox(width: AppSpace.s2 + 2),
+                Flexible(child: Text(settings.shopName, overflow: TextOverflow.ellipsis)),
+              ],
+            ),
+      actions: [
+        const SyncStatusPill(),
+        if (!desktop) ...[
+          if (user.isAdmin)
+            IconButton(
+              tooltip: 'Settings',
+              icon: const Icon(Icons.settings_outlined, size: 21),
+              onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const SettingsScreen())),
+            ),
+          // Phones cannot fit gear + password + name pill + logout next to the
+          // shop name — they collapse to gear (manager) + one avatar button
+          // that opens an account sheet.
+          if (narrow)
+            Padding(
+              padding: const EdgeInsets.only(right: AppSpace.s2),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(AppRadius.pill),
+                onTap: () => _showAccountSheet(context, user),
+                child: Container(
+                  width: 36,
+                  height: 36,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: AppColors.primarySoft,
+                    borderRadius: BorderRadius.circular(AppRadius.pill),
+                    border: Border.all(color: AppColors.primary.withValues(alpha: 0.25)),
+                  ),
+                  child: Text(
+                    user.name.isEmpty ? '?' : user.name[0].toUpperCase(),
+                    style: const TextStyle(
+                        fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.primaryDark),
+                  ),
+                ),
+              ),
+            )
+          else ...[
+            IconButton(
+              tooltip: 'Change password',
+              icon: const Icon(Icons.lock_reset_outlined, size: 21),
+              onPressed: () => _showChangePassword(context),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: AppSpace.s1 + 2),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(AppRadius.pill),
+                onTap: () => _showChangePassword(context),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: AppSpace.s3, vertical: AppSpace.s1),
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceTint,
+                    borderRadius: BorderRadius.circular(AppRadius.pill),
+                    border: Border.all(color: AppColors.borderSoft),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 24,
+                        height: 24,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: AppColors.primarySoft,
+                          borderRadius: BorderRadius.circular(AppRadius.sm),
+                        ),
+                        child: Text(
+                          user.name.isEmpty ? '?' : user.name[0].toUpperCase(),
+                          style: const TextStyle(
+                              fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.primary),
+                        ),
+                      ),
+                      const SizedBox(width: AppSpace.s2),
+                      Text(user.name,
+                          style: const TextStyle(
+                              fontFamily: 'Carlito', fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink)),
+                      const SizedBox(width: AppSpace.s2),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: AppSpace.s2, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: user.isAdmin ? AppColors.primarySoft : AppColors.infoSoft,
+                          borderRadius: BorderRadius.circular(AppRadius.pill),
+                        ),
+                        child: Text(
+                          user.isAdmin ? 'Manager' : 'Sales',
+                          style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: user.isAdmin ? AppColors.primaryDark : AppColors.info),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            IconButton(
+              tooltip: 'Sign out',
+              icon: const Icon(Icons.logout_rounded, size: 21),
+              onPressed: () => _confirmSignOut(context),
+            ),
+          ],
+        ],
+        const SizedBox(width: AppSpace.s1),
+      ],
+    );
+    return appBar;
   }
 
   /// Compact account sheet for phones: who is signed in, change password,
