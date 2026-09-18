@@ -7,7 +7,11 @@ import 'products/products_screen.dart';
 import 'reports/reports_screen.dart';
 import 'sales/sales_screen.dart';
 import 'settings/settings_screen.dart';
+import 'settings/users_screen.dart';
+import '../data/database.dart';
 import '../models/user.dart';
+import '../services/cloud_auth.dart';
+import '../services/sync_service.dart';
 import '../state/auth.dart';
 import '../state/nav.dart';
 import '../state/settings.dart';
@@ -33,6 +37,123 @@ class HomeShell extends StatefulWidget {
 }
 
 class _HomeShellState extends State<HomeShell> {
+  bool _gatesDone = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _runPostLoginGates());
+  }
+
+  /// Runs once per session, after the first frame: (1) the legacy-data
+  /// gate — old pre-cloud data on this device while a cloud shop is
+  /// active; (2) the one-time "create staff accounts" hint for Managers.
+  Future<void> _runPostLoginGates() async {
+    if (_gatesDone || !mounted) return;
+    _gatesDone = true;
+
+    final authP = context.read<AuthProvider>();
+    final user = authP.user;
+    if (user == null) return;
+
+    // ---- gate 1: old local data vs the cloud shop -------------------
+    try {
+      final legacy = await CloudAuth.legacyDataInfo();
+      if (legacy != null && mounted) {
+        final upload = await _showLegacyDataDialog(legacy);
+        await CloudAuth.resolveLegacyData(upload: upload);
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(upload
+              ? 'Keeping local data — it will join your shop on the next sync.'
+              : 'Fresh start! Pulling your shop data from the cloud…'),
+        ));
+        await SyncService.I.run();
+      }
+    } catch (_) {// Never block the till on the gate.
+    }
+
+    // ---- gate 2: first-run staff hint (managers) ---------------------
+    if (!mounted || !user.isAdmin) return;
+    try {
+      final db = await DB.instance();
+      final flag = await db.query('settings',
+          where: 'key = ?', whereArgs: ['staff_prompt_done']);
+      final done = flag.isNotEmpty && flag.first['value'] == '1';
+      if (done) return;
+      final users = await authP.listUsers();
+      if (users.length <= 1 && mounted) {
+        await _showStaffPrompt();
+      }
+      await db.insert('settings', {'key': 'staff_prompt_done', 'value': '1'});
+    } catch (_) {
+    }
+  }
+
+  Future<bool> _showLegacyDataDialog(LegacyDataInfo legacy) async {
+    return await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (ctx) => PopScope(
+            canPop: false,
+            child: AlertDialog(
+              title: const Text('Old data on this device'),
+              content: Text(
+                'This device has data that is not part of your cloud '
+                'shop:\n\n'
+                '• ${legacy.sales} old sales\n'
+                '• ${legacy.unsyncedProducts} products never synced\n\n'
+                'Start fresh to see ONLY your shop\'s shared data on this '
+                'device (recommended), or upload the old data to your shop.',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  child: const Text('Upload to my shop'),
+                ),
+                FilledButton(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                  ),
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text('Start fresh (recommended)'),
+                ),
+              ],
+            ),
+          ),
+        ) ??
+        false;
+  }
+
+  Future<void> _showStaffPrompt() async {
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Add your staff'),
+        content: const Text(
+          'Create till accounts for your cashiers — they sign in on the '
+          'Staff tab with the email + password you set, and every sale '
+          'they make lands in your shared shop data.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Later'),
+          ),
+          FilledButton.icon(
+            onPressed: () {
+              Navigator.pop(ctx);
+              Navigator.of(context).push(MaterialPageRoute(
+                  builder: (_) => const UsersScreen()));
+            },
+            icon: const Icon(Icons.person_add_alt_rounded, size: 18),
+            label: const Text('Add staff'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
@@ -293,6 +414,18 @@ class _HomeShellState extends State<HomeShell> {
                 _showChangePassword(context);
               },
             ),
+            if (user.isAdmin)
+              ListTile(
+                leading: const Icon(Icons.manage_accounts_outlined,
+                    color: AppColors.muted),
+                title: const Text('Staff accounts'),
+                subtitle: const Text('Add cashiers, reset passwords'),
+                onTap: () {
+                  Navigator.pop(sheet);
+                  Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const UsersScreen()));
+                },
+              ),
             ListTile(
               leading: const Icon(Icons.logout_rounded, color: AppColors.danger),
               title: const Text('Sign out',

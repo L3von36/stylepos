@@ -43,12 +43,22 @@ class FakeGateway implements CloudGateway {
   }
 
   @override
-  Future<String?> uploadProductPhoto(String cloudId, String filePath) =>
+  Future<String?> uploadProductPhoto(String cloudId, dynamic bytes) =>
       Future.value('products/$cloudId.jpg');
 
   @override
   Future<List<int>?> downloadProductPhoto(String storagePath) =>
       Future.value(null);
+
+  final settingsRows = <String, String>{};
+
+  @override
+  Future<String?> fetchSetting(String key) async => settingsRows[key];
+
+  @override
+  Future<void> upsertSetting(String key, String value) async {
+    settingsRows[key] = value;
+  }
 
   @override
   Future<List<Map<String, dynamic>>> fetchAppUsersByIds(

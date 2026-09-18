@@ -1,53 +1,45 @@
-import 'dart:io' show Directory, File, Platform;
-
 import 'package:file_selector/file_selector.dart';
+import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 
 import '../widgets/ui.dart';
+import 'photo_store.dart';
+
+export 'photo_store.dart'
+    show photoExists, photoPath, photoReadBytes, photoSave;
 
 /// Offline product-photo pipeline.
 ///
 /// Photos are picked with the system camera/gallery on phones
-/// (image_picker) or a file dialog on desktop (file_selector), then
-/// copied into `<app support>/product_images/`. Only the relative
-/// filename is stored in the database, so the DB stays portable.
+/// (image_picker), a file dialog on desktop (file_selector) or the
+/// browser file picker on web — then stored by [ProductImages]'s
+/// platform store: files under `<app support>/product_images/` on
+/// native devices, data URLs inside the local database on web.
+/// Only the relative ref is stored in the database, so it stays
+/// portable.
 class ProductImages {
-  static const _dirName = 'product_images';
-  static String? _baseDir;
+  /// Resolves the images folder once at startup (IO only; no-op on web).
+  static Future<void> init() => ensureInit();
 
-  /// Resolves the images folder once at startup so widgets can turn a
-  /// stored relative filename into a full path synchronously.
-  static Future<void> init() async {
-    final support = await getApplicationSupportDirectory();
-    final dir = Directory(p.join(support.path, _dirName));
-    if (!dir.existsSync()) dir.createSync(recursive: true);
-    _baseDir = dir.path;
-  }
+  /// Full path for a stored relative filename (IO; empty on web).
+  static String path(String relativeName) => photoPath(relativeName);
 
-  /// Full path for a stored relative filename.
-  static String path(String relativeName) =>
-      p.join(_baseDir ?? '', relativeName);
-
-  /// Opens a picker and stores the chosen photo. Returns the relative
-  /// filename to persist on the product, or null when cancelled.
+  /// Opens a picker and stores the chosen photo. Returns the ref to
+  /// persist on the product, or null when cancelled.
   static Future<String?> pick(BuildContext context) async {
     try {
-      final XFile? picked;
-      if (!Platform.isAndroid && !Platform.isIOS) {
-        // Desktop: native open-file dialog.
-        final file = await openFile(
-          acceptedTypeGroups: const [
-            XTypeGroup(
-              label: 'Images',
-              extensions: ['jpg', 'jpeg', 'png', 'webp'],
-            ),
-          ],
+      XFile? picked;
+      if (kIsWeb) {
+        // Browser: image_picker serves the native file picker.
+        picked = await ImagePicker().pickImage(
+          source: ImageSource.gallery, // ignored by the web implementation
+          imageQuality: 82,
+          maxWidth: 1600,
         );
-        picked = file;
-      } else {
+      } else if (defaultTargetPlatform == TargetPlatform.android ||
+          defaultTargetPlatform == TargetPlatform.iOS) {
         // Phones: let the user choose camera or gallery.
         final source = await showModalBottomSheet<ImageSource>(
           context: context,
@@ -102,15 +94,24 @@ class ProductImages {
           imageQuality: 82,
           maxWidth: 1600,
         );
+      } else {
+        // Desktop: native open-file dialog.
+        picked = await openFile(
+          acceptedTypeGroups: const [
+            XTypeGroup(
+              label: 'Images',
+              extensions: ['jpg', 'jpeg', 'png', 'webp'],
+            ),
+          ],
+        );
       }
       if (picked == null) return null;
 
-      final ext = p.extension(picked.path).toLowerCase();
-      final name =
-          'img_${DateTime.now().millisecondsSinceEpoch}$ext';
-      await _ensureDir();
-      await File(picked.path).copy(p.join(_baseDir!, name));
-      return name;
+      final bytes = await picked.readAsBytes();
+      var ext = p.extension(picked.name).toLowerCase();
+      if (ext.isEmpty || ext.length > 5) ext = '.jpg';
+      final name = 'img_${DateTime.now().millisecondsSinceEpoch}$ext';
+      return await photoSave(name, bytes);
     } catch (_) {
       // Picker unavailable / permission denied — treat as cancelled.
       return null;
@@ -118,18 +119,5 @@ class ProductImages {
   }
 
   /// Deletes a stored photo (best effort) after it was replaced.
-  static Future<void> delete(String relativeName) async {
-    try {
-      final f = File(path(relativeName));
-      if (f.existsSync()) f.deleteSync();
-    } catch (_) {
-      // Best effort only — orphaned files are harmless.
-    }
-  }
-
-  static Future<void> _ensureDir() async {
-    if (_baseDir == null) await init();
-    final dir = Directory(_baseDir!);
-    if (!dir.existsSync()) dir.createSync(recursive: true);
-  }
+  static Future<void> delete(String ref) => photoDelete(ref);
 }

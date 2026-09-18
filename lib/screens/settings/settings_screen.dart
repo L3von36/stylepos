@@ -2,6 +2,7 @@ import 'dart:io' show File, Platform, exit;
 
 import 'package:file_picker/file_picker.dart';
 import 'package:file_selector/file_selector.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 import 'package:provider/provider.dart';
@@ -336,57 +337,88 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
               const SizedBox(height: AppSpace.s4),
 
-              // --- backup & restore ---
-              SectionCard(
-                icon: Icons.backup_outlined,
-                title: 'Backup & restore',
-                subtitle:
-                    'One file with your whole shop — database + product photos',
-                children: [
-                  Text(
-                    'Export a backup and keep it away from this device '
-                    '(WhatsApp to yourself, email, USB, Google Drive). '
-                    'If this phone is ever lost or replaced, Restore puts '
-                    'everything back. Make a fresh backup at least weekly.',
-                    style: TextStyle(
-                        fontSize: 12.5,
-                        color: AppColors.muted,
-                        height: 1.45),
-                  ),
-                  const SizedBox(height: AppSpace.s3),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: FilledButton.icon(
-                          style: FilledButton.styleFrom(
-                              minimumSize: const Size(0, 46)),
-                          onPressed: _busy ? null : _exportBackup,
-                          icon: const Icon(Icons.file_upload_outlined,
-                              size: 18),
-                          label: const Text('Export backup'),
-                        ),
-                      ),
-                      const SizedBox(width: AppSpace.s3),
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          style: OutlinedButton.styleFrom(
-                            minimumSize: const Size(0, 46),
-                            foregroundColor: AppColors.danger,
+              // --- backup & restore (needs a local file system) ---
+              if (!kIsWeb) ...[
+                SectionCard(
+                  icon: Icons.backup_outlined,
+                  title: 'Backup & restore',
+                  subtitle:
+                      'One file with your whole shop — database + product photos',
+                  children: [
+                    Text(
+                      'Export a backup and keep it away from this device '
+                      '(WhatsApp to yourself, email, USB, Google Drive). '
+                      'If this phone is ever lost or replaced, Restore puts '
+                      'everything back. Make a fresh backup at least weekly.',
+                      style: TextStyle(
+                          fontSize: 12.5,
+                          color: AppColors.muted,
+                          height: 1.45),
+                    ),
+                    const SizedBox(height: AppSpace.s3),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: FilledButton.icon(
+                            style: FilledButton.styleFrom(
+                                minimumSize: const Size(0, 46)),
+                            onPressed: _busy ? null : _exportBackup,
+                            icon: const Icon(Icons.file_upload_outlined,
+                                size: 18),
+                            label: const Text('Export backup'),
                           ),
-                          onPressed: _busy ? null : _restoreBackup,
-                          icon: const Icon(Icons.restore_outlined, size: 18),
-                          label: const Text('Restore'),
+                        ),
+                        const SizedBox(width: AppSpace.s3),
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            style: OutlinedButton.styleFrom(
+                              minimumSize: const Size(0, 46),
+                              foregroundColor: AppColors.danger,
+                            ),
+                            onPressed: _busy ? null : _restoreBackup,
+                            icon: const Icon(Icons.restore_outlined, size: 18),
+                            label: const Text('Restore'),
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (_busy) ...[
+                      const SizedBox(height: AppSpace.s3),
+                      const LinearProgressIndicator(),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: AppSpace.s4),
+              ] else ...[
+                Container(
+                  padding: const EdgeInsets.all(AppSpace.s3),
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceTint,
+                    borderRadius: BorderRadius.circular(AppRadius.sm),
+                    border: Border.all(color: AppColors.borderSoft),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.info_outline_rounded,
+                          size: 16, color: AppColors.faint),
+                      const SizedBox(width: 8),
+                      const Expanded(
+                        child: Text(
+                          'File backups are not available on the web — your '
+                          'data is kept in this browser and synced to the '
+                          'cloud. Use the phone or PC app for file backups.',
+                          style: TextStyle(
+                              fontFamily: 'Carlito',
+                              fontSize: 12,
+                              color: AppColors.muted,
+                              height: 1.35),
                         ),
                       ),
                     ],
                   ),
-                  if (_busy) ...[
-                    const SizedBox(height: AppSpace.s3),
-                    const LinearProgressIndicator(),
-                  ],
-                ],
-              ),
-              const SizedBox(height: AppSpace.s4),
+                ),
+                const SizedBox(height: AppSpace.s4),
+              ],
 
               // --- about ---
               Card(

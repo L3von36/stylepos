@@ -15,28 +15,29 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _email = TextEditingController(text: 'admin@stylepos.app');
+  final _email = TextEditingController();
   final _password = TextEditingController();
   bool _obscure = true;
   bool _busy = false;
   String? _error;
 
-  /// 0 = staff (offline till account), 1 = cloud (sync between devices).
+  /// 0 = Manager (cloud shop account), 1 = Staff (this device's till
+  /// account, created by the Manager).
   int _tab = 0;
-  final _cloudName = TextEditingController();
-  final _cloudEmail = TextEditingController();
-  final _cloudPass = TextEditingController();
-  bool _cloudObscure = true;
-  bool _cloudBusy = false;
-  String? _cloudError;
+  final _managerName = TextEditingController();
+  final _managerEmail = TextEditingController();
+  final _managerPass = TextEditingController();
+  bool _managerObscure = true;
+  bool _managerBusy = false;
+  String? _managerError;
 
   @override
   void dispose() {
     _email.dispose();
     _password.dispose();
-    _cloudName.dispose();
-    _cloudEmail.dispose();
-    _cloudPass.dispose();
+    _managerName.dispose();
+    _managerEmail.dispose();
+    _managerPass.dispose();
     super.dispose();
   }
 
@@ -60,28 +61,36 @@ class _LoginScreenState extends State<LoginScreen> {
     // On success AuthProvider notifies and _Root swaps to HomeShell.
   }
 
-  Future<void> _cloudSubmit({required bool create}) async {
-    final email = _cloudEmail.text.trim();
-    final pass = _cloudPass.text;
-    setState(() => _cloudError = null);
+  Future<void> _managerSubmit({required bool create}) async {
+    final email = _managerEmail.text.trim();
+    final pass = _managerPass.text;
+    setState(() => _managerError = null);
     if (!email.contains('@')) {
-      setState(() => _cloudError = 'Enter a valid email.');
+      setState(() => _managerError = 'Enter a valid email.');
       return;
     }
     if (pass.length < 6) {
-      setState(() => _cloudError = 'Password must be at least 6 characters.');
+      setState(() => _managerError = 'Password must be at least 6 characters.');
       return;
     }
-    setState(() => _cloudBusy = true);
+    if (create && _managerName.text.trim().isEmpty) {
+      setState(() => _managerError = 'Enter your shop name to create a new shop.');
+      return;
+    }
+    setState(() => _managerBusy = true);
     final err = create
         ? await CloudAuth.signUp(
-            email: email, password: pass, name: _cloudName.text)
+            email: email,
+            password: pass,
+            name: _managerName.text,
+            shopName: _managerName.text,
+          )
         : await CloudAuth.signIn(email: email, password: pass);
     if (!mounted) return;
     if (err != null) {
       setState(() {
-        _cloudBusy = false;
-        _cloudError = err == 'confirm'
+        _managerBusy = false;
+        _managerError = err == 'confirm'
             ? 'Account created! Check your email for a confirmation link, '
                 'then sign in here.'
             : err;
@@ -92,8 +101,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
   void _toggleObscure() => setState(() => _obscure = !_obscure);
 
-  void _toggleCloudObscure() =>
-      setState(() => _cloudObscure = !_cloudObscure);
+  void _toggleManagerObscure() =>
+      setState(() => _managerObscure = !_managerObscure);
 
   /// Public so the stateless form widgets can switch the tab safely.
   void switchTab(int t) => setState(() => _tab = t);
@@ -209,7 +218,7 @@ class _BrandPane extends StatelessWidget {
           ),
           const SizedBox(height: AppSpace.s4),
           Text(
-            'Fast checkout, live stock levels and clear reports —\nall offline, right on your own device.',
+            'Fast checkout, live stock levels and clear reports —\nyour shop in your pocket, synced to every device.',
             style: TextStyle(
               fontFamily: 'Carlito',
               fontSize: 14.5,
@@ -221,8 +230,8 @@ class _BrandPane extends StatelessWidget {
           const _FeatureRow(Icons.bolt_rounded, 'Scan & sell in seconds',
               'Barcode scanner ready, keyboard friendly'),
           const SizedBox(height: AppSpace.s4),
-          const _FeatureRow(Icons.inventory_2_outlined, 'Per-variant stock',
-              'Every size and color tracked separately'),
+          const _FeatureRow(Icons.sync_rounded, 'Every device, one shop',
+              'Phone, PC and web share the same live data'),
           const SizedBox(height: AppSpace.s4),
           const _FeatureRow(Icons.insights_rounded, 'Reports that matter',
               'Revenue, best sellers and category share'),
@@ -350,13 +359,13 @@ class _LoginForm extends StatelessWidget {
               segments: const [
                 ButtonSegment(
                   value: 0,
-                  label: Text('Staff'),
-                  icon: Icon(Icons.badge_outlined, size: 18),
+                  label: Text('Manager'),
+                  icon: Icon(Icons.admin_panel_settings_outlined, size: 18),
                 ),
                 ButtonSegment(
                   value: 1,
-                  label: Text('Cloud'),
-                  icon: Icon(Icons.cloud_outlined, size: 18),
+                  label: Text('Staff'),
+                  icon: Icon(Icons.badge_outlined, size: 18),
                 ),
               ],
               selected: {state._tab},
@@ -364,9 +373,9 @@ class _LoginForm extends StatelessWidget {
             ),
             const SizedBox(height: AppSpace.s5),
             if (state._tab == 0)
-              _StaffFields(state: state)
+              _ManagerFields(state: state)
             else
-              _CloudFields(state: state),
+              _StaffFields(state: state),
           ],
         ),
       ),
@@ -374,7 +383,7 @@ class _LoginForm extends StatelessWidget {
   }
 }
 
-/// Staff (offline till) sign-in — the original email + password form.
+/// Staff (offline till) sign-in — local account created by the Manager.
 class _StaffFields extends StatelessWidget {
   final _LoginScreenState state;
   const _StaffFields({required this.state});
@@ -388,7 +397,6 @@ class _StaffFields extends StatelessWidget {
           controller: state._email,
           keyboardType: TextInputType.emailAddress,
           textInputAction: TextInputAction.next,
-          autofocus: true,
           decoration: const InputDecoration(
             labelText: 'Email',
             prefixIcon: Icon(Icons.alternate_email_rounded, size: 20),
@@ -400,6 +408,7 @@ class _StaffFields extends StatelessWidget {
         TextFormField(
           controller: state._password,
           obscureText: state._obscure,
+          autofocus: true,
           onFieldSubmitted: (_) => state._submit(),
           decoration: InputDecoration(
             labelText: 'Password',
@@ -442,10 +451,12 @@ class _StaffFields extends StatelessWidget {
             children: [
               const Icon(Icons.info_outline_rounded, size: 16, color: AppColors.faint),
               const SizedBox(width: 8),
-              Expanded(
+              const Expanded(
                 child: Text(
-                  'First run? Sign in with admin@stylepos.app / admin123, then change the password.',
-                  style: const TextStyle(
+                  'Staff accounts are created by your Manager '
+                  '(Settings → Staff accounts) and work offline on this '
+                  'device. Managers: use the Manager tab.',
+                  style: TextStyle(
                       fontFamily: 'Carlito', fontSize: 12, color: AppColors.muted, height: 1.35),
                 ),
               ),
@@ -457,11 +468,12 @@ class _StaffFields extends StatelessWidget {
   }
 }
 
-/// Cloud tab — create the shop's cloud account (first account = Manager)
-/// or sign in on an additional device to pull the shared shop data.
-class _CloudFields extends StatelessWidget {
+/// Manager tab — the cloud shop account. Sign in on any device to open
+/// the same shop; "Create shop account" starts a NEW shop (first account
+/// becomes the Manager).
+class _ManagerFields extends StatelessWidget {
   final _LoginScreenState state;
-  const _CloudFields({required this.state});
+  const _ManagerFields({required this.state});
 
   @override
   Widget build(BuildContext context) {
@@ -469,18 +481,19 @@ class _CloudFields extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         TextField(
-          controller: state._cloudName,
+          controller: state._managerName,
           textInputAction: TextInputAction.next,
           decoration: const InputDecoration(
-            labelText: 'Your name (used once, for the staff list)',
-            prefixIcon: Icon(Icons.person_outline_rounded, size: 20),
+            labelText: 'Shop name (when creating a new shop)',
+            prefixIcon: Icon(Icons.storefront_outlined, size: 20),
           ),
         ),
         const SizedBox(height: AppSpace.s4),
         TextField(
-          controller: state._cloudEmail,
+          controller: state._managerEmail,
           keyboardType: TextInputType.emailAddress,
           textInputAction: TextInputAction.next,
+          autofocus: true,
           decoration: const InputDecoration(
             labelText: 'Email',
             prefixIcon: Icon(Icons.alternate_email_rounded, size: 20),
@@ -488,23 +501,23 @@ class _CloudFields extends StatelessWidget {
         ),
         const SizedBox(height: AppSpace.s4),
         TextField(
-          controller: state._cloudPass,
-          obscureText: state._cloudObscure,
-          onSubmitted: (_) => state._cloudSubmit(create: false),
+          controller: state._managerPass,
+          obscureText: state._managerObscure,
+          onSubmitted: (_) => state._managerSubmit(create: false),
           decoration: InputDecoration(
             labelText: 'Password',
             prefixIcon: const Icon(Icons.lock_outline_rounded, size: 20),
             suffixIcon: IconButton(
-              icon: Icon(state._cloudObscure
+              icon: Icon(state._managerObscure
                   ? Icons.visibility_outlined
                   : Icons.visibility_off_outlined),
-              onPressed: state._toggleCloudObscure,
+              onPressed: state._toggleManagerObscure,
             ),
           ),
         ),
-        if (state._cloudError != null) ...[
+        if (state._managerError != null) ...[
           const SizedBox(height: AppSpace.s4),
-          _ErrorBox(text: state._cloudError!),
+          _ErrorBox(text: state._managerError!),
         ],
         const SizedBox(height: 20),
         Row(
@@ -512,25 +525,27 @@ class _CloudFields extends StatelessWidget {
             Expanded(
               child: OutlinedButton(
                 style: OutlinedButton.styleFrom(minimumSize: const Size(0, 48)),
-                onPressed: state._cloudBusy
+                onPressed: state._managerBusy
                     ? null
-                    : () => state._cloudSubmit(create: false),
+                    : () => state._managerSubmit(create: false),
                 child: const Text('Sign in'),
               ),
             ),
             const SizedBox(width: AppSpace.s3),
             Expanded(
-              child: FilledButton(
+              flex: 2,
+              child: FilledButton.icon(
                 style: FilledButton.styleFrom(minimumSize: const Size(0, 48)),
-                onPressed: state._cloudBusy
+                onPressed: state._managerBusy
                     ? null
-                    : () => state._cloudSubmit(create: true),
-                child: const Text('Create account'),
+                    : () => state._managerSubmit(create: true),
+                icon: const Icon(Icons.add_business_rounded, size: 18),
+                label: const Text('Create shop account'),
               ),
             ),
           ],
         ),
-        if (state._cloudBusy) ...[
+        if (state._managerBusy) ...[
           const SizedBox(height: AppSpace.s3),
           const LinearProgressIndicator(),
         ],
@@ -544,15 +559,15 @@ class _CloudFields extends StatelessWidget {
           ),
           child: Row(
             children: [
-              const Icon(Icons.cloud_upload_outlined, size: 16, color: AppColors.faint),
+              const Icon(Icons.admin_panel_settings_outlined, size: 16, color: AppColors.faint),
               const SizedBox(width: 8),
-              Expanded(
+              const Expanded(
                 child: Text(
-                  'New shop? Create account — the first account becomes the '
-                  'Manager. More phones or the PC? Sign in with the same '
-                  'shop account and everything syncs: products, stock, '
-                  'sales and live reports.',
-                  style: const TextStyle(
+                  'The cloud account IS the Manager account. New shop? '
+                  'Create one — you become the Manager and can add staff '
+                  'accounts from Settings. Same account on another phone, '
+                  'the PC or the web shows ONLY this shop\'s data.',
+                  style: TextStyle(
                       fontFamily: 'Carlito', fontSize: 12, color: AppColors.muted, height: 1.35),
                 ),
               ),

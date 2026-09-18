@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -209,17 +210,20 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
         ),
         actions: _stage == _Stage.done
             ? [
-                if (Platform.isAndroid || Platform.isIOS)
+                // Share / Save rely on a local file system (not on web);
+                // on web, Print opens the browser dialog which can save PDFs.
+                if (!kIsWeb && (Platform.isAndroid || Platform.isIOS))
                   TextButton.icon(
                     onPressed: _sharePdf,
                     icon: const Icon(Icons.share_outlined, size: 17),
                     label: const Text('Share'),
                   ),
-                TextButton.icon(
-                  onPressed: _savePdf,
-                  icon: const Icon(Icons.save_outlined, size: 17),
-                  label: const Text('Save PDF'),
-                ),
+                if (!kIsWeb)
+                  TextButton.icon(
+                    onPressed: _savePdf,
+                    icon: const Icon(Icons.save_outlined, size: 17),
+                    label: const Text('Save PDF'),
+                  ),
                 TextButton.icon(
                   onPressed: _printPdf,
                   icon: const Icon(Icons.print_outlined, size: 17),

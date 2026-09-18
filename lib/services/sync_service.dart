@@ -1,13 +1,12 @@
 import 'dart:async';
-import 'dart:io' show File;
 
 import 'package:flutter/foundation.dart';
-import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+import 'package:sqflite/sqflite.dart' show ConflictAlgorithm, Database;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
 import '../data/database.dart';
-import 'images.dart';
+import 'photo_store.dart';
 
 const _uuid = Uuid();
 
@@ -28,10 +27,16 @@ abstract class CloudGateway {
   Future<void> upsertRows(String table, List<Map<String, dynamic>> rows);
 
   /// Uploads a product photo; returns the storage path it was stored at.
-  Future<String?> uploadProductPhoto(String cloudId, String filePath);
+  Future<String?> uploadProductPhoto(String cloudId, Uint8List bytes);
 
   /// Downloads a product photo; null when unavailable.
   Future<List<int>?> downloadProductPhoto(String storagePath);
+
+  /// Reads one cloud settings row (shop-scoped by RLS); null when missing.
+  Future<String?> fetchSetting(String key);
+
+  /// Creates or updates one cloud settings row.
+  Future<void> upsertSetting(String key, String value);
 
   /// Cloud staff profiles (app_users) for the given auth ids — used to
   /// attribute pulled sales to the right cashier name on this device.
@@ -64,13 +69,13 @@ class SupabaseGateway implements CloudGateway {
   }
 
   @override
-  Future<String?> uploadProductPhoto(String cloudId, String filePath) async {
+  Future<String?> uploadProductPhoto(String cloudId, Uint8List bytes) async {
     try {
       const path = 'products'; // objects go to products/<cloudId>.jpg
       final object = '$path/$cloudId.jpg';
-      await _c.storage.from('product-images').upload(
+      await _c.storage.from('product-images').uploadBinary(
             object,
-            File(filePath),
+            bytes,
             fileOptions: const FileOptions(
                 upsert: true, contentType: 'image/jpeg'),
           );
@@ -103,6 +108,27 @@ class SupabaseGateway implements CloudGateway {
       return [];
     }
   }
+
+  @override
+  Future<String?> fetchSetting(String key) async {
+    try {
+      final rows = await _c.from('settings').select('value').eq('key', key);
+      if (rows.isEmpty) return null;
+      return rows.first['value'] as String?;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  @override
+  Future<void> upsertSetting(String key, String value) async {
+    // shop_id is stamped by the column default (my_shop_id()); the touch
+    // trigger keeps updated_at fresh so Realtime notifies other devices.
+    await _c.from('settings').upsert(
+          {'key': key, 'value': value},
+          onConflict: 'shop_id,key',
+        );
+  }
 }
 
 enum SyncPhase { idle, syncing, error }
@@ -130,6 +156,10 @@ class SyncService extends ChangeNotifier {
   static final SyncService I = SyncService();
 
   final CloudGateway _gateway;
+
+  /// Gateway access for services that need a direct cloud call
+  /// (e.g. the clear-sales-history settings marker).
+  CloudGateway get gateway => _gateway;
 
   /// Overridable sign-in probe (tests pass `() => true`).
   final bool Function()? signedInCheck;
@@ -250,6 +280,9 @@ class SyncService extends ChangeNotifier {
     lastError = null;
     notifyListeners();
     try {
+      // Another device may have cleared the sales history — honour that
+      // before anything else so old sales never resurrect here.
+      await _applySalesClearMarker();
       await _bootstrapIfNeeded();
       // Push order respects foreign keys: parents before children.
       await _pushCategories();
@@ -349,6 +382,42 @@ class SyncService extends ChangeNotifier {
         conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
+  // ------------------------------------------------- sales history clear
+
+  /// Cloud marker timestamp of the last "clear sales history" action, or
+  /// null when the shop never cleared.
+  Future<String?> _salesClearedMarker() => _gateway.fetchSetting('sales_cleared_at');
+
+  /// If the shop's sales history was cleared on ANOTHER device, wipe the
+  /// local sales tables too (otherwise this device would keep — and later
+  /// re-push — the old receipts the Manager just purged).
+  Future<void> _applySalesClearMarker() async {
+    final marker = await _salesClearedMarker();
+    if (marker == null || marker.isEmpty) return;
+    final db = await _db;
+    final ackRows = await db.query('settings',
+        where: 'key = ?', whereArgs: ['sales_cleared_ack']);
+    final ack = ackRows.isEmpty ? '' : (ackRows.first['value'] as String? ?? '');
+    if (ack == marker) return;
+    await wipeLocalSales(db);
+    await db.insert('settings',
+        {'key': 'sales_cleared_ack', 'value': marker},
+        conflictAlgorithm: ConflictAlgorithm.replace);
+    debugPrint('sales history cleared in the cloud — local copy wiped');
+  }
+
+  /// Deletes all local sales history (children first). Cloud deletion is
+  /// the caller's job; here we only clean the local mirror.
+  Future<void> wipeLocalSales(Database db) async {
+    await db.execute('DELETE FROM sale_items');
+    await db.execute('DELETE FROM stock_movements');
+    await db.execute('DELETE FROM sales');
+    // Reset pull cursors so nothing stale is assumed about the cloud.
+    for (final t in kSalesTables) {
+      await _setLastPull(t, 0);
+    }
+  }
+
   Future<List<Map<String, Object?>>> _byCloudId(String table, Object id) async {
     final db = await _db;
     return db.query(table, where: 'cloud_id = ?', whereArgs: [id], limit: 1);
@@ -416,13 +485,14 @@ class SyncService extends ChangeNotifier {
       await db.update('products', {'cloud_id': cloudId},
           where: 'id = ?', whereArgs: [r['id']]);
 
-      // Photo: push the local file, then reference the storage path.
+      // Photo: push the local bytes, then reference the storage path.
       String? cloudImage;
       final localImage = r['image'] as String?;
       if (localImage != null) {
-        final f = File(ProductImages.path(localImage));
-        if (f.existsSync()) {
-          cloudImage = await _gateway.uploadProductPhoto(cloudId, f.path);
+        final bytes =
+            photoExists(localImage) ? photoReadBytes(localImage) : null;
+        if (bytes != null) {
+          cloudImage = await _gateway.uploadProductPhoto(cloudId, bytes);
         }
       }
 
@@ -1063,16 +1133,15 @@ class SyncService extends ChangeNotifier {
   Future<({String localName})?> _takeCloudPhoto(
       String cloudId, String? cloudImage, String? currentLocal) async {
     if (cloudImage == null) return null;
-    if (currentLocal != null &&
-        File(ProductImages.path(currentLocal)).existsSync()) {
+    if (currentLocal != null && photoExists(currentLocal)) {
       return (localName: currentLocal);
     }
     final bytes = await _gateway.downloadProductPhoto(cloudImage);
     if (bytes == null || bytes.isEmpty) return null;
     final name = '$cloudId.jpg';
     try {
-      await File(ProductImages.path(name)).writeAsBytes(bytes, flush: true);
-      return (localName: name);
+      final ref = await photoSave(name, Uint8List.fromList(bytes));
+      return (localName: ref);
     } catch (_) {
       return null;
     }
@@ -1092,8 +1161,7 @@ class SyncService extends ChangeNotifier {
       return (localName: null);
     }
     final changed = cloudImage != lastCloudImage;
-    final fileMissing =
-        localImage == null || !File(ProductImages.path(localImage)).existsSync();
+    final fileMissing = localImage == null || !photoExists(localImage);
     if (!changed && !fileMissing) {
       return (localName: localImage);
     }

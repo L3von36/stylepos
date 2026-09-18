@@ -43,6 +43,7 @@ Future<void> main() async {
         url: CloudConfig.url, publishableKey: CloudConfig.publishableKey);
     CloudAuth.auth = auth; // landing-screen cloud sign-in maps to local staff
     SyncService.I.onSynced = () async {
+      await settings.load(); // shop settings refresh after wipes/pulls
       await catalog.reload();
       await customers.reload();
       sales.bump(); // reports + POS strip refresh with cloud sales

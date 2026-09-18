@@ -1,12 +1,14 @@
 import 'dart:io' show Platform;
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
-import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+import 'package:sqflite/sqflite.dart';
 
 import '../models/category.dart';
 import '../models/product.dart';
 import '../services/hash.dart';
+import 'db_factory.dart';
 
 /// Opens (and creates/seeds on first run) the local SQLite database.
 /// Uses sqflite on Android and sqlite3 FFI on desktop (Windows).
@@ -28,14 +30,13 @@ class DB {
 
   static Future<Database> instance() async {
     if (_instance != null) return _instance!;
-    if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
-      sqfliteFfiInit();
-      databaseFactory = databaseFactoryFfi;
-    }
+    configureDatabaseFactory();
 
     final String dbPath;
     if (_dirOverride != null) {
       dbPath = p.join(_dirOverride!, 'stylepos.db');
+    } else if (kIsWeb) {
+      dbPath = 'stylepos.db'; // stored in the browser via sqlite3 wasm
     } else if (Platform.isAndroid || Platform.isIOS) {
       dbPath = p.join(await getDatabasesPath(), 'stylepos.db');
     } else {
@@ -235,10 +236,39 @@ class DB {
     return _instance!;
   }
 
-  static Future<void> _seed(Database db) async {
-    final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+  /// Erases EVERYTHING from the local database (used by the Manager's
+  /// "start fresh" tool when a device holds old pre-cloud data). Settings
+  /// get their defaults back; no demo catalog is re-seeded — the cloud
+  /// pull brings the shop's real data instead.
+  static Future<void> wipeAllData() async {
+    final db = await instance();
+    await db.transaction((txn) async {
+      for (final t in const [
+        'sale_items',
+        'stock_movements',
+        'sales',
+        'variants',
+        'products',
+        'categories',
+        'customers',
+        'users',
+        'settings',
+      ]) {
+        await txn.execute('DELETE FROM $t');
+      }
+    });
+    try {
+      // Restart autoincrement counters so fresh rows start from 1.
+      await db.execute(
+          "DELETE FROM sqlite_sequence WHERE name NOT IN ('users', 'categories', 'products', 'variants', 'customers', 'sales', 'sale_items', 'stock_movements')");
+      await db.execute(
+          "UPDATE sqlite_sequence SET seq = 0 WHERE name IN ('users', 'categories', 'products', 'variants', 'customers', 'sales', 'sale_items', 'stock_movements')");
+    } catch (_) {// sqlite_sequence may not exist yet — nothing to reset.
+    }
+    await _seedSettings(db);
+  }
 
-    // --- default settings ---
+  static Future<void> _seedSettings(Database db) async {
     final defaults = <String, String>{
       'shop_name': 'My Clothing Shop',
       'shop_address': '',
@@ -254,6 +284,13 @@ class DB {
     for (final e in defaults.entries) {
       await db.insert('settings', {'key': e.key, 'value': e.value});
     }
+  }
+
+  static Future<void> _seed(Database db) async {
+    final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+
+    // --- default settings ---
+    await _seedSettings(db);
 
     // --- default admin account ---
     final salt = newSalt();

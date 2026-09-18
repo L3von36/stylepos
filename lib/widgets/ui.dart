@@ -1,8 +1,6 @@
-import 'dart:io' show File;
-
 import 'package:flutter/material.dart';
 
-import '../services/images.dart';
+import '../services/photo_store.dart';
 
 /// StylePOS design system — built on the Material Design 3 (2021) spec.
 ///
@@ -850,14 +848,17 @@ class ProductThumb extends StatelessWidget {
     }
     final dpr = MediaQuery.devicePixelRatioOf(context);
     final decodeWidth = ((size ?? 320) * dpr).round().clamp(64, 1600);
+    final prov = photoProvider(name, cacheWidth: decodeWidth);
+    if (prov == null) {
+      return ClipRRect(borderRadius: BorderRadius.circular(radius), child: _fallback());
+    }
     return ClipRRect(
       borderRadius: BorderRadius.circular(radius),
-      child: Image.file(
-        File(ProductImages.path(name)),
+      child: Image(
+        image: prov,
         width: size,
         height: size,
         fit: BoxFit.cover,
-        cacheWidth: decodeWidth,
         errorBuilder: (_, _, _) => _fallback(),
       ),
     );

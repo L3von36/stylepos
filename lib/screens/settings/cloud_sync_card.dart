@@ -4,9 +4,11 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../services/cloud_auth.dart';
 import '../../services/sync_service.dart';
 import '../../widgets/ui.dart';
+import 'users_screen.dart';
 
-/// "Cloud sync" settings card: status, manual sync trigger and sign-out.
-/// Account creation / sign-in lives on the landing screen's Cloud tab.
+/// "Cloud sync" settings card: shop identity, status, manual sync,
+/// manager reset tools and sign-out. Account creation / sign-in lives
+/// on the landing screen's Manager tab.
 class CloudSyncCard extends StatefulWidget {
   const CloudSyncCard({super.key});
 
@@ -17,11 +19,13 @@ class CloudSyncCard extends StatefulWidget {
 class _CloudSyncCardState extends State<CloudSyncCard> {
   bool _busy = false;
   String? _role;
+  Map<String, String> _shop = const {};
 
   @override
   void initState() {
     super.initState();
     _loadRole();
+    _loadShop();
   }
 
   SupabaseClient get _c => Supabase.instance.client;
@@ -29,6 +33,19 @@ class _CloudSyncCardState extends State<CloudSyncCard> {
   Future<void> _loadRole() async {
     final role = await CloudAuth.currentRole();
     if (mounted) setState(() => _role = role);
+  }
+
+  Future<void> _loadShop() async {
+    try {
+      var shop = await CloudAuth.fetchMyShop();
+      shop ??= await CloudAuth.rememberedShop();
+      if (mounted) setState(() => _shop = shop!);
+    } catch (_) {
+      try {
+        final remembered = await CloudAuth.rememberedShop();
+        if (mounted) setState(() => _shop = remembered);
+      } catch (_) {}
+    }
   }
 
   String _statusLine(SyncService sync) {
@@ -49,10 +66,87 @@ class _CloudSyncCardState extends State<CloudSyncCard> {
     return '${d.inDays} d ago';
   }
 
+  Future<void> _confirmEraseDevice() async {
+    final sure = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Erase this device\'s data?'),
+        content: const Text(
+          'Everything on THIS device is deleted, then your shop\'s '
+          'cloud data is pulled fresh. Other devices are not affected. '
+          'Use this if this phone/PC shows old or wrong data.',
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel')),
+          FilledButton(
+            style: FilledButton.styleFrom(
+                backgroundColor: AppColors.danger,
+                foregroundColor: Colors.white),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Erase & re-pull'),
+          ),
+        ],
+      ),
+    );
+    if (sure != true || !mounted) return;
+    setState(() => _busy = true);
+    try {
+      await CloudAuth.eraseLocalData();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Device wiped — pulling your shop data…'),
+      ));
+      await SyncService.I.run();
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _confirmClearSales() async {
+    final sure = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Clear sales history everywhere?'),
+        content: const Text(
+          'ALL sales, line items and stock movements are deleted from '
+          'the cloud AND from every device signed into this shop. '
+          'Products, customers and staff are kept. This cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel')),
+          FilledButton(
+            style: FilledButton.styleFrom(
+                backgroundColor: AppColors.danger,
+                foregroundColor: Colors.white),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Clear sales history'),
+          ),
+        ],
+      ),
+    );
+    if (sure != true || !mounted) return;
+    setState(() => _busy = true);
+    try {
+      final err = await CloudAuth.clearSalesHistoryEverywhere();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(err ?? 'Sales history cleared on all devices'),
+        backgroundColor: err == null ? null : AppColors.danger,
+      ));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final sync = SyncService.I;
     final signedIn = sync.signedIn;
+    final isAdmin = _role == 'admin';
 
     return ListenableBuilder(
       listenable: sync,
@@ -63,8 +157,8 @@ class _CloudSyncCardState extends State<CloudSyncCard> {
         children: [
           Text(
             'Your shop data lives on this device and syncs through your '
-            'Supabase cloud when there is internet. The till keeps working '
-            'normally with no internet and catches up later.'
+            'cloud when there is internet. Only YOUR shop\'s data is '
+            'visible on devices signed into this shop.'
             '${sync.realtimeLive ? ' Live updates are on: sales from other '
                 'devices appear here within seconds.' : ''}',
             style: TextStyle(
@@ -87,8 +181,8 @@ class _CloudSyncCardState extends State<CloudSyncCard> {
                   const Expanded(
                     child: Text(
                       'Not connected. Sign out of the till, then use the '
-                      'Cloud tab on the login screen to create or open '
-                      'your shop account.',
+                      'Manager tab on the login screen to open your shop '
+                      'account.',
                       style: TextStyle(
                           fontFamily: 'Carlito',
                           fontSize: 12,
@@ -146,6 +240,16 @@ class _CloudSyncCardState extends State<CloudSyncCard> {
                                 : AppColors.muted),
                         overflow: TextOverflow.ellipsis,
                       ),
+                      if ((_shop['name'] ?? '').isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          '${_shop['name']}'
+                          '${(_shop['code'] ?? '').isNotEmpty ? "  ·  shop code ${_shop['code']}" : ""}',
+                          style: const TextStyle(
+                              fontSize: 12, color: AppColors.faint),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -186,6 +290,55 @@ class _CloudSyncCardState extends State<CloudSyncCard> {
                 ),
               ],
             ),
+            const SizedBox(height: AppSpace.s3),
+            OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(minimumSize: const Size(0, 46)),
+              onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const UsersScreen())),
+              icon: const Icon(Icons.manage_accounts_outlined, size: 18),
+              label: const Text('Staff accounts (add cashiers)'),
+            ),
+            if (isAdmin) ...[
+              const SizedBox(height: AppSpace.s4),
+              Text(
+                'Manager tools',
+                style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.4,
+                    color: AppColors.faint),
+              ),
+              const SizedBox(height: AppSpace.s2),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size(0, 46),
+                        foregroundColor: AppColors.danger,
+                      ),
+                      onPressed:
+                          _busy ? null : () => _confirmEraseDevice(),
+                      icon: const Icon(Icons.restart_alt_rounded, size: 18),
+                      label: const Text('Erase this device & re-pull'),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpace.s3),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size(0, 46),
+                        foregroundColor: AppColors.danger,
+                      ),
+                      onPressed:
+                          _busy ? null : () => _confirmClearSales(),
+                      icon: const Icon(Icons.delete_sweep_outlined, size: 18),
+                      label: const Text('Clear sales history everywhere'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
             if (sync.isBusy) ...[
               const SizedBox(height: AppSpace.s3),
               const LinearProgressIndicator(),
