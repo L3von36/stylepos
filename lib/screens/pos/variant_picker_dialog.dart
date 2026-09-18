@@ -11,6 +11,20 @@ class VariantPickerDialog extends StatelessWidget {
   final Product product;
   const VariantPickerDialog({super.key, required this.product});
 
+  /// Starter-catalog variants carry machine SKUs derived from the product
+  /// barcode (`<barcode>-<size|OS>-<n>`) — noise for humans. Real SKUs the
+  /// manager typed are shown; derived ones are not.
+  bool _hasRealSku(Product product, ProductVariant v) {
+    final sku = v.sku.trim();
+    if (sku.isEmpty) return false;
+    final bc = (product.barcode ?? '').trim();
+    if (bc.isNotEmpty && sku.startsWith('$bc-')) {
+      final rest = sku.substring(bc.length + 1);
+      if (RegExp(r'^[^-]+-\d+$').hasMatch(rest)) return false;
+    }
+    return true;
+  }
+
   @override
   Widget build(BuildContext context) {
     final settings = context.watch<AppSettings>();
@@ -84,7 +98,11 @@ class VariantPickerDialog extends StatelessWidget {
                               fontWeight: FontWeight.w700,
                               color: soldOut ? AppColors.faint : AppColors.ink)),
                       subtitle: Text(
-                        soldOut ? 'Out of stock' : '${v.stock} in stock · ${v.sku}',
+                        soldOut
+                            ? 'Out of stock'
+                            : _hasRealSku(product, v)
+                                ? '${v.stock} in stock · ${v.sku}'
+                                : '${v.stock} in stock',
                         style: TextStyle(
                           fontFamily: 'Carlito',
                           fontSize: 12,

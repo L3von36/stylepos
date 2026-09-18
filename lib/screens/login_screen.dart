@@ -356,6 +356,25 @@ class _LoginForm extends StatelessWidget {
             ],
             SegmentedButton<int>(
               showSelectedIcon: false,
+              // Tab selection must read "active", not "success" — override
+              // the theme's mint secondaryContainer (kept for the payment
+              // toggle, where money=green is intentional) with the
+              // primary-toned selection used by chips and the nav rail.
+              style: ButtonStyle(
+                backgroundColor: WidgetStateProperty.resolveWith((states) =>
+                    states.contains(WidgetState.selected)
+                        ? AppColors.primarySoft
+                        : null),
+                foregroundColor: WidgetStateProperty.resolveWith((states) =>
+                    states.contains(WidgetState.selected)
+                        ? AppColors.primaryDark
+                        : null),
+                side: WidgetStateProperty.resolveWith((states) => BorderSide(
+                      color: states.contains(WidgetState.selected)
+                          ? AppColors.primary.withValues(alpha: 0.35)
+                          : AppColors.border,
+                    )),
+              ),
               segments: const [
                 ButtonSegment(
                   value: 0,

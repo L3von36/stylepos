@@ -127,12 +127,6 @@ class Product {
 
   bool get hasLowStock => variants.any((v) => v.stock <= lowStock);
 
-  String get priceLabel {
-    if (variants.isEmpty) return '-';
-    if (minPrice == maxPrice) return minPrice.toStringAsFixed(2);
-    return '${minPrice.toStringAsFixed(0)} - ${maxPrice.toStringAsFixed(0)}';
-  }
-
   Product copyWith({
     int? id,
     String? name,

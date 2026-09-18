@@ -139,7 +139,10 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
             const SizedBox(width: AppSpace.s3),
             Text(isNew ? 'Add variant' : 'Edit variant'),
           ]),
-          content: SingleChildScrollView(
+          content: SizedBox(
+            // Form-dialog width family (matches stock adjust / variant picker).
+            width: 430,
+            child: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -249,6 +252,7 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
                 ],
               ],
             ),
+          ),
           ),
           actions: [
             TextButton(onPressed: () => Navigator.pop(c), child: const Text('Cancel')),

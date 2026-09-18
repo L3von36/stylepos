@@ -135,10 +135,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Restore this backup?'),
-        content: const Text(
-            'Everything currently on this device — products, sales, '
-            'customers and photos — will be REPLACED by the backup. '
-            'This cannot be undone.'),
+        content: const SizedBox(
+          width: 400,
+          child: Text(
+              'Everything currently on this device — products, sales, '
+              'customers and photos — will be REPLACED by the backup. '
+              'This cannot be undone.'),
+        ),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),
@@ -163,9 +166,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
         barrierDismissible: false,
         builder: (ctx) => AlertDialog(
           title: const Text('Restore complete'),
-          content: const Text(
-              'Your shop data was restored. Close and reopen StylePOS '
-              'now to finish.'),
+          content: const SizedBox(
+            width: 360,
+            child: Text(
+                'Your shop data was restored. Close and reopen StylePOS '
+                'now to finish.'),
+          ),
           actions: [
             FilledButton(
               onPressed: () => exit(0),
@@ -200,10 +206,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const PageHeader(
-                title: 'Settings',
-                subtitle: 'Shop profile, currency, tax and loyalty configuration',
-              ),
+              // No in-page heading — the app bar already says "Settings"
+              // (same pattern as the pushed Staff accounts screen).
 
               // --- shop profile ---
               SectionCard(

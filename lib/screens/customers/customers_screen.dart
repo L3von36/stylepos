@@ -150,8 +150,10 @@ class _CustomerDetailState extends State<_CustomerDetail> {
       context: context,
       builder: (c) => AlertDialog(
         title: const Text('Delete customer?'),
-        content: const Text(
-            'Their loyalty points and contact details will be removed. Past receipts are kept.'),
+        content: const SizedBox(
+            width: 380,
+            child: Text(
+                'Their loyalty points and contact details will be removed. Past receipts are kept.')),
         actions: [
           TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')),
           FilledButton(

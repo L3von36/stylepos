@@ -340,8 +340,10 @@ class CartPanel extends StatelessWidget {
                                     context: sheetContext,
                                     builder: (c) => AlertDialog(
                                       title: const Text('Discard held sale?'),
-                                      content: const Text(
-                                          'Its items and customer link will be removed. This cannot be undone.'),
+                                      content: const SizedBox(
+                                          width: 380,
+                                          child: Text(
+                                              'Its items and customer link will be removed. This cannot be undone.')),
                                       actions: [
                                         TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')),
                                         FilledButton(
@@ -366,8 +368,10 @@ class CartPanel extends StatelessWidget {
                                       context: sheetContext,
                                       builder: (c) => AlertDialog(
                                         title: const Text('Replace current cart?'),
-                                        content: const Text(
-                                            'Resuming this held sale will replace the items currently in the cart.'),
+                                        content: const SizedBox(
+                                            width: 380,
+                                            child: Text(
+                                                'Resuming this held sale will replace the items currently in the cart.')),
                                         actions: [
                                           TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')),
                                           FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('Replace')),

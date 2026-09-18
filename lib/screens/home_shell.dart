@@ -16,6 +16,7 @@ import '../state/auth.dart';
 import '../state/nav.dart';
 import '../state/settings.dart';
 import '../widgets/ui.dart';
+import 'sync_status_pill.dart';
 
 class _Dest {
   final NavId id;
@@ -98,13 +99,20 @@ class _HomeShellState extends State<HomeShell> {
             canPop: false,
             child: AlertDialog(
               title: const Text('Old data on this device'),
-              content: Text(
-                'This device has data that is not part of your cloud '
-                'shop:\n\n'
-                '• ${legacy.sales} old sales\n'
-                '• ${legacy.unsyncedProducts} products never synced\n\n'
-                'Start fresh to see ONLY your shop\'s shared data on this '
-                'device (recommended), or upload the old data to your shop.',
+              content: SizedBox(
+                // Message dialogs wrap at a fixed reading width instead of
+                // stretching edge-to-edge on desktop (matches the other
+                // confirm dialogs' width family).
+                width: 400,
+                child: Text(
+                  'This device has data that is not part of your cloud '
+                  'shop:\n\n'
+                  '• ${legacy.sales} old sale${legacy.sales == 1 ? '' : 's'}\n'
+                  '• ${legacy.unsyncedProducts} product${legacy.unsyncedProducts == 1 ? '' : 's'} '
+                  'never synced\n\n'
+                  'Start fresh to see ONLY your shop\'s shared data on this '
+                  'device (recommended), or upload the old data to your shop.',
+                ),
               ),
               actions: [
                 TextButton(
@@ -130,10 +138,14 @@ class _HomeShellState extends State<HomeShell> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Add your staff'),
-        content: const Text(
-          'Create till accounts for your cashiers — they sign in on the '
-          'Staff tab with the email + password you set, and every sale '
-          'they make lands in your shared shop data.',
+        content: const SizedBox(
+          // Fixed reading width — same family as the other message dialogs.
+          width: 400,
+          child: Text(
+            'Create till accounts for your cashiers — they sign in on the '
+            'Staff tab with the email + password you set, and every sale '
+            'they make lands in your shared shop data.',
+          ),
         ),
         actions: [
           TextButton(
@@ -203,10 +215,11 @@ class _HomeShellState extends State<HomeShell> {
             child: const Icon(Icons.storefront_rounded, size: 17, color: Colors.white),
           ),
           const SizedBox(width: AppSpace.s2 + 2),
-          Text(settings.shopName),
+          Flexible(child: Text(settings.shopName, overflow: TextOverflow.ellipsis)),
         ],
       ),
       actions: [
+        const SyncStatusPill(),
         if (user.isAdmin)
           IconButton(
             tooltip: 'Settings',

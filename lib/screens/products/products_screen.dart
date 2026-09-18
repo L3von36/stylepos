@@ -51,8 +51,11 @@ class _ProductsScreenState extends State<ProductsScreen> {
       context: context,
       builder: (c) => AlertDialog(
         title: const Text('Archive product?'),
-        content: Text(
-            '"${p.name}" will be hidden from the POS and inventory. Past sales are kept.'),
+        content: SizedBox(
+          width: 380,
+          child: Text(
+              '"${p.name}" will be hidden from the POS and inventory. Past sales are kept.'),
+        ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')),
           FilledButton(
@@ -268,7 +271,7 @@ class _ProductTile extends StatelessWidget {
                     const SizedBox(height: 2),
                     Text(
                       '${product.variants.length} variants'
-                      ' · ${settings.currencySymbol} ${product.priceLabel}'
+                      ' · ${product.variants.isEmpty ? '-' : settings.priceLabel(product.minPrice, product.maxPrice)}'
                       ' · ${product.barcode ?? 'no barcode'}',
                       style: const TextStyle(fontFamily: 'Carlito', fontSize: 12.5, color: AppColors.muted),
                       overflow: TextOverflow.ellipsis,
@@ -382,8 +385,10 @@ class _CategoriesDialogState extends State<_CategoriesDialog> {
                               context: context,
                               builder: (c2) => AlertDialog(
                                 title: const Text('Rename category'),
-                                content: TextField(
-                                    controller: ctrl, autofocus: true),
+                                content: SizedBox(
+                                    width: 360,
+                                    child: TextField(
+                                        controller: ctrl, autofocus: true)),
                                 actions: [
                                   TextButton(
                                       onPressed: () => Navigator.pop(c2),

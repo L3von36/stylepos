@@ -71,10 +71,13 @@ class _CloudSyncCardState extends State<CloudSyncCard> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Erase this device\'s data?'),
-        content: const Text(
-          'Everything on THIS device is deleted, then your shop\'s '
-          'cloud data is pulled fresh. Other devices are not affected. '
-          'Use this if this phone/PC shows old or wrong data.',
+        content: const SizedBox(
+          width: 380,
+          child: Text(
+            'Everything on THIS device is deleted, then your shop\'s '
+            'cloud data is pulled fresh. Other devices are not affected. '
+            'Use this if this phone/PC shows old or wrong data.',
+          ),
         ),
         actions: [
           TextButton(
@@ -109,10 +112,13 @@ class _CloudSyncCardState extends State<CloudSyncCard> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Clear sales history everywhere?'),
-        content: const Text(
-          'ALL sales, line items and stock movements are deleted from '
-          'the cloud AND from every device signed into this shop. '
-          'Products, customers and staff are kept. This cannot be undone.',
+        content: const SizedBox(
+          width: 380,
+          child: Text(
+            'ALL sales, line items and stock movements are deleted from '
+            'the cloud AND from every device signed into this shop. '
+            'Products, customers and staff are kept. This cannot be undone.',
+          ),
         ),
         actions: [
           TextButton(

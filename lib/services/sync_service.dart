@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart' show AppLifecycleListener;
 import 'package:sqflite/sqflite.dart' show ConflictAlgorithm, Database;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
@@ -169,12 +170,24 @@ class SyncService extends ChangeNotifier {
   bool _queued = false;
   bool _started = false;
 
+  /// Safety-net so a missed realtime event (websocket blip, device asleep)
+  /// still converges within a minute instead of waiting for a local edit.
+  Timer? _keepAlive;
+
+  /// Reconnects a dropped realtime channel with growing backoff.
+  Timer? _reconnectTimer;
+  int _reconnectAttempt = 0;
+
+  /// Re-syncs when the app comes back to the foreground (mobile/web tab).
+  AppLifecycleListener? _lifecycle;
+
   SyncPhase phase = SyncPhase.idle;
   DateTime? lastSyncAt;
   String? lastError;
 
-  /// True while a Supabase Realtime subscription is attached — the Manager
-  /// sees sales from other devices land within seconds.
+  /// True while a Supabase Realtime subscription is attached AND confirmed
+  /// by the server (SUBSCRIBED status) — the Manager sees sales from other
+  /// devices land within seconds.
   bool realtimeLive = false;
 
   RealtimeChannel? _channel;
@@ -201,6 +214,7 @@ class SyncService extends ChangeNotifier {
       _authSub = Supabase.instance.client.auth.onAuthStateChange.listen((s) {
         if (s.event == AuthChangeEvent.signedIn ||
             s.event == AuthChangeEvent.initialSession) {
+          _reconnectAttempt = 0;
           scheduleSync(const Duration(seconds: 2));
           _startRealtime();
         } else if (s.event == AuthChangeEvent.signedOut) {
@@ -211,6 +225,23 @@ class SyncService extends ChangeNotifier {
     } catch (_) {
       // Supabase not initialised (unit tests) — manual runs still work.
     }
+
+    // Safety-net: pull every 45s even if no realtime event arrives.
+    _keepAlive ??= Timer.periodic(const Duration(seconds: 45), (_) {
+      if (signedIn) scheduleSync();
+    });
+
+    // Coming back to the foreground (phone app switch / browser tab):
+    // catch up immediately and revive the realtime channel if it died.
+    try {
+      _lifecycle ??= AppLifecycleListener(onResume: () {
+        if (!signedIn) return;
+        scheduleSync(const Duration(seconds: 1));
+        _startRealtime();
+      });
+    } catch (_) {// Tests / environments without a binding.
+    }
+
     if (signedIn) {
       scheduleSync(const Duration(seconds: 2));
       _startRealtime();
@@ -218,30 +249,89 @@ class SyncService extends ChangeNotifier {
   }
 
   /// Listens for cloud row changes (sales made on another device, catalog
-  /// edits, refunds) and schedules a pull a moment later.
+  /// edits, refunds, staff changes) and schedules a pull ~1s later. The
+  /// SUBSCRIBED status drives the visible "Live" indicator; any error
+  /// schedules an automatic reconnect with backoff.
   void _startRealtime() {
-    if (_channel != null) return;
+    if (_channel != null) {
+      // Channel exists but never confirmed / died — reconnect it.
+      if (!realtimeLive) _scheduleRealtimeReconnect();
+      return;
+    }
     try {
       final client = Supabase.instance.client;
       final ch = client.channel('stylepos-live');
-      for (final table in [...kSyncTables, ...kSalesTables, 'settings']) {
+      for (final table
+          in [...kSyncTables, ...kSalesTables, 'settings', 'app_users']) {
         ch.onPostgresChanges(
           event: PostgresChangeEvent.all,
           schema: 'public',
           table: table,
-          callback: (_) => scheduleSync(const Duration(seconds: 2)),
+          callback: (_) => scheduleSync(const Duration(seconds: 1)),
         );
       }
-      ch.subscribe();
+      ch.subscribe((status, [error]) {
+        debugPrint('realtime $status${error == null ? '' : ' ($error)'}');
+        if (status == RealtimeSubscribeStatus.subscribed) {
+          _reconnectAttempt = 0;
+          _reconnectTimer?.cancel();
+          if (!realtimeLive) {
+            realtimeLive = true;
+            notifyListeners();
+          }
+          return;
+        }
+        // A per-table config rejection (e.g. app_users before the user
+        // runs patch5 SQL) arrives as channelError AFTER a successful
+        // join. The channel itself is healthy — every published table
+        // still streams — so do NOT reconnect-loop here. patch5 fixes it.
+        final msg = error?.toString() ?? '';
+        final configRejection = status == RealtimeSubscribeStatus.channelError &&
+            (msg.contains('Unable to subscribe') ||
+                msg.contains('Realtime is enabled'));
+        if (configRejection) {
+          if (!realtimeLive) {
+            realtimeLive = true;
+            notifyListeners();
+          }
+          return;
+        }
+        // WebSocket-level problem (timedOut / closed / real error).
+        if (realtimeLive || identical(_channel, ch)) {
+          realtimeLive = false;
+          notifyListeners();
+          _scheduleRealtimeReconnect();
+        }
+      });
       _channel = ch;
-      realtimeLive = true;
       notifyListeners();
     } catch (_) {
       // Supabase not initialised or offline — pull-on-demand still works.
     }
   }
 
-  Future<void> _stopRealtime() async {
+  /// Tears down and re-joins the channel after a growing delay
+  /// (3s, 10s, 30s, then every 60s; caps at 6 tries — the 45s keep-alive
+  /// pull keeps data fresh even when realtime never comes back).
+  void _scheduleRealtimeReconnect() {
+    _reconnectTimer?.cancel();
+    final attempt = _reconnectAttempt += 1;
+    if (attempt > 6) return;
+    final delay = attempt <= 1
+        ? const Duration(seconds: 3)
+        : attempt <= 2
+            ? const Duration(seconds: 10)
+            : attempt <= 4
+                ? const Duration(seconds: 30)
+                : const Duration(seconds: 60);
+    _reconnectTimer = Timer(delay, () async {
+      if (!signedIn) return;
+      await _removeChannel();
+      _startRealtime();
+    });
+  }
+
+  Future<void> _removeChannel() async {
     final ch = _channel;
     _channel = null;
     realtimeLive = false;
@@ -251,6 +341,12 @@ class SyncService extends ChangeNotifier {
       } catch (_) {// Already gone.
       }
     }
+  }
+
+  Future<void> _stopRealtime() async {
+    _reconnectTimer?.cancel();
+    _reconnectAttempt = 0;
+    await _removeChannel();
     notifyListeners();
   }
 
@@ -258,6 +354,9 @@ class SyncService extends ChangeNotifier {
   void dispose() {
     _authSub?.cancel();
     _debounce?.cancel();
+    _keepAlive?.cancel();
+    _reconnectTimer?.cancel();
+    _lifecycle?.dispose();
     super.dispose();
   }
 

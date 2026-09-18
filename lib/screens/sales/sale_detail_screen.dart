@@ -59,8 +59,10 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
           SizedBox(width: AppSpace.s3),
           Text('Refund this sale?'),
         ]),
-        content: const Text(
-            'All items will be returned to stock and the sale marked as refunded. This cannot be undone.'),
+        content: const SizedBox(
+            width: 380,
+            child: Text(
+                'All items will be returned to stock and the sale marked as refunded. This cannot be undone.')),
         actions: [
           TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')),
           FilledButton(

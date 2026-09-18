@@ -98,8 +98,15 @@ class _ReportsScreenState extends State<ReportsScreen> {
 
               // KPI cards
               LayoutBuilder(builder: (context, c) {
-                final cols = (c.maxWidth / 200).floor().clamp(2, 6);
                 const gap = 12.0;
+                // Six KPI cards must fill rows evenly — 3-across on
+                // desktop/tablet, 2-across on phones, 1 on very narrow
+                // screens — never 5+1 with an orphan card on the last row.
+                final cols = c.maxWidth >= 3 * 200 + 2 * gap
+                    ? 3
+                    : c.maxWidth >= 2 * 184 + gap
+                        ? 2
+                        : 1;
                 final w = (c.maxWidth - gap * (cols - 1)) / cols;
                 return Wrap(
                   spacing: gap,

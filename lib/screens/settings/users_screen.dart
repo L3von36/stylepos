@@ -152,12 +152,15 @@ class _UsersScreenState extends State<UsersScreen> {
       context: context,
       builder: (c) => AlertDialog(
         title: Text('Reset password for ${u.name}'),
-        content: TextField(
-          controller: ctrl,
-          obscureText: true,
-          autofocus: true,
-          decoration: const InputDecoration(
-              labelText: 'New password (min 6 chars)'),
+        content: SizedBox(
+          width: 360,
+          child: TextField(
+            controller: ctrl,
+            obscureText: true,
+            autofocus: true,
+            decoration: const InputDecoration(
+                labelText: 'New password (min 6 chars)'),
+          ),
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(c), child: const Text('Cancel')),

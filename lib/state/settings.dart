@@ -36,6 +36,22 @@ class AppSettings extends ChangeNotifier {
     return fmt.format(v);
   }
 
+  /// Formats an amount without the currency symbol, e.g. "1,250.00" —
+  /// used as the upper bound of a price range.
+  String moneyPlain(double v) {
+    final fmt = _moneyFmt;
+    if (fmt == null) return v.toStringAsFixed(2);
+    return NumberFormat('#,##0.00').format(v);
+  }
+
+  /// Price label for product cards / inventory rows: one formatted price
+  /// when all variants share it, otherwise a compact min–max range with
+  /// the symbol only on the lower bound, e.g. "KSh 1,000.00 – 3,200.00".
+  String priceLabel(double min, double max) {
+    if (min == max) return money(min);
+    return '${money(min)} – ${moneyPlain(max)}';
+  }
+
   Future<void> load() async {
     final db = await DB.instance();
     final rows = await db.query('settings');

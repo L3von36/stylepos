@@ -537,7 +537,9 @@ class _ProductCardState extends State<_ProductCard> {
                   children: [
                     Expanded(
                       child: Text(
-                        '${widget.settings.currencySymbol} ${p.priceLabel}',
+                        p.variants.isEmpty
+                            ? '-'
+                            : widget.settings.priceLabel(p.minPrice, p.maxPrice),
                         style: const TextStyle(
                           fontFamily: 'Carlito',
                           color: AppColors.primary,
@@ -692,7 +694,7 @@ class _MobileCartBar extends StatelessWidget {
                           ),
                           Text(
                             cart.isNotEmpty
-                                ? '${settings.currencySymbol} ${cart.total(settings.taxRate).toStringAsFixed(2)}'
+                                ? settings.money(cart.total(settings.taxRate))
                                 : 'Tap to review',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,

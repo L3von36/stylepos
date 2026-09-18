@@ -172,6 +172,12 @@ class CloudAuth {
         remembered['id']!.isNotEmpty &&
         remembered['id'] != shop['id'];
 
+    // The legacy question only makes sense for cloud shop members.
+    // A local-only device (Staff-tab till, offline mode, no Manager
+    // account yet) must NEVER be asked to "start fresh" — that would
+    // just wipe a perfectly good local shop.
+    final hasCloudShop = shop != null || remembered['id']!.isNotEmpty;
+    if (!hasCloudShop) return null;
     if (remembered['id']!.isEmpty && (sales > 0 || unsynced > 0)) {
       return LegacyDataInfo(
           sales: sales, unsyncedProducts: unsynced, shopMismatch: false);
