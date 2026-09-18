@@ -7,6 +7,7 @@ import '../../state/catalog.dart';
 import '../../state/settings.dart';
 import '../../widgets/ui.dart';
 import 'label_print_dialog.dart';
+import 'product_csv.dart';
 import 'product_edit_screen.dart';
 import 'stock_adjust_dialog.dart';
 
@@ -122,6 +123,33 @@ class _ProductsScreenState extends State<ProductsScreen> {
                   onPressed: () => _manageCategories(context),
                   icon: const Icon(Icons.category_outlined, size: 17),
                   label: const Text('Categories'),
+                ),
+              if (canManage)
+                PopupMenuButton<String>(
+                  tooltip: 'Bulk catalog CSV',
+                  icon: const Icon(Icons.import_export_rounded, size: 21),
+                  onSelected: (v) {
+                    if (v == 'export') ProductCsv.export(context);
+                    if (v == 'import') ProductCsv.import(context);
+                  },
+                  itemBuilder: (_) => const [
+                    PopupMenuItem(
+                      value: 'export',
+                      child: ListTile(
+                        leading: Icon(Icons.file_download_outlined, size: 19),
+                        title: Text('Export CSV'),
+                        dense: true,
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: 'import',
+                      child: ListTile(
+                        leading: Icon(Icons.file_upload_outlined, size: 19),
+                        title: Text('Import CSV'),
+                        dense: true,
+                      ),
+                    ),
+                  ],
                 ),
               if (canManage)
                 FilledButton.icon(

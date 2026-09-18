@@ -48,7 +48,7 @@ class DB {
 
     _instance = await openDatabase(
       dbPath,
-      version: 5,
+      version: 6,
       onConfigure: (db) => db.execute('PRAGMA foreign_keys = ON'),
       onUpgrade: (db, oldVersion, newVersion) async {
         // v2: product photos (relative filename inside the app images dir).
@@ -104,6 +104,14 @@ class DB {
         // from this version on.
         if (oldVersion < 5) {
           await _purgeCatalogAndHistory(db);
+        }
+        // v6: staff shift logs (clock in/out) and the audit trail (who did
+        // what, when) — accountability features. Both are local-first:
+        // attendance/audit are per-device records by design (a shift log
+        // belongs to the till it was punched on), so they are NOT mirrored
+        // to the cloud tables.
+        if (oldVersion < 6) {
+          await _createAccountabilityTables(db);
         }
       },
       onCreate: (db, version) async {
@@ -242,10 +250,39 @@ class DB {
           )
         ''');
 
+        await _createAccountabilityTables(db);
+
         await _seed(db);
       },
     );
     return _instance!;
+  }
+
+  /// Shift logs (clock in/out) and the audit trail. Kept in a helper so
+  /// both fresh installs (onCreate) and upgrades (< v6) build them once.
+  static Future<void> _createAccountabilityTables(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS attendance (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        clock_in INTEGER NOT NULL,
+        clock_out INTEGER
+      )
+    ''');
+    await db.execute(
+        'CREATE INDEX IF NOT EXISTS idx_attendance_user ON attendance(user_id)');
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS audit_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER,
+        user_name TEXT,
+        action TEXT NOT NULL,
+        details TEXT,
+        created_at INTEGER NOT NULL
+      )
+    ''');
+    await db.execute(
+        'CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_log(created_at)');
   }
 
   /// One-time (DB v5) purge of the demo catalog and demo sales history.
@@ -312,6 +349,8 @@ class DB {
         'categories',
         'customers',
         'users',
+        'attendance',
+        'audit_log',
         'settings',
       ]) {
         await txn.execute('DELETE FROM $t');

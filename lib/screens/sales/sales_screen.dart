@@ -49,9 +49,13 @@ class _SalesScreenState extends State<SalesScreen> {
   }
 
   Future<void> _load() async {
+    final auth = context.read<AuthProvider>();
+    final user = auth.user;
     final sales = await context.read<SalesProvider>().listSales(
           days: _days,
           query: _query,
+          // Salespeople see only their own receipts (manager sees all).
+          userId: (user?.isAdmin ?? false) ? null : user?.id,
         );
     if (mounted) setState(() => _sales = sales);
   }
@@ -147,7 +151,8 @@ class _SalesScreenState extends State<SalesScreen> {
             subtitle: _sales == null
                 ? 'Loading…'
                 : '${_sales!.length} receipt${_sales!.length == 1 ? '' : 's'}'
-                    ' · ${settings.money(totalRevenue)} revenue',
+                    ' · ${settings.money(totalRevenue)} revenue'
+                    '${isAdmin ? '' : ' · your sales'}',
             actions: [
               if (isAdmin && _sales != null && _sales!.isNotEmpty)
                 IconButton(

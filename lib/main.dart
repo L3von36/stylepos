@@ -9,6 +9,7 @@ import 'services/cloud_config.dart';
 import 'services/images.dart';
 import 'services/sync_service.dart';
 import 'state/auth.dart';
+import 'state/attendance.dart';
 import 'state/cart.dart';
 import 'state/catalog.dart';
 import 'state/customers.dart';
@@ -27,6 +28,7 @@ Future<void> main() async {
   final cart = CartProvider();
   final sales = SalesProvider();
   final nav = NavProvider();
+  final attendance = AttendanceProvider();
 
   // Load persisted settings + session before showing UI.
   await Future.wait([settings.load(), auth.init(), ProductImages.init()]);
@@ -61,6 +63,7 @@ Future<void> main() async {
     cart: cart,
     sales: sales,
     nav: nav,
+    attendance: attendance,
   ));
 }
 
@@ -72,6 +75,7 @@ class StylePosApp extends StatelessWidget {
   final CartProvider cart;
   final SalesProvider sales;
   final NavProvider nav;
+  final AttendanceProvider attendance;
 
   const StylePosApp({
     super.key,
@@ -82,6 +86,7 @@ class StylePosApp extends StatelessWidget {
     required this.cart,
     required this.sales,
     required this.nav,
+    required this.attendance,
   });
 
   @override
@@ -95,6 +100,7 @@ class StylePosApp extends StatelessWidget {
         ChangeNotifierProvider<CartProvider>.value(value: cart),
         ChangeNotifierProvider<SalesProvider>.value(value: sales),
         ChangeNotifierProvider<NavProvider>.value(value: nav),
+        ChangeNotifierProvider<AttendanceProvider>.value(value: attendance),
       ],
       child: Builder(builder: (context) {
         // Watch settings so a System/Light/Dark switch rebuilds MaterialApp.

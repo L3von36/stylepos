@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../../services/audit.dart';
 import '../../services/receipt_service.dart';
 import '../../services/zreport_service.dart';
 import '../../state/auth.dart';
@@ -139,34 +140,152 @@ class _ZReportCardState extends State<ZReportCard> {
     final user = context.read<AuthProvider>().user;
     final settings = context.read<AppSettings>();
     String two(int n) => n.toString().padLeft(2, '0');
+    final dayLabel = '${d.day.year}-${two(d.day.month)}-${two(d.day.day)}';
+
+    // Cash-up dialog: the manager counts the drawer and enters the total;
+    // the variance (over/short) is captured on the close snapshot and
+    // printed on the Z-report.
+    final countedCtrl = TextEditingController();
     final ok = await showDialog<bool>(
       context: context,
-      builder: (c) => AlertDialog(
-        title: const Text('Close the day?'),
-        content: SizedBox(
-          width: 400,
-          child: Text(
-            'A Z-report snapshot for ${d.day.year}-${two(d.day.month)}-${two(d.day.day)} '
-            'will be recorded with net takings of ${settings.money(d.net)} '
-            '(${d.orders} order${d.orders == 1 ? '' : 's'}).\n\n'
-            'Refunds processed after closing will appear on the next day\'s '
-            'report. The day stays re-openable in case of mistakes.',
-          ),
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(c, false),
-              child: const Text('Cancel')),
-          FilledButton.icon(
-            onPressed: () => Navigator.pop(c, true),
-            icon: const Icon(Icons.event_available_rounded, size: 18),
-            label: const Text('Close day'),
-          ),
-        ],
+      builder: (c) => StatefulBuilder(
+        builder: (c, setD) {
+          final countedVal = double.tryParse(countedCtrl.text);
+          final variance =
+              countedVal == null ? null : countedVal - d.expectedCash;
+          return AlertDialog(
+            title: const Text('Close the day?'),
+            content: SizedBox(
+              width: 400,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    'A Z-report snapshot for $dayLabel will be recorded with '
+                    'net takings of ${settings.money(d.net)} '
+                    '(${d.orders} order${d.orders == 1 ? '' : 's'}).',
+                  ),
+                  const SizedBox(height: AppSpace.s4),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpace.s3, vertical: AppSpace.s2),
+                    decoration: BoxDecoration(
+                      color: AppColors.successSoft,
+                      borderRadius: BorderRadius.circular(AppRadius.sm),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.savings_outlined,
+                            size: 17, color: AppColors.success),
+                        const SizedBox(width: AppSpace.s2),
+                        Text('Expected cash in drawer',
+                            style: TextStyle(
+                                fontFamily: 'Carlito',
+                                fontSize: 12.5,
+                                color: AppColors.body)),
+                        const Spacer(),
+                        Text(settings.money(d.expectedCash),
+                            style: TextStyle(
+                                fontFamily: 'Carlito',
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.success)),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: AppSpace.s3),
+                  TextField(
+                    controller: countedCtrl,
+                    autofocus: true,
+                    keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true),
+                    decoration: InputDecoration(
+                      labelText:
+                          'Counted cash (${settings.currencySymbol}) — optional',
+                      helperText: 'Skip to close without a cash count',
+                      prefixText: '${settings.currencySymbol} ',
+                    ),
+                    onChanged: (_) => setD(() {}),
+                  ),
+                  if (variance != null) ...[
+                    const SizedBox(height: AppSpace.s2),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: AppSpace.s3, vertical: AppSpace.s2),
+                      decoration: BoxDecoration(
+                        color: variance == 0
+                            ? AppColors.successSoft
+                            : (variance > 0
+                                ? AppColors.infoSoft
+                                : AppColors.dangerSoft),
+                        borderRadius: BorderRadius.circular(AppRadius.sm),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                              variance == 0
+                                  ? Icons.check_circle_outline_rounded
+                                  : (variance > 0
+                                      ? Icons.trending_up_rounded
+                                      : Icons.trending_down_rounded),
+                              size: 17,
+                              color: variance == 0
+                                  ? AppColors.success
+                                  : (variance > 0
+                                      ? AppColors.info
+                                      : AppColors.danger)),
+                          const SizedBox(width: AppSpace.s2),
+                          Text(
+                            variance == 0
+                                ? 'Cash drawer balanced'
+                                : variance > 0
+                                    ? 'Over by ${settings.money(variance)}'
+                                    : 'Short by ${settings.money(-variance)}',
+                            style: TextStyle(
+                                fontFamily: 'Carlito',
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w700,
+                                color: variance == 0
+                                    ? AppColors.success
+                                    : (variance > 0
+                                        ? AppColors.info
+                                        : AppColors.danger)),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: AppSpace.s2),
+                  Text(
+                    'Refunds processed after closing will appear on the next '
+                    'day\'s report. The day stays re-openable in case of '
+                    'mistakes.',
+                    style: TextStyle(
+                        fontFamily: 'Carlito',
+                        fontSize: 11.5,
+                        color: AppColors.muted),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(c, false),
+                  child: const Text('Cancel')),
+              FilledButton.icon(
+                onPressed: () => Navigator.pop(c, true),
+                icon: const Icon(Icons.event_available_rounded, size: 18),
+                label: const Text('Close day'),
+              ),
+            ],
+          );
+        },
       ),
     );
     if (ok != true || !mounted) return;
 
+    final counted = double.tryParse(countedCtrl.text);
     await ZReportService.closeDay(
       _day,
       ZCloseRecord(
@@ -174,7 +293,18 @@ class _ZReportCardState extends State<ZReportCard> {
         closedBy: user?.name ?? '',
         net: d.net,
         orders: d.orders,
+        expectedCash: d.expectedCash,
+        countedCash: counted,
       ),
+    );
+    final variance = counted == null ? null : counted - d.expectedCash;
+    await Audit.add(
+      'day_close',
+      '$dayLabel · net ${settings.money(d.net)} · ${d.orders} orders'
+      '${counted == null ? '' : ' · counted ${settings.money(counted)} '
+          '(${variance == 0 ? 'balanced' : variance! > 0 ? 'over ${settings.money(variance)}' : 'short ${settings.money(-variance)}'})'}',
+      userId: user?.id,
+      userName: user?.name,
     );
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -204,7 +334,10 @@ class _ZReportCardState extends State<ZReportCard> {
       ),
     );
     if (ok != true || !mounted) return;
+    final user = context.read<AuthProvider>().user;
     await ZReportService.reopenDay(_day);
+    await Audit.add('day_reopen', ZReportService.dayKey(_day),
+        userId: user?.id, userName: user?.name);
     if (!mounted) return;
     ScaffoldMessenger.of(context)
         .showSnackBar(const SnackBar(content: Text('Day re-opened')));
@@ -307,7 +440,8 @@ class _ZReportCardState extends State<ZReportCard> {
                 Expanded(
                   child: Text(
                     'Closed by ${_closed!.closedBy.isEmpty ? 'manager' : _closed!.closedBy} · '
-                    'snapshot net ${s.money(_closed!.net)} · ${_closed!.orders} orders',
+                    'snapshot net ${s.money(_closed!.net)} · ${_closed!.orders} orders'
+                    '${_closed!.variance == null ? '' : ' · cash ${_closed!.variance! == 0 ? 'balanced' : _closed!.variance! > 0 ? 'over ${s.money(_closed!.variance!)}' : 'short ${s.money(-_closed!.variance!)}'}'}',
                     style: TextStyle(
                         fontFamily: 'Carlito',
                         fontSize: 12.5,

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/customer.dart';
+import '../../services/approvals.dart';
+import '../../state/auth.dart';
 import '../../state/cart.dart';
 import '../../state/catalog.dart';
 import '../../state/customers.dart';
@@ -22,6 +24,11 @@ class CartPanel extends StatelessWidget {
     final cart = context.watch<CartProvider>();
     final settings = context.watch<AppSettings>();
     final theme = Theme.of(context);
+    final user = context.watch<AuthProvider>().user;
+    final needsApproval = discountNeedsApproval(
+        isAdmin: user?.isAdmin ?? false,
+        discount: cart.discount,
+        threshold: settings.discountPinThreshold);
 
     final content = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -184,6 +191,25 @@ class CartPanel extends StatelessWidget {
                     const _DiscountField(),
                   ],
                 ),
+                if (needsApproval) ...[
+                  const SizedBox(height: AppSpace.s2),
+                  Row(
+                    children: [
+                      Icon(Icons.verified_user_outlined, size: 14, color: AppColors.warning),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          'Manager approval needed to charge this discount',
+                          style: TextStyle(
+                              fontFamily: 'Carlito',
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.warning),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
                 const SizedBox(height: AppSpace.s2),
                 _totalRow(context, 'Subtotal', settings.money(cart.subtotal)),
                 if (cart.discount > 0)

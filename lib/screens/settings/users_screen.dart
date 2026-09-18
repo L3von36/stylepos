@@ -3,10 +3,12 @@ import 'package:provider/provider.dart';
 
 import '../../data/database.dart';
 import '../../models/user.dart';
+import '../../services/audit.dart';
 import '../../services/cloud_auth.dart';
 import '../../services/sync_service.dart';
 import '../../state/auth.dart';
 import '../../widgets/ui.dart';
+import 'shift_logs_screen.dart';
 
 /// One merged staff entry: a cloud account (signs in on ANY device) that
 /// may also have a local row, or a legacy account on this device only.
@@ -205,6 +207,11 @@ class _UsersScreenState extends State<UsersScreen> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(
             result ?? 'Password reset for ${u.name} — it works on every device')));
+    if (result == null) {
+      final me = context.read<AuthProvider>().user;
+      await Audit.add('password_reset', 'Password reset for ${u.name} (${u.email})',
+          userId: me?.id, userName: me?.name);
+    }
   }
 
   Future<void> _toggleActive(_StaffEntry u) async {
@@ -213,6 +220,7 @@ class _UsersScreenState extends State<UsersScreen> {
           content: Text('You cannot deactivate your own account')));
       return;
     }
+    final me = context.read<AuthProvider>().user;
     if (u.isCloud) {
       final err = await CloudAuth.setStaffActive(u.cloudId!, !u.active);
       if (!mounted) return;
@@ -222,12 +230,22 @@ class _UsersScreenState extends State<UsersScreen> {
         return;
       }
       _syncLocalCopy(u, active: !u.active);
+      await Audit.add(
+          'staff_updated',
+          '${u.name} ${u.active ? 'deactivated' : 'reactivated'}',
+          userId: me?.id,
+          userName: me?.name);
     } else {
       final a = context.read<AuthProvider>();
       final local = await a.listUsers();
       final match = local.where((x) => x.id == u.localId).toList();
       if (match.isEmpty) return;
       await a.updateUser(match.first, active: !u.active);
+      await Audit.add(
+          'staff_updated',
+          '${u.name} ${u.active ? 'deactivated' : 'reactivated'}',
+          userId: me?.id,
+          userName: me?.name);
     }
     _load();
   }
@@ -264,7 +282,18 @@ class _UsersScreenState extends State<UsersScreen> {
         : entries ?? const <_StaffEntry>[];
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Staff accounts')),
+      appBar: AppBar(
+        title: const Text('Staff accounts'),
+        actions: [
+          IconButton(
+            tooltip: 'Shift logs',
+            icon: const Icon(Icons.badge_outlined, size: 22),
+            onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const ShiftLogsScreen())),
+          ),
+          const SizedBox(width: AppSpace.s1),
+        ],
+      ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _edit(),
         icon: const Icon(Icons.person_add_alt_rounded, size: 20),
@@ -565,6 +594,7 @@ class _UserEditDialogState extends State<_UserEditDialog> {
     // Capture before any await — context must not be used across async gaps.
     final screen = context.findAncestorStateOfType<_UsersScreenState>();
     final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
     String? err;
     setState(() => _busy = true);
 
@@ -614,9 +644,18 @@ class _UserEditDialogState extends State<_UserEditDialog> {
         _busy = false;
       });
     } else {
+      // Audit: who created/edited which staff account.
+      final me = auth.user;
+      await Audit.add(
+        _isNew ? 'staff_created' : 'staff_updated',
+        '${_name.text.trim()} · role: $_role'
+            '${_cloudTarget ? ' · cloud account' : ' · device account'}',
+        userId: me?.id,
+        userName: me?.name,
+      );
       messenger.showSnackBar(const SnackBar(
           content: Text('Saved')));
-      Navigator.pop(context);
+      navigator.pop();
     }
   }
 

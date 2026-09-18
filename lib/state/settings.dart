@@ -20,6 +20,11 @@ class AppSettings extends ChangeNotifier {
   int lowStockDefault = 5;
   int loyaltyStep = 100; // award 1 point per this many currency units spent; 0 = off
 
+  /// Order discounts at or above this amount (in currency units) require
+  /// manager approval when a salesperson enters them (0 = every discount
+  /// needs approval). Managers always skip the gate.
+  double discountPinThreshold = 0;
+
   /// Appearance: 'system' | 'light' | 'dark' (Material [ThemeMode]).
   String themeModeName = 'system';
   ThemeMode get themeMode => switch (themeModeName) {
@@ -141,6 +146,8 @@ class AppSettings extends ChangeNotifier {
     taxRate = double.tryParse(g('tax_rate') ?? '') ?? taxRate;
     lowStockDefault = int.tryParse(g('low_stock_default') ?? '') ?? lowStockDefault;
     loyaltyStep = int.tryParse(g('loyalty_step') ?? '') ?? loyaltyStep;
+    discountPinThreshold =
+        double.tryParse(g('discount_pin_threshold') ?? '') ?? discountPinThreshold;
     themeModeName = g('theme_mode') ?? themeModeName;
     receiptLogoB64 = g('receipt_logo_b64');
     receiptShowLogo = (g('receipt_show_logo') ?? '1') != '0';
@@ -162,6 +169,7 @@ class AppSettings extends ChangeNotifier {
     double? taxRate,
     int? lowStockDefault,
     int? loyaltyStep,
+    double? discountPinThreshold,
     String? themeMode,
     String? receiptLogo,
     bool? receiptShowLogo,
@@ -175,6 +183,7 @@ class AppSettings extends ChangeNotifier {
     if (taxRate != null) this.taxRate = taxRate;
     if (lowStockDefault != null) this.lowStockDefault = lowStockDefault;
     if (loyaltyStep != null) this.loyaltyStep = loyaltyStep;
+    if (discountPinThreshold != null) this.discountPinThreshold = discountPinThreshold;
     if (themeMode != null) themeModeName = themeMode;
     if (receiptLogo != null) receiptLogoB64 = receiptLogo.isEmpty ? null : receiptLogo;
     if (receiptShowLogo != null) this.receiptShowLogo = receiptShowLogo;
@@ -190,6 +199,7 @@ class AppSettings extends ChangeNotifier {
       'tax_rate': this.taxRate.toString(),
       'low_stock_default': this.lowStockDefault.toString(),
       'loyalty_step': this.loyaltyStep.toString(),
+      'discount_pin_threshold': this.discountPinThreshold.toString(),
       'theme_mode': themeModeName,
       'receipt_show_logo': this.receiptShowLogo ? '1' : '0',
       'receipt_logo_b64': ?receiptLogoB64,

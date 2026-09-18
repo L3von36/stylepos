@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/sale.dart';
+import '../../services/approvals.dart';
+import '../../services/audit.dart';
 import '../../services/receipt_service.dart';
 import '../../state/auth.dart';
 import '../../state/cart.dart';
@@ -51,6 +53,44 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
   Future<void> _completeSale() async {
     final cart = context.read<CartProvider>();
     final settings = context.read<AppSettings>();
+    // Read everything up-front: the approval dialog and the audit write
+    // introduce async gaps, so no context reads may happen after them.
+    final auth = context.read<AuthProvider>();
+    final sales = context.read<SalesProvider>();
+    final catalog = context.read<CatalogProvider>();
+    final customers = context.read<CustomersProvider>();
+    final actor = auth.user!;
+
+    // ---- manager approval for manual discounts (salesperson gate) -------
+    // A discount at or above the configured threshold needs a manager PIN
+    // (or manager password) before the sale can complete — the single
+    // approval moment is checkout, not the cart field.
+    final discount = cart.discount;
+    if (discountNeedsApproval(
+        isAdmin: actor.isAdmin,
+        discount: discount,
+        threshold: settings.discountPinThreshold)) {
+      final ok = await Approvals.request(
+        context,
+        title: 'Discount needs approval',
+        reason:
+            'This sale carries a ${settings.money(discount)} manual discount. '
+            'A manager must approve it before checkout.',
+      );
+      if (ok == null) {
+        setState(() {
+          _error = 'Discount not approved — reduce it or ask a manager.';
+        });
+        return;
+      }
+      await Audit.add(
+        'discount_approved',
+        '${settings.money(discount)} approved via ${ok.methodLabel} '
+        '(sale by ${actor.name})',
+        userId: ok.userId > 0 ? ok.userId : actor.id,
+        userName: ok.userId > 0 ? ok.userName : actor.name,
+      );
+    }
 
     // Cash guard: never record a cash sale that was not fully tendered.
     final due = cart.total(settings.taxRate);
@@ -67,12 +107,6 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
       _error = null;
     });
     try {
-      final sales = context.read<SalesProvider>();
-      final auth = context.read<AuthProvider>();
-      final catalog = context.read<CatalogProvider>();
-      final customers = context.read<CustomersProvider>();
-      final user = auth.user!;
-
       // loyalty preview (mirrors sales.checkout logic)
       final total = cart.total(settings.taxRate);
       _pointsEarned = (cart.customer?.id != null && settings.loyaltyStep > 0)
@@ -81,7 +115,7 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
 
       final sale = await sales.checkout(
         cart: cart,
-        userId: user.id!,
+        userId: actor.id!,
         paymentMethod: _method,
         amountPaid: _method == 'cash' ? _tenderedValue : total,
         settings: settings,

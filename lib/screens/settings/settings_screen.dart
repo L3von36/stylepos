@@ -12,10 +12,13 @@ import 'package:path/path.dart' as p;
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../../services/approvals.dart';
+import '../../services/audit.dart';
 import '../../services/backup_service.dart';
 import '../../state/auth.dart';
 import '../../state/settings.dart';
 import '../../widgets/ui.dart';
+import 'audit_log_screen.dart';
 import 'cloud_sync_card.dart';
 import 'users_screen.dart';
 
@@ -38,6 +41,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   late final TextEditingController _tax;
   late final TextEditingController _lowStock;
   late final TextEditingController _loyalty;
+  late final TextEditingController _discPin;
 
   @override
   void initState() {
@@ -52,13 +56,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _tax = TextEditingController(text: s.taxRate.toString());
     _lowStock = TextEditingController(text: s.lowStockDefault.toString());
     _loyalty = TextEditingController(text: s.loyaltyStep.toString());
+    _discPin = TextEditingController(
+        text: s.discountPinThreshold == 0
+            ? '0'
+            : (s.discountPinThreshold % 1 == 0
+                ? s.discountPinThreshold.toStringAsFixed(0)
+                : s.discountPinThreshold.toString()));
   }
 
   @override
   void dispose() {
     for (final c in [
       _shopName, _address, _phone, _footer,
-      _curCode, _curSymbol, _tax, _lowStock, _loyalty,
+      _curCode, _curSymbol, _tax, _lowStock, _loyalty, _discPin,
     ]) {
       c.dispose();
     }
@@ -76,6 +86,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
           taxRate: (double.tryParse(_tax.text) ?? 0).clamp(0.0, 100.0),
           lowStockDefault: (int.tryParse(_lowStock.text) ?? 5).clamp(0, 999),
           loyaltyStep: (int.tryParse(_loyalty.text) ?? 0).clamp(0, 1000000),
+          discountPinThreshold:
+              (double.tryParse(_discPin.text) ?? 0).clamp(0.0, double.maxFinite),
         );
     if (mounted) {
       ScaffoldMessenger.of(context)
@@ -91,8 +103,128 @@ class _SettingsScreenState extends State<SettingsScreen> {
     ));
   }
 
+  // ---- manager PIN (approvals) ----
+
+  Future<void> _changePin() async {
+    final pin1 = TextEditingController();
+    final pin2 = TextEditingController();
+    String? error;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (c) => StatefulBuilder(
+        builder: (c, setD) => AlertDialog(
+          title: const Text('Set manager PIN'),
+          content: SizedBox(
+            width: 340,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Cashiers type this PIN to approve refunds and manual '
+                  'discounts. Keep it manager-only.',
+                  style: TextStyle(fontSize: 12.5, color: AppColors.muted,
+                      height: 1.4),
+                ),
+                const SizedBox(height: AppSpace.s3),
+                TextField(
+                  controller: pin1,
+                  obscureText: true,
+                  keyboardType: TextInputType.number,
+                  maxLength: 8,
+                  autofocus: true,
+                  decoration: const InputDecoration(
+                      labelText: 'New PIN (4–8 digits)', counterText: ''),
+                ),
+                const SizedBox(height: AppSpace.s3),
+                TextField(
+                  controller: pin2,
+                  obscureText: true,
+                  keyboardType: TextInputType.number,
+                  maxLength: 8,
+                  decoration: const InputDecoration(
+                      labelText: 'Repeat PIN', counterText: ''),
+                ),
+                if (error != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: AppSpace.s2),
+                    child: Text(error!,
+                        style: TextStyle(
+                            color: AppColors.danger, fontSize: 12.5)),
+                  ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(c, false),
+                child: const Text('Cancel')),
+            FilledButton(
+              onPressed: () async {
+                if (pin1.text != pin2.text) {
+                  setD(() => error = 'PINs do not match.');
+                  return;
+                }
+                final err = await Approvals.setPin(pin1.text);
+                if (err != null) {
+                  setD(() => error = err);
+                  return;
+                }
+                if (!c.mounted) return;
+                Navigator.pop(c, true);
+              },
+              child: const Text('Save PIN'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (ok != true || !mounted) return;
+    final me = context.read<AuthProvider>().user;
+    await Audit.add('pin_changed', 'Manager PIN set or changed',
+        userId: me?.id, userName: me?.name);
+    if (!mounted) return;
+    setState(() {}); // refresh the PIN status row
+    ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Manager PIN saved')));
+  }
+
+  Future<void> _removePin() async {
+    final me = context.read<AuthProvider>().user;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('Remove the PIN?'),
+        content: const SizedBox(
+          width: 360,
+          child: Text(
+              'Approvals will fall back to a manager account email and '
+              'password until a new PIN is set.'),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(c, false),
+              child: const Text('Cancel')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppColors.danger),
+            onPressed: () => Navigator.pop(c, true),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    await Approvals.clearPin();
+    await Audit.add('pin_changed', 'Manager PIN removed',
+        userId: me?.id, userName: me?.name);
+    if (!mounted) return;
+    setState(() {});
+    ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('PIN removed')));
+  }
+
   /// Creates the backup zip, then shares it (phones) or saves it (desktop).
   Future<void> _exportBackup() async {
+    final me = context.read<AuthProvider>().user;
     setState(() => _busy = true);
     try {
       final path = await BackupService.createBackup();
@@ -100,6 +232,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       // The zip exists now — count this as a real backup even if the
       // share/save step is cancelled, so the reminder stays honest.
       await context.read<AppSettings>().markBackedUp();
+      await Audit.add('backup_exported', p.basename(path),
+          userId: me?.id, userName: me?.name);
       if (!mounted) return;
       if (Platform.isAndroid || Platform.isIOS) {
         await SharePlus.instance.share(ShareParams(
@@ -167,6 +301,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     setState(() => _busy = true);
     try {
+      final me = context.read<AuthProvider>().user;
+      await Audit.add('restore', p.basename(picked),
+          userId: me?.id, userName: me?.name);
       await BackupService.restoreBackup(picked);
       if (!mounted) return;
       await showDialog<void>(
@@ -495,6 +632,84 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               const SizedBox(height: AppSpace.s4),
 
+              // --- approvals & security ---
+              SectionCard(
+                icon: Icons.verified_user_outlined,
+                title: 'Approvals & security',
+                subtitle:
+                    'Manager PIN for refunds and discounts · audit trail',
+                children: [
+                  FutureBuilder<bool>(
+                    future: Approvals.hasPin(),
+                    builder: (context, snap) {
+                      final has = snap.data ?? false;
+                      return Row(
+                        children: [
+                          Icon(
+                            has
+                                ? Icons.pin_rounded
+                                : Icons.pin_outlined,
+                            size: 18,
+                            color: has
+                                ? AppColors.success
+                                : AppColors.warning,
+                          ),
+                          const SizedBox(width: AppSpace.s2),
+                          Expanded(
+                            child: Text(
+                              has
+                                  ? 'Manager PIN is set — cashiers approve with '
+                                      'the PIN or a manager password'
+                                  : 'No PIN set — approvals ask for a manager '
+                                      'account email and password',
+                              style: TextStyle(
+                                  fontFamily: 'Carlito',
+                                  fontSize: 12.5,
+                                  color: AppColors.body),
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: _changePin,
+                            child: Text(has ? 'Change' : 'Set PIN'),
+                          ),
+                          if (has)
+                            TextButton(
+                              onPressed: _removePin,
+                              child: Text('Remove',
+                                  style: TextStyle(color: AppColors.danger)),
+                            ),
+                        ],
+                      );
+                    },
+                  ),
+                  const SizedBox(height: AppSpace.s2),
+                  TextField(
+                    controller: _discPin,
+                    keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true),
+                    decoration: const InputDecoration(
+                      labelText:
+                          'Discount approval threshold (shop currency)',
+                      helperText:
+                          'Discounts at or above this need manager approval '
+                          'when a salesperson checks out. 0 = every discount.',
+                    ),
+                  ),
+                  const SizedBox(height: AppSpace.s2),
+                  Text(
+                    'Salespeople only see their own sales; refunds and stock '
+                    'adjustments stay manager-controlled. Save settings to '
+                    'apply the threshold.',
+                    style: TextStyle(
+                        fontFamily: 'Carlito',
+                        fontSize: 11.5,
+                        color: AppColors.faint),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: AppSpace.s4),
+
               // --- users ---
               Card(
                 child: ListTile(
@@ -515,6 +730,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   trailing: Icon(Icons.chevron_right_rounded, color: AppColors.faint),
                   onTap: () => Navigator.of(context).push(
                       MaterialPageRoute(builder: (_) => const UsersScreen())),
+                ),
+              ),
+
+              const SizedBox(height: AppSpace.s4),
+
+              // --- audit log ---
+              Card(
+                child: ListTile(
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: AppSpace.s4, vertical: AppSpace.s2),
+                  leading: Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: AppColors.primarySoft,
+                      borderRadius: BorderRadius.circular(AppRadius.md),
+                    ),
+                    child: Icon(Icons.history_rounded,
+                        color: AppColors.primary, size: 22),
+                  ),
+                  title: const Text('Audit log'),
+                  subtitle: const Text('Who refunded, approved, adjusted and closed — with times'),
+                  trailing: Icon(Icons.chevron_right_rounded, color: AppColors.faint),
+                  onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const AuditLogScreen())),
                 ),
               ),
 

@@ -24,6 +24,12 @@ class ZReportData {
   final List<({String name, int orders, double revenue})> staff;
   final List<({String name, int units, double revenue})> topItems;
 
+  /// Cash payments received (completed sales only).
+  final double cashIn;
+
+  /// Cash refunds processed today (refunded sales paid by cash).
+  final double cashRefunds;
+
   ZReportData({
     required this.day,
     required this.orders,
@@ -37,10 +43,16 @@ class ZReportData {
     required this.payments,
     required this.staff,
     required this.topItems,
+    this.cashIn = 0,
+    this.cashRefunds = 0,
   });
 
   /// Net takings = gross sales minus refunds processed that day.
   double get net => gross - refundTotal;
+
+  /// Expected cash in the drawer at day close: cash sales minus cash
+  /// refunds. Reconciliation compares the counted float against this.
+  double get expectedCash => cashIn - cashRefunds;
 
   /// Estimated profit margin (null when no cost prices are set).
   double? get grossProfit => cogs > 0 ? net - cogs : null;
@@ -54,21 +66,41 @@ class ZCloseRecord {
   final double net;
   final int orders;
 
-  ZCloseRecord({
+  /// Cash reconciliation captured at close (null = not counted).
+  final double? expectedCash;
+  final double? countedCash;
+
+  const ZCloseRecord({
     required this.closedAt,
     required this.closedBy,
     required this.net,
     required this.orders,
+    this.expectedCash,
+    this.countedCash,
   });
 
-  Map<String, dynamic> toJson() =>
-      {'at': closedAt, 'by': closedBy, 'net': net, 'orders': orders};
+  /// counted − expected (null when no count was taken).
+  double? get variance =>
+      (countedCash == null || expectedCash == null)
+          ? null
+          : countedCash! - expectedCash!;
+
+  Map<String, dynamic> toJson() => {
+        'at': closedAt,
+        'by': closedBy,
+        'net': net,
+        'orders': orders,
+        if (expectedCash != null) 'expectedCash': expectedCash,
+        if (countedCash != null) 'countedCash': countedCash,
+      };
 
   static ZCloseRecord fromJson(Map<String, dynamic> j) => ZCloseRecord(
         closedAt: (j['at'] as num?)?.toInt() ?? 0,
         closedBy: j['by'] as String? ?? '',
         net: (j['net'] as num?)?.toDouble() ?? 0,
         orders: (j['orders'] as num?)?.toInt() ?? 0,
+        expectedCash: (j['expectedCash'] as num?)?.toDouble(),
+        countedCash: (j['countedCash'] as num?)?.toDouble(),
       );
 }
 
@@ -120,7 +152,8 @@ class ZReportService {
     ''', args);
 
     final refunds = await db.rawQuery('''
-      SELECT COUNT(*) AS n, COALESCE(SUM(total), 0) AS amount
+      SELECT COUNT(*) AS n, COALESCE(SUM(total), 0) AS amount,
+             COALESCE(SUM(CASE WHEN payment_method = 'cash' THEN total ELSE 0 END), 0) AS cash
       FROM sales
       WHERE status = 'refunded' AND ${win('created_at')}
     ''', args);
@@ -163,6 +196,18 @@ class ZReportService {
       LIMIT 5
     ''', args);
 
+    final paymentRows = [
+      for (final r in payments)
+        (
+          method: r['method'] as String? ?? 'cash',
+          orders: r['orders'] as int? ?? 0,
+          total: (r['total'] as num?)?.toDouble() ?? 0,
+        ),
+    ];
+    final cashIn = paymentRows
+        .where((p) => p.method == 'cash')
+        .fold(0.0, (s, p) => s + p.total);
+
     return ZReportData(
       day: _dayStart(day),
       orders: totals.first['orders'] as int? ?? 0,
@@ -173,14 +218,9 @@ class ZReportService {
       refundCount: refunds.first['n'] as int? ?? 0,
       refundTotal: (refunds.first['amount'] as num?)?.toDouble() ?? 0,
       cogs: (cogsRows.first['cost'] as num?)?.toDouble() ?? 0,
-      payments: [
-        for (final r in payments)
-          (
-            method: r['method'] as String? ?? 'cash',
-            orders: r['orders'] as int? ?? 0,
-            total: (r['total'] as num?)?.toDouble() ?? 0,
-          ),
-      ],
+      payments: paymentRows,
+      cashIn: cashIn,
+      cashRefunds: (refunds.first['cash'] as num?)?.toDouble() ?? 0,
       staff: [
         for (final r in staff)
           (
@@ -419,6 +459,28 @@ class ZReportService {
               for (final p in d.payments)
                 _row3(_methodLabel(p.method), '${p.orders}', money(p.total)),
             ]),
+            pw.SizedBox(height: 12),
+          ],
+
+          // ---- cash reconciliation (when a count was taken at close) ----
+          if (closed?.countedCash != null) ...[
+            pw.Text('CASH RECONCILIATION',
+                style: pw.TextStyle(
+                    fontSize: 10, fontWeight: pw.FontWeight.bold)),
+            pw.SizedBox(height: 4),
+            _row('Cash sales', money(d.cashIn)),
+            if (d.cashRefunds > 0)
+              _row('Cash refunds', '− ${money(d.cashRefunds)}'),
+            _row('Expected in drawer', money(d.expectedCash)),
+            _row('Counted at close', money(closed!.countedCash!)),
+            pw.Divider(),
+            _row(
+              'VARIANCE',
+              closed.variance! == 0
+                  ? '0.00 — balanced'
+                  : '${closed.variance! > 0 ? '+' : '−'}${money(closed.variance!.abs())}',
+              bold: true,
+            ),
             pw.SizedBox(height: 12),
           ],
 

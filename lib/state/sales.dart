@@ -143,7 +143,9 @@ class SalesProvider extends ChangeNotifier {
   }
 
   /// Lists sales with optional filters. `days` = 0 means all time.
-  Future<List<Sale>> listSales({int days = 0, String? query, int? customerId}) async {
+  /// [userId] scopes the list to one cashier — salespeople only ever see
+  /// their own receipts (the manager sees the whole shop).
+  Future<List<Sale>> listSales({int days = 0, String? query, int? customerId, int? userId}) async {
     final db = await DB.instance();
     final where = <String>[];
     final args = <Object?>[];
@@ -153,6 +155,10 @@ class SalesProvider extends ChangeNotifier {
           DateTime.now().subtract(Duration(days: days)).millisecondsSinceEpoch ~/ 1000;
       where.add('s.created_at >= ?');
       args.add(cutoff);
+    }
+    if (userId != null) {
+      where.add('s.user_id = ?');
+      args.add(userId);
     }
     if (customerId != null) {
       where.add('s.customer_id = ?');

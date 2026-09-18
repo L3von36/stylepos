@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/sale.dart';
+import '../../services/approvals.dart';
+import '../../services/audit.dart';
 import '../../services/receipt_service.dart';
 import '../../state/auth.dart';
 import '../../state/catalog.dart';
@@ -51,6 +53,34 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
   }
 
   Future<void> _refund() async {
+    final auth = context.read<AuthProvider>();
+    final actor = auth.user!;
+    final settings = context.read<AppSettings>();
+    final sale = _sale!;
+
+    // Salespeople can process a return, but a manager must approve it
+    // (PIN, or a manager account password when no PIN is configured).
+    Approval? approval;
+    if (!actor.isAdmin) {
+      approval = await Approvals.request(
+        context,
+        title: 'Refund needs approval',
+        reason:
+            'Refunding ${sale.receiptNo} (${settings.money(sale.total)}) '
+            'restores the items to stock and reverses the takings. '
+            'A manager must approve it.',
+      );
+      if (approval == null) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Refund cancelled — manager approval is required'),
+          behavior: SnackBarBehavior.floating,
+        ));
+        return;
+      }
+    }
+    if (!mounted) return;
+
     final ok = await showDialog<bool>(
       context: context,
       builder: (c) => AlertDialog(
@@ -78,10 +108,18 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
     final messenger = ScaffoldMessenger.of(context);
     final sales = context.read<SalesProvider>();
     final catalog = context.read<CatalogProvider>();
-    final user = context.read<AuthProvider>().user!;
-    await sales.refund(_sale!, user.id!);
+    await sales.refund(_sale!, actor.id!);
     await catalog.reload();
     await _load();
+
+    // Audit trail: who refunded, and (for salespeople) who approved.
+    await Audit.add(
+      'refund',
+      '${sale.receiptNo} · ${settings.money(sale.total)}'
+      '${approval != null ? ' · approved by ${approval.userName} via ${approval.methodLabel}' : ''}',
+      userId: actor.id,
+      userName: actor.name,
+    );
     if (mounted) {
       messenger.showSnackBar(
           const SnackBar(content: Text('Sale refunded, stock restored')));
@@ -135,9 +173,11 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
       appBar: AppBar(
         title: Text(sale.receiptNo),
         actions: [
-          if (auth.user?.isAdmin == true && !sale.isRefunded)
+          if (!sale.isRefunded)
             IconButton(
-              tooltip: 'Refund',
+              tooltip: (auth.user?.isAdmin ?? false)
+                  ? 'Refund'
+                  : 'Refund (manager approval required)',
               icon: const Icon(Icons.undo_rounded),
               onPressed: _refund,
             ),

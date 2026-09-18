@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 
 import '../../models/customer.dart';
 import '../../models/sale.dart';
+import '../../services/csv_util.dart';
+import '../../state/auth.dart';
 import '../../state/cart.dart';
 import '../../state/customers.dart';
 import '../../state/nav.dart';
@@ -37,6 +39,29 @@ class _CustomersScreenState extends State<CustomersScreen> {
     );
   }
 
+  /// Manager-only: exports the customer list (name / phone / email / 
+  /// points) — the "marketing lists" export for email or SMS campaigns.
+  Future<void> _exportCsv() async {
+    final messenger = ScaffoldMessenger.of(context);
+    final buf = StringBuffer('name,phone,email,points,notes\n');
+    String s(String? v) => v ?? '';
+    for (final c in context.read<CustomersProvider>().customers) {
+      buf.writeln([
+        c.name, s(c.phone), s(c.email), '${c.points}', s(c.notes),
+      ].map(CsvUtil.escape).join(','));
+    }
+    final name =
+        'Sami-customers-${DateTime.now().toIso8601String().substring(0, 10)}.csv';
+    try {
+      final res = await CsvUtil.saveFile(
+          name: name, data: CsvUtil.encodeUtf8(buf.toString()));
+      if (res != null) messenger.showSnackBar(SnackBar(content: Text('CSV $res')));
+    } catch (_) {
+      messenger.showSnackBar(
+          const SnackBar(content: Text('Export failed — please try again')));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final customers = context.watch<CustomersProvider>();
@@ -55,6 +80,13 @@ class _CustomersScreenState extends State<CustomersScreen> {
             title: 'Customers',
             subtitle: '${customers.customers.length} registered',
             actions: [
+              if ((context.watch<AuthProvider>().user?.isAdmin ?? false) &&
+                  customers.customers.isNotEmpty)
+                IconButton(
+                  tooltip: 'Export customer list (CSV)',
+                  icon: const Icon(Icons.file_download_outlined, size: 21),
+                  onPressed: _exportCsv,
+                ),
               FilledButton.icon(
                 onPressed: () => _openEdit(),
                 icon: const Icon(Icons.person_add_alt_rounded, size: 19),

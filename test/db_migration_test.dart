@@ -134,7 +134,7 @@ void main() {
     return db;
   }
 
-  test('v1 database is upgraded to v5 and gains all sync columns', () async {
+  test('v1 database is upgraded to v6 and gains all sync columns', () async {
     // -- arrange: build a minimal version-1 database by hand --
     final v1 = await createLegacySchemaDb(tempDir.path, 1);
     await v1.insert('products', {
@@ -149,14 +149,14 @@ void main() {
     });
     await v1.close();
 
-    // -- act: open through the app (triggers onUpgrade 1 -> 5) --
+    // -- act: open through the app (triggers onUpgrade 1 -> 6) --
     final db = await DB.instance();
     final version = await db.getVersion();
     final cols = await db.rawQuery('PRAGMA table_info(products)');
     final colNames = cols.map((c) => c['name']).toSet();
 
     // -- assert --
-    expect(version, 5);
+    expect(version, 6);
     expect(colNames, containsAll(['image', 'cloud_id', 'dirty', 'deleted']));
     // v4: sales tables gained their sync bookkeeping too
     final saleCols = (await db.rawQuery('PRAGMA table_info(sales)'))
@@ -180,9 +180,15 @@ void main() {
       createdAt: 1700000001,
     ).toMap());
     expect(id, greaterThan(0));
+
+    // v6: accountability tables exist on migrated databases too
+    await db.insert('attendance', {'user_id': 1, 'clock_in': 1700000000});
+    await db.insert('audit_log', {
+      'action': 'refund', 'created_at': 1700000000,
+    });
   });
 
-  test('v4 to v5 wipes the demo catalog, sales history and pull cursors',
+  test('v4 database is upgraded to v6: demo purge + accountability tables',
       () async {
     final tempDir2 = await Directory.systemTemp.createTemp('stylepos_mig45');
     DB.useDirectory(tempDir2.path);
@@ -256,9 +262,9 @@ void main() {
     await v4.insert('settings', {'key': 'sync_last_pull_sales', 'value': '99'});
     await v4.close();
 
-    // -- act: open through the app (triggers onUpgrade 4 -> 5) --
+    // -- act: open through the app (triggers onUpgrade 4 -> 6) --
     final db = await DB.instance();
-    expect(await db.getVersion(), 5);
+    expect(await db.getVersion(), 6);
 
     // -- assert: catalog + history wiped, cursors forgotten --
     for (final t in [

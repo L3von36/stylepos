@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/product.dart';
+import '../../services/audit.dart';
 import '../../state/auth.dart';
 import '../../state/catalog.dart';
 import '../../widgets/ui.dart';
@@ -178,6 +179,15 @@ class _StockAdjustDialogState extends State<StockAdjustDialog> {
                     _delta > 0 ? 'restock' : 'adjustment',
                     _note.text.trim().isEmpty ? null : _note.text.trim(),
                     user?.id,
+                  );
+                  // Audit trail: who moved stock, why.
+                  await Audit.add(
+                    'stock_adjust',
+                    '${_delta > 0 ? '+' : ''}$_delta · ${product.name} '
+                    '(${variant.descriptor})'
+                    '${_note.text.trim().isEmpty ? '' : ' · ${_note.text.trim()}'}',
+                    userId: user?.id,
+                    userName: user?.name,
                   );
                   if (context.mounted) Navigator.pop(context);
                 },

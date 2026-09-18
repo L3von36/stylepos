@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 
 import '../../models/product.dart';
 import '../../services/scan_gate.dart';
+import '../../state/attendance.dart';
 import '../../state/auth.dart';
 import '../../state/cart.dart';
 import '../../state/catalog.dart';
@@ -397,11 +398,28 @@ class _MyTodayStripState extends State<_MyTodayStrip> {
     }
   }
 
+  Future<void> _togglePunch(bool currentlyIn) async {
+    final attendance = context.read<AttendanceProvider>();
+    if (currentlyIn) {
+      await attendance.clockOut(widget.userId);
+    } else {
+      await attendance.clockIn(widget.userId);
+    }
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(currentlyIn
+          ? 'Clocked out — shift saved to the log'
+          : 'Clocked in — have a great shift!'),
+      behavior: SnackBarBehavior.floating,
+    ));
+  }
+
   @override
   Widget build(BuildContext context) {
     _sync();
     final settings = context.watch<AppSettings>();
     final auth = context.watch<AuthProvider>();
+    final attendance = context.watch<AttendanceProvider>();
 
     return FutureBuilder<({int orders, double revenue, int itemsSold})>(
       future: _future,
@@ -439,6 +457,65 @@ class _MyTodayStripState extends State<_MyTodayStrip> {
                   'No sales yet today — scan a garment to start',
                   style: TextStyle(fontFamily: 'Carlito', fontSize: 12.5, color: AppColors.muted),
                 ),
+              const SizedBox(width: AppSpace.s3),
+              // Personal dashboard: clock in/out for the shift log. The
+              // pill shows the running shift length while clocked in.
+              FutureBuilder<Shift?>(
+                future: attendance.openShift(widget.userId),
+                builder: (context, shiftSnap) {
+                  final shift = shiftSnap.data;
+                  final onDuty = shift != null;
+                  return Tooltip(
+                    message: onDuty
+                        ? 'Clock out — ends this shift in the log'
+                        : 'Clock in — start a shift in the log',
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(AppRadius.pill),
+                      onTap: () => _togglePunch(onDuty),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: AppSpace.s3, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: onDuty ? AppColors.successSoft : AppColors.surface,
+                          borderRadius: BorderRadius.circular(AppRadius.pill),
+                          border: Border.all(
+                              color: onDuty
+                                  ? AppColors.success.withValues(alpha: 0.4)
+                                  : AppColors.border),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              onDuty
+                                  ? Icons.logout_rounded
+                                  : Icons.login_rounded,
+                              size: 13,
+                              color: onDuty
+                                  ? AppColors.success
+                                  : AppColors.primary,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              onDuty
+                                  ? 'On duty · ${shift.durationLabel}'
+                                  '  ·  Clock out'
+                                  : 'Clock in',
+                              style: TextStyle(
+                                  fontFamily: 'Carlito',
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.w700,
+                                  color: onDuty
+                                      ? AppColors.success
+                                      : AppColors.primary),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
             ],
           ),
         );
