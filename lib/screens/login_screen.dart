@@ -47,10 +47,24 @@ class _LoginScreenState extends State<LoginScreen> {
       _busy = true;
       _error = null;
     });
-    final err = await context.read<AuthProvider>().login(
+    final auth = context.read<AuthProvider>();
+    var err = await auth.login(
           _email.text,
           _password.text,
         );
+    // Not a known local account (or a device-seeded cloud staff row
+    // without a matching password)? It may be a CLOUD staff account —
+    // created by the Manager in Settings → Staff accounts on another
+    // device. Try the cloud; the session maps onto this device with the
+    // same role and remembers the credentials for offline sign-ins.
+    if (err == 'No account found for that email.' ||
+        err == 'Incorrect password.') {
+      final cloudErr = await CloudAuth.signIn(
+          email: _email.text, password: _password.text);
+      if (!mounted) return;
+      if (cloudErr == null) return; // session opened; _Root swaps to HomeShell
+      err = cloudErr;
+    }
     if (!mounted) return;
     if (err != null) {
       setState(() {
@@ -468,13 +482,14 @@ class _StaffFields extends StatelessWidget {
           ),
           child: Row(
             children: [
-              const Icon(Icons.info_outline_rounded, size: 16, color: AppColors.faint),
+              const Icon(Icons.badge_outlined, size: 16, color: AppColors.faint),
               const SizedBox(width: 8),
               const Expanded(
                 child: Text(
                   'Staff accounts are created by your Manager '
-                  '(Settings → Staff accounts) and work offline on this '
-                  'device. Managers: use the Manager tab.',
+                  '(Settings → Staff accounts). Cloud staff can sign in on '
+                  'ANY device with their email + password — after the first '
+                  'sign-in this device remembers them for offline use.',
                   style: TextStyle(
                       fontFamily: 'Carlito', fontSize: 12, color: AppColors.muted, height: 1.35),
                 ),

@@ -142,9 +142,9 @@ class _HomeShellState extends State<HomeShell> {
           // Fixed reading width — same family as the other message dialogs.
           width: 400,
           child: Text(
-            'Create till accounts for your cashiers — they sign in on the '
-            'Staff tab with the email + password you set, and every sale '
-            'they make lands in your shared shop data.',
+            'Create cloud accounts for your cashiers — they sign in on any '
+            'device (Staff tab) with the email + password you set, and every '
+            'sale they make lands in your shared shop data.',
           ),
         ),
         actions: [

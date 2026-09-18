@@ -60,15 +60,14 @@ class CloudAuth {
       final res = await _c.auth.signUp(email: email.trim(), password: password);
       if (res.session == null) return 'confirm';
       // New shop account: create the shop boundary + become its Manager.
-      if (shopName != null && shopName.trim().isNotEmpty) {
-        try {
-          await _c.rpc('create_shop',
-              params: {'p_name': shopName.trim()});
-        } catch (_) {// Idempotent — may already belong to a shop.
-        }
-      }
-      await _afterAuth(displayName: name ?? shopName, password: password);
-      return null;
+      // IMPORTANT: the shop is created INSIDE _afterAuth, AFTER the
+      // caller's app_users row exists — create_shop links the shop by
+      // UPDATING that row, so the order decides whether the account ever
+      // joins its own shop (v1.9.0 had it reversed and orphaned shops).
+      return await _afterAuth(
+          displayName: name ?? shopName,
+          password: password,
+          newShopName: shopName);
     } on AuthException catch (e) {
       return e.message;
     } catch (_) {
@@ -84,12 +83,16 @@ class CloudAuth {
     try {
       await _c.auth
           .signInWithPassword(email: email.trim(), password: password);
-      await _afterAuth();
-      return null;
+      return await _afterAuth(password: password);
     } on AuthException catch (e) {
       if (e.message.toLowerCase().contains('not confirmed')) {
         return 'Email not confirmed yet — click the link we sent you. '
             '(Or disable "Confirm email" in the Supabase dashboard.)';
+      }
+      if (e.message.toLowerCase().contains('banned') ||
+          e.message.toLowerCase().contains('disabled')) {
+        return 'This account has been deactivated. Ask your Manager to '
+            'reactivate it.';
       }
       return e.message;
     } catch (_) {
@@ -119,6 +122,105 @@ class CloudAuth {
       return null;
     }
   }
+
+  // ---- staff management (Manager, cloud-backed) ----
+
+  /// The signed-in Manager's whole staff roster (RLS scopes it to their
+  /// shop automatically). Null when not signed in, not the Manager, or
+  /// the shop does not exist yet.
+  static Future<List<Map<String, dynamic>>?> fetchStaffRoster() async {
+    try {
+      if (_c.auth.currentSession?.user.id == null) return null;
+      if (await currentRole() != 'admin') return null;
+      if (await fetchMyShop() == null) return null;
+      final rows = await _c
+          .from('app_users')
+          .select('id,name,role,active,email')
+          .order('name');
+      return List<Map<String, dynamic>>.from(rows);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Creates a real cloud staff account (Supabase auth user + app_users
+  /// row in the caller's shop). Returns null on success or the message
+  /// from the server (duplicate email, weak password, not the Manager…).
+  static Future<String?> createStaff({
+    required String email,
+    required String password,
+    required String name,
+    required String role,
+  }) async {
+    try {
+      await _c.rpc('create_staff_account', params: {
+        'p_email': email.trim(),
+        'p_password': password,
+        'p_name': name.trim(),
+        'p_role': role,
+      });
+      return null;
+    } on AuthException catch (e) {
+      return e.message;
+    } catch (e) {
+      final msg = e.toString();
+      if (msg.contains('already exists')) {
+        return msg.contains('your shop')
+            ? 'A staff account with that email already exists in your shop.'
+            : 'An account with that email already exists.';
+      }
+      if (msg.contains('Manager')) return msg.split('\n').first;
+      if (msg.contains('valid email')) return 'Enter a valid email address.';
+      if (msg.contains('6 characters')) {
+        return 'Password must be at least 6 characters.';
+      }
+      return 'Could not create the staff account — check your connection.';
+    }
+  }
+
+  /// Resets a cloud staff member's password (they sign in with the new
+  /// one on any device). Returns null on success or an error message.
+  static Future<String?> resetStaffPassword(String cloudId, String pw) async {
+    try {
+      await _c.rpc('reset_staff_password',
+          params: {'p_uid': cloudId, 'p_password': pw});
+      return null;
+    } catch (_) {
+      return 'Could not reset the cloud password — check your connection.';
+    }
+  }
+
+  /// Deactivates (bans) or reactivates a cloud staff member everywhere.
+  static Future<String?> setStaffActive(String cloudId, bool active) async {
+    try {
+      await _c.rpc('set_staff_active',
+          params: {'p_uid': cloudId, 'p_active': active});
+      return null;
+    } catch (e) {
+      final msg = e.toString();
+      if (msg.contains('your own')) return 'You cannot change your own access.';
+      return 'Could not update the staff member — check your connection.';
+    }
+  }
+
+  /// Edits a cloud staff member's name / role. Returns null on success.
+  static Future<String?> updateStaff(String cloudId,
+      {String? name, String? role}) async {
+    try {
+      final data = <String, Object?>{
+        'name': ?(name != null && name.trim().isNotEmpty ? name.trim() : null),
+        'role': ?role,
+      };
+      if (data.isEmpty) return null;
+      await _c.from('app_users').update(data).eq('id', cloudId);
+      return null;
+    } catch (_) {
+      return 'Could not update the staff member — check your connection.';
+    }
+  }
+
+  /// The signed-in cloud user id, or null when offline / signed out.
+  static String? currentUserId() => _c.auth.currentSession?.user.id;
 
   /// The signed-in user's shop, straight from the cloud (RLS returns only
   /// their own shop). Null when not signed in / offline / no shop yet.
@@ -246,9 +348,10 @@ class CloudAuth {
     }
   }
 
-  static Future<void> _afterAuth({String? displayName, String? password}) async {
+  static Future<String?> _afterAuth(
+      {String? displayName, String? password, String? newShopName}) async {
     final user = _c.auth.currentUser;
-    if (user == null) return;
+    if (user == null) return null;
 
     // 1) make sure a staff row exists in the cloud
     final fallbackName = user.email?.split('@').first ?? 'Staff';
@@ -257,24 +360,64 @@ class CloudAuth {
         : fallbackName;
     try {
       await _c.from('app_users').upsert(
-        {'id': user.id, 'name': name},
+        {'id': user.id, 'name': name, 'email': user.email},
         onConflict: 'id',
         ignoreDuplicates: true,
       );
     } catch (_) {// Row may already exist — fine.
     }
-    // 2) first shop member becomes the Manager (create_shop already does
+
+    // 2) create the shop AFTER the app_users row exists (see signUp).
+    var pendingShopId = '';
+    if (newShopName != null && newShopName.trim().isNotEmpty) {
+      try {
+        final sid = await _c.rpc('create_shop',
+            params: {'p_name': newShopName.trim()});
+        pendingShopId = sid?.toString() ?? '';
+      } catch (_) {// Idempotent — may already belong to a shop.
+      }
+    }
+
+    // 3) first shop member becomes the Manager (create_shop already does
     //    this for brand-new shops; this covers legacy accounts).
     try {
       await _c.rpc('claim_admin_if_first');
     } catch (_) {// Admin already claimed — fine.
     }
 
-    // 3) remember the shop on this device
-    try {
-      final shop = await fetchMyShop();
-      if (shop != null) {
+    // 3b) self-heal accounts whose shop was orphaned by the v1.9.0
+    //     signup-order bug: the shop id was remembered at creation but
+    //     the account was never linked. link_orphan_shop refuses unless
+    //     the shop has no members at all, so this cannot steal shops.
+    var shop = await fetchMyShop();
+    if (shop == null) {
+      try {
         final db = await DB.instance();
+        final rows = await db.query('settings',
+            where: 'key = ?', whereArgs: ['pending_shop_id']);
+        final pid = rows.isEmpty ? '' : (rows.first['value'] ?? '') as String;
+        if (pid.isNotEmpty) {
+          try {
+            await _c.rpc('link_orphan_shop', params: {'p_shop_id': pid});
+          } catch (_) {// Already linked / not an orphan — drop the hint.
+          }
+          shop = await fetchMyShop();
+        }
+      } catch (_) {// Local settings unavailable — skip healing.
+      }
+    } else {
+      pendingShopId = shop['id'] ?? '';
+    }
+
+    // 4) remember the shop on this device (and the healing hint)
+    try {
+      final db = await DB.instance();
+      if (pendingShopId.isNotEmpty) {
+        await db.insert('settings',
+            {'key': 'pending_shop_id', 'value': pendingShopId},
+            conflictAlgorithm: ConflictAlgorithm.replace);
+      }
+      if (shop != null) {
         await db.insert('settings',
             {'key': 'cloud_shop_id', 'value': shop['id'] ?? ''},
             conflictAlgorithm: ConflictAlgorithm.replace);
@@ -291,15 +434,27 @@ class CloudAuth {
     // 4) map onto a local staff account so this device has a till identity
     String? cloudRole;
     String? cloudName;
+    bool deactivated = false;
     try {
       final row = await _c
           .from('app_users')
-          .select('name,role')
+          .select('name,role,active')
           .eq('id', user.id)
           .maybeSingle();
       cloudRole = row?['role'] as String?;
       cloudName = row?['name'] as String?;
+      deactivated = row != null && row['active'] == false;
     } catch (_) {// Offline-ish; defaults below still work.
+    }
+    if (deactivated) {
+      // The Manager has switched this staff member off — refuse the
+      // session instead of opening a till for them.
+      try {
+        await _c.auth.signOut();
+      } catch (_) {// Session may already be gone.
+      }
+      return 'This account has been deactivated. Ask your Manager to '
+          'reactivate it.';
     }
     final localRole = cloudRole == 'admin' ? 'admin' : 'cashier';
 
@@ -319,8 +474,20 @@ class CloudAuth {
 
       if (rows.isNotEmpty) {
         final u = AppUser.fromMap(rows.first);
-        await db.update('users', {'cloud_id': user.id, 'role': localRole},
-            where: 'id = ?', whereArgs: [u.id]);
+        final update = <String, Object?>{
+          'cloud_id': user.id,
+          'role': localRole,
+        };
+        // A shadow row (created by sync for sale attribution) has no local
+        // password — seed it from this sign-in so the staff member can log
+        // in on the Staff tab even when this device is OFFLINE.
+        if (password != null &&
+            (rows.first['pass_hash'] as String? ?? '').isEmpty) {
+          final salt = newSalt();
+          update['salt'] = salt;
+          update['pass_hash'] = hashPassword(password, salt);
+        }
+        await db.update('users', update, where: 'id = ?', whereArgs: [u.id]);
         await auth?.sessionAs(u.copyWith(role: localRole));
       } else {
         // Brand-new shop account: create the matching local staff row.
@@ -345,5 +512,6 @@ class CloudAuth {
 
     // 5) pull the shop data
     SyncService.I.scheduleSync(const Duration(seconds: 1));
+    return null;
   }
 }
