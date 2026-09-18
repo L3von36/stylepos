@@ -65,7 +65,7 @@ class _AppSidebarState extends State<AppSidebar> {
         width: 38,
         height: 38,
         decoration: BoxDecoration(
-          gradient: const LinearGradient(
+          gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: AppColors.brandGradient,
@@ -89,7 +89,7 @@ class _AppSidebarState extends State<AppSidebar> {
         children: [
           tile,
           const SizedBox(width: AppSpace.s3),
-          const Expanded(
+          Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
@@ -119,7 +119,7 @@ class _AppSidebarState extends State<AppSidebar> {
   Widget _sectionLabel(String text) => Padding(
         padding: const EdgeInsets.fromLTRB(AppSpace.s5, AppSpace.s5, AppSpace.s4, AppSpace.s2),
         child: Text(text.toUpperCase(),
-            style: const TextStyle(
+            style: TextStyle(
                 fontFamily: 'Carlito',
                 fontSize: 11,
                 height: 16 / 11,
@@ -249,7 +249,7 @@ class _AppSidebarState extends State<AppSidebar> {
                       Text(u.name,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
+                          style: TextStyle(
                               fontFamily: 'Carlito',
                               fontSize: 13,
                               height: 18 / 13,
@@ -273,7 +273,7 @@ class _AppSidebarState extends State<AppSidebar> {
                     ],
                   ),
                 ),
-                const Icon(Icons.unfold_more_rounded, size: 16, color: AppColors.faint),
+                Icon(Icons.unfold_more_rounded, size: 16, color: AppColors.faint),
               ],
             ),
           )
@@ -299,19 +299,19 @@ class _AppSidebarState extends State<AppSidebar> {
                     Text(u.name,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
+                        style: TextStyle(
                             fontFamily: 'Carlito', fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.ink)),
                     Text(u.email,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
+                        style: TextStyle(
                             fontFamily: 'Carlito', fontSize: 12, height: 16 / 12, color: AppColors.muted)),
                   ],
                 ),
               ),
             ),
             const PopupMenuDivider(),
-            const PopupMenuItem<String>(
+            PopupMenuItem<String>(
               value: 'pw',
               height: 44,
               child: Row(children: [
@@ -321,7 +321,7 @@ class _AppSidebarState extends State<AppSidebar> {
                     style: TextStyle(fontFamily: 'Carlito', fontSize: 13.5, color: AppColors.body)),
               ]),
             ),
-            const PopupMenuItem<String>(
+            PopupMenuItem<String>(
               value: 'out',
               height: 44,
               child: Row(children: [
@@ -349,7 +349,7 @@ class _AppSidebarState extends State<AppSidebar> {
 
     return Container(
       width: _extended ? 244.0 : 72.0,
-      color: Colors.white,
+      color: AppColors.surface,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [

@@ -72,34 +72,55 @@ abstract final class AppMotion {
 // ---------------------------------------------------------------------------
 
 abstract final class AppColors {
-  // Brand (indigo)
-  static const primary = Color(0xFF4F46E5); // indigo 600
-  static const primaryDark = Color(0xFF3730A3); // indigo 800
-  static const primarySoft = Color(0xFFEEF2FF); // indigo 50
-  static const primaryContainer = Color(0xFFE0E7FF); // indigo 100
+  /// Brightness the semantic tokens resolve for. The app shell keeps it in
+  /// step with MaterialApp's effective theme (see _ThemeSync in main.dart),
+  /// so one set of call sites renders correctly in light AND dark mode.
+  static Brightness brightness = Brightness.light;
+  static bool get isDark => brightness == Brightness.dark;
+
+  // Brand (indigo) — identical hue family in both modes; dark mode lifts
+  // the tones so accents keep contrast on dark surfaces.
+  static Color get primary =>
+      isDark ? const Color(0xFF818CF8) : const Color(0xFF4F46E5); // indigo 400 / 600
+  static Color get onPrimary =>
+      isDark ? const Color(0xFF14163F) : Colors.white;
+  /// "Strong indigo" content on primarySoft/primaryContainer (selected nav
+  /// labels, avatars, links). Flips to a light indigo in dark mode.
+  static Color get primaryDark =>
+      isDark ? const Color(0xFFC7D2FE) : const Color(0xFF3730A3);
+  static Color get primarySoft =>
+      isDark ? const Color(0xFF2A2C5E) : const Color(0xFFEEF2FF);
+  static Color get primaryContainer =>
+      isDark ? const Color(0xFF3730A3) : const Color(0xFFE0E7FF);
 
   /// Brand gradient for logo tiles (app bar, sidebar header, receipts).
   static const List<Color> brandGradient = [Color(0xFF4F46E5), Color(0xFF6D28D9)];
 
+  /// Foreground on fixed saturated brand art (logo tiles): white in both modes.
+  static const Color onBrand = Colors.white;
+
   // Neutrals (slate)
-  static const ink = Color(0xFF0F172A); // headings
-  static const body = Color(0xFF334155); // body text
-  static const muted = Color(0xFF64748B); // secondary text (4.8:1 on white)
-  static const faint = Color(0xFF94A3B8); // hints / disabled text
-  static const border = Color(0xFFCBD5E1); // outline
-  static const borderSoft = Color(0xFFE2E8F0); // outlineVariant
-  static const background = Color(0xFFF4F5F9);
-  static const surfaceTint = Color(0xFFF8FAFC);
+  static Color get ink => isDark ? const Color(0xFFF1F5F9) : const Color(0xFF0F172A);
+  static Color get body => isDark ? const Color(0xFFC7CDDB) : const Color(0xFF334155);
+  static Color get muted => isDark ? const Color(0xFF95A1B5) : const Color(0xFF64748B);
+  static Color get faint => isDark ? const Color(0xFF66748C) : const Color(0xFF94A3B8);
+  static Color get border => isDark ? const Color(0xFF3A4258) : const Color(0xFFCBD5E1);
+  static Color get borderSoft => isDark ? const Color(0xFF272E40) : const Color(0xFFE2E8F0);
+  static Color get background => isDark ? const Color(0xFF0F1117) : const Color(0xFFF4F5F9);
+  static Color get surfaceTint => isDark ? const Color(0xFF161A24) : const Color(0xFFF8FAFC);
+  /// Card / app-bar / sheet color (white in light, raised slate in dark).
+  static Color get surface => isDark ? const Color(0xFF151924) : Colors.white;
 
   // Semantic (fixed fg + container pairs, M3-style)
-  static const success = Color(0xFF059669);
-  static const successSoft = Color(0xFFD1FAE5);
-  static const warning = Color(0xFFB45309);
-  static const warningSoft = Color(0xFFFEF3C7);
-  static const danger = Color(0xFFDC2626);
-  static const dangerSoft = Color(0xFFFEE2E2);
-  static const info = Color(0xFF0284C7);
-  static const infoSoft = Color(0xFFE0F2FE);
+  static Color get success => isDark ? const Color(0xFF34D399) : const Color(0xFF059669);
+  static Color get successSoft => isDark ? const Color(0xFF0D3328) : const Color(0xFFD1FAE5);
+  static Color get warning => isDark ? const Color(0xFFFBBF24) : const Color(0xFFB45309);
+  static Color get warningSoft => isDark ? const Color(0xFF39300E) : const Color(0xFFFEF3C7);
+  static Color get danger => isDark ? const Color(0xFFF87171) : const Color(0xFFDC2626);
+  static Color get onError => isDark ? const Color(0xFF3D0B10) : Colors.white;
+  static Color get dangerSoft => isDark ? const Color(0xFF3D1A20) : const Color(0xFFFEE2E2);
+  static Color get info => isDark ? const Color(0xFF38BDF8) : const Color(0xFF0284C7);
+  static Color get infoSoft => isDark ? const Color(0xFF0C2C40) : const Color(0xFFE0F2FE);
 
   /// Coordinated chart palette (reports screen).
   static const chart = [
@@ -142,39 +163,42 @@ ButtonStyle primarySegmentStyle() => ButtonStyle(
 // ---------------------------------------------------------------------------
 
 abstract final class AppTheme {
-  static ThemeData build() {
-    const scheme = ColorScheme(
-      brightness: Brightness.light,
+  /// Builds the app theme for [target] brightness. Both modes share the same
+  /// component geometry; only tokens differ.
+  static ThemeData build([Brightness target = Brightness.light]) {
+    final dark = target == Brightness.dark;
+    final scheme = ColorScheme(
+      brightness: target,
       primary: AppColors.primary,
-      onPrimary: Colors.white,
+      onPrimary: AppColors.onPrimary,
       primaryContainer: AppColors.primaryContainer,
       onPrimaryContainer: AppColors.primaryDark,
-      secondary: Color(0xFF0F766E),
-      onSecondary: Colors.white,
-      secondaryContainer: Color(0xFFCCFBF1),
-      onSecondaryContainer: Color(0xFF115E59),
-      tertiary: Color(0xFF7C3AED),
-      onTertiary: Colors.white,
-      tertiaryContainer: Color(0xFFEDE9FE),
-      onTertiaryContainer: Color(0xFF5B21B6),
+      secondary: dark ? const Color(0xFF2DD4BF) : const Color(0xFF0F766E),
+      onSecondary: dark ? const Color(0xFF06251F) : Colors.white,
+      secondaryContainer: dark ? const Color(0xFF0B3B34) : const Color(0xFFCCFBF1),
+      onSecondaryContainer: dark ? const Color(0xFFB7F2E7) : const Color(0xFF115E59),
+      tertiary: dark ? const Color(0xFFA78BFA) : const Color(0xFF7C3AED),
+      onTertiary: dark ? const Color(0xFF241041) : Colors.white,
+      tertiaryContainer: dark ? const Color(0xFF3B2A6E) : const Color(0xFFEDE9FE),
+      onTertiaryContainer: dark ? const Color(0xFFDDD6FE) : const Color(0xFF5B21B6),
       error: AppColors.danger,
-      onError: Colors.white,
+      onError: AppColors.onError,
       errorContainer: AppColors.dangerSoft,
-      onErrorContainer: Color(0xFF991B1B),
-      surface: Colors.white,
+      onErrorContainer: dark ? const Color(0xFFFCA5A5) : const Color(0xFF991B1B),
+      surface: AppColors.surface,
       onSurface: AppColors.ink,
-      surfaceContainerLowest: Colors.white,
+      surfaceContainerLowest: dark ? const Color(0xFF0E1015) : Colors.white,
       surfaceContainerLow: AppColors.surfaceTint,
-      surfaceContainer: Color(0xFFF1F5F9),
-      surfaceContainerHigh: Color(0xFFE8ECF3),
+      surfaceContainer: dark ? const Color(0xFF1A202C) : const Color(0xFFF1F5F9),
+      surfaceContainerHigh: dark ? const Color(0xFF222A38) : const Color(0xFFE8ECF3),
       surfaceContainerHighest: AppColors.borderSoft,
       onSurfaceVariant: AppColors.muted,
       outline: AppColors.border,
       outlineVariant: AppColors.borderSoft,
-      shadow: Color(0xFF0F172A),
-      inverseSurface: Color(0xFF1E293B),
-      onInverseSurface: Color(0xFFF8FAFC),
-      inversePrimary: Color(0xFFA5B4FC),
+      shadow: const Color(0xFF0F172A),
+      inverseSurface: dark ? const Color(0xFFE2E8F0) : const Color(0xFF1E293B),
+      onInverseSurface: dark ? const Color(0xFF10151F) : const Color(0xFFF8FAFC),
+      inversePrimary: dark ? const Color(0xFF4F46E5) : const Color(0xFFA5B4FC),
       // Elevated surfaces (dialogs, menus) receive the M3 primary tint.
       surfaceTint: AppColors.primary,
     );
@@ -186,8 +210,8 @@ abstract final class AppTheme {
       textTheme: _textTheme(base.textTheme),
 
       // -- App bar: flat, surface-colored, hairline bottom (M3 surface role) --
-      appBarTheme: const AppBarTheme(
-        backgroundColor: Colors.white,
+      appBarTheme: AppBarTheme(
+        backgroundColor: scheme.surface,
         foregroundColor: AppColors.ink,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
@@ -212,25 +236,25 @@ abstract final class AppTheme {
         clipBehavior: Clip.antiAlias,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppRadius.md),
-          side: const BorderSide(color: AppColors.borderSoft),
+          side: BorderSide(color: AppColors.borderSoft),
         ),
       ),
 
       // -- Dialogs: M3 basic dialog — extra-large shape, level-3 elevation --
       dialogTheme: DialogThemeData(
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.white,
+        backgroundColor: dark ? scheme.surfaceContainerHigh : scheme.surface,
+        surfaceTintColor: Colors.transparent,
         elevation: 3,
-        shadowColor: const Color(0x240F172A),
+        shadowColor: dark ? const Color(0x66000000) : const Color(0x240F172A),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.xl)),
-        titleTextStyle: const TextStyle(
+        titleTextStyle: TextStyle(
           fontFamily: 'Carlito',
           fontSize: 20,
           fontWeight: FontWeight.w700,
           color: AppColors.ink,
           height: 28 / 20,
         ),
-        contentTextStyle: const TextStyle(
+        contentTextStyle: TextStyle(
           fontFamily: 'Carlito',
           fontSize: 14,
           height: 20 / 14,
@@ -241,8 +265,8 @@ abstract final class AppTheme {
       // -- Text fields: M3 outlined style — 1dp outline, 2dp active indicator --
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: Colors.white,
-        hintStyle: const TextStyle(color: AppColors.faint),
+        fillColor: dark ? scheme.surfaceContainer : Colors.white,
+        hintStyle: TextStyle(color: AppColors.faint),
         contentPadding: const EdgeInsets.symmetric(horizontal: AppSpace.s4, vertical: AppSpace.s3 + 1),
         border: _inputBorder(AppColors.border),
         enabledBorder: _inputBorder(AppColors.border),
@@ -269,7 +293,7 @@ abstract final class AppTheme {
           minimumSize: const Size(0, 40),
           padding: const EdgeInsets.symmetric(horizontal: AppSpace.s4),
           foregroundColor: AppColors.primaryDark,
-          side: const BorderSide(color: AppColors.border),
+          side: BorderSide(color: AppColors.border),
           textStyle: const TextStyle(
               fontFamily: 'Carlito', fontSize: 14, fontWeight: FontWeight.w700, letterSpacing: 0.1),
           shape: const RoundedRectangleBorder(
@@ -291,7 +315,7 @@ abstract final class AppTheme {
       ),
       segmentedButtonTheme: SegmentedButtonThemeData(
         style: ButtonStyle(
-          side: const WidgetStatePropertyAll(BorderSide(color: AppColors.border)),
+          side: WidgetStatePropertyAll(BorderSide(color: AppColors.border)),
           minimumSize: const WidgetStatePropertyAll(Size(0, 40)),
           textStyle: const WidgetStatePropertyAll(
             TextStyle(fontFamily: 'Carlito', fontSize: 13.5, fontWeight: FontWeight.w700),
@@ -311,17 +335,17 @@ abstract final class AppTheme {
 
       // -- Chips: small shape (8dp), 32dp height --
       chipTheme: ChipThemeData(
-        backgroundColor: Colors.white,
-        side: const BorderSide(color: AppColors.border),
+        backgroundColor: scheme.surface,
+        side: BorderSide(color: AppColors.border),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.sm)),
-        labelStyle: const TextStyle(fontFamily: 'Carlito', fontSize: 13, color: AppColors.body),
+        labelStyle: TextStyle(fontFamily: 'Carlito', fontSize: 13, color: AppColors.body),
         padding: const EdgeInsets.symmetric(horizontal: AppSpace.s2 + 2, vertical: AppSpace.s1),
       ),
 
       // -- FAB: large shape (16dp), lowered elevation (3) --
       floatingActionButtonTheme: FloatingActionButtonThemeData(
         backgroundColor: AppColors.primary,
-        foregroundColor: Colors.white,
+        foregroundColor: AppColors.onPrimary,
         elevation: 3,
         focusElevation: 3,
         hoverElevation: 4,
@@ -333,7 +357,7 @@ abstract final class AppTheme {
       //    selected tab matches the desktop sidebar's primary selection —
       //    mint (secondaryContainer) stays reserved for success/money --
       navigationBarTheme: NavigationBarThemeData(
-        backgroundColor: Colors.white,
+        backgroundColor: scheme.surface,
         indicatorColor: AppColors.primaryContainer,
         iconTheme: WidgetStateProperty.resolveWith((states) => IconThemeData(
               color: states.contains(WidgetState.selected)
@@ -356,9 +380,9 @@ abstract final class AppTheme {
       listTileTheme: ListTileThemeData(
         iconColor: AppColors.muted,
         contentPadding: const EdgeInsets.symmetric(horizontal: AppSpace.s4),
-        titleTextStyle: const TextStyle(
+        titleTextStyle: TextStyle(
             fontFamily: 'Carlito', fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.ink),
-        subtitleTextStyle: const TextStyle(
+        subtitleTextStyle: TextStyle(
             fontFamily: 'Carlito', fontSize: 12.5, height: 17 / 12.5, color: AppColors.muted),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
       ),
@@ -368,32 +392,38 @@ abstract final class AppTheme {
         behavior: SnackBarBehavior.floating,
         backgroundColor: scheme.inverseSurface,
         elevation: 3,
-        contentTextStyle: const TextStyle(
-            fontFamily: 'Carlito', fontSize: 13.5, color: Color(0xFFF8FAFC), letterSpacing: 0.2),
+        contentTextStyle: TextStyle(
+            fontFamily: 'Carlito',
+            fontSize: 13.5,
+            color: dark ? const Color(0xFF10151F) : const Color(0xFFF8FAFC),
+            letterSpacing: 0.2),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.sm)),
       ),
 
       // -- Menus / popovers: medium shape, level-2 elevation --
       popupMenuTheme: PopupMenuThemeData(
-        color: Colors.white,
-        surfaceTintColor: Colors.white,
+        color: dark ? scheme.surfaceContainerHigh : Colors.white,
+        surfaceTintColor: Colors.transparent,
         elevation: 3,
-        shadowColor: const Color(0x240F172A),
+        shadowColor: dark ? const Color(0x66000000) : const Color(0x240F172A),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
-        textStyle: const TextStyle(fontFamily: 'Carlito', fontSize: 13.5, color: AppColors.body),
+        textStyle: TextStyle(fontFamily: 'Carlito', fontSize: 13.5, color: AppColors.body),
       ),
 
-      dividerTheme: const DividerThemeData(color: AppColors.borderSoft, thickness: 1, space: 1),
-      progressIndicatorTheme: const ProgressIndicatorThemeData(
+      dividerTheme: DividerThemeData(color: AppColors.borderSoft, thickness: 1, space: 1),
+      progressIndicatorTheme: ProgressIndicatorThemeData(
         color: AppColors.primary,
         linearTrackColor: AppColors.borderSoft,
       ),
       tooltipTheme: TooltipThemeData(
         decoration: BoxDecoration(
-          color: const Color(0xFF1E293B),
+          color: dark ? const Color(0xFFE2E8F0) : const Color(0xFF1E293B),
           borderRadius: BorderRadius.circular(AppRadius.sm),
         ),
-        textStyle: const TextStyle(fontFamily: 'Carlito', fontSize: 12, color: Color(0xFFF8FAFC)),
+        textStyle: TextStyle(
+            fontFamily: 'Carlito',
+            fontSize: 12,
+            color: dark ? const Color(0xFF10151F) : const Color(0xFFF8FAFC)),
       ),
 
       // -- M3 page transitions (forward + fade) --
@@ -407,6 +437,9 @@ abstract final class AppTheme {
     );
   }
 
+  /// Dark-mode twin of [build] — same geometry, dark tokens.
+  static ThemeData dark() => build(Brightness.dark);
+
   static OutlineInputBorder _inputBorder(Color color, {double width = 1}) => OutlineInputBorder(
         borderRadius: BorderRadius.circular(AppRadius.sm),
         borderSide: BorderSide(color: color, width: width),
@@ -419,40 +452,40 @@ abstract final class AppTheme {
     const f = 'Carlito';
     return base.copyWith(
       // Headline (largest on-screen text, section/page headers)
-      headlineMedium: const TextStyle(
+      headlineMedium: TextStyle(
           fontFamily: f, fontSize: 28, height: 36 / 28, letterSpacing: -0.25,
           fontWeight: FontWeight.w700, color: AppColors.ink),
-      headlineSmall: const TextStyle(
+      headlineSmall: TextStyle(
           fontFamily: f, fontSize: 24, height: 32 / 24, letterSpacing: -0.25,
           fontWeight: FontWeight.w700, color: AppColors.ink),
       // Title (medium-emphasis headers of components)
-      titleLarge: const TextStyle(
+      titleLarge: TextStyle(
           fontFamily: f, fontSize: 20, height: 28 / 20,
           fontWeight: FontWeight.w700, color: AppColors.ink),
-      titleMedium: const TextStyle(
+      titleMedium: TextStyle(
           fontFamily: f, fontSize: 16, height: 24 / 16, letterSpacing: 0.15,
           fontWeight: FontWeight.w700, color: AppColors.ink),
-      titleSmall: const TextStyle(
+      titleSmall: TextStyle(
           fontFamily: f, fontSize: 14, height: 20 / 14, letterSpacing: 0.1,
           fontWeight: FontWeight.w700, color: AppColors.ink),
       // Body (reading text)
-      bodyLarge: const TextStyle(
+      bodyLarge: TextStyle(
           fontFamily: f, fontSize: 15, height: 22 / 15, letterSpacing: 0.2,
           fontWeight: FontWeight.w400, color: AppColors.body),
-      bodyMedium: const TextStyle(
+      bodyMedium: TextStyle(
           fontFamily: f, fontSize: 14, height: 20 / 14, letterSpacing: 0.2,
           fontWeight: FontWeight.w400, color: AppColors.body),
-      bodySmall: const TextStyle(
+      bodySmall: TextStyle(
           fontFamily: f, fontSize: 12.5, height: 17 / 12.5, letterSpacing: 0.3,
           fontWeight: FontWeight.w400, color: AppColors.muted),
       // Label (buttons, pills, captions, overlines)
-      labelLarge: const TextStyle(
+      labelLarge: TextStyle(
           fontFamily: f, fontSize: 14, height: 20 / 14, letterSpacing: 0.1,
           fontWeight: FontWeight.w700, color: AppColors.ink),
-      labelMedium: const TextStyle(
+      labelMedium: TextStyle(
           fontFamily: f, fontSize: 12, height: 16 / 12, letterSpacing: 0.3,
           fontWeight: FontWeight.w700, color: AppColors.muted),
-      labelSmall: const TextStyle(
+      labelSmall: TextStyle(
           fontFamily: f, fontSize: 11, height: 16 / 11, letterSpacing: 0.4,
           fontWeight: FontWeight.w700, color: AppColors.muted),
     );
@@ -574,7 +607,8 @@ class StatusPill {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: AppSpace.s2 + 2, vertical: AppSpace.s1),
       decoration: BoxDecoration(
-        color: background ?? Color.lerp(foreground, Colors.white, 0.88),
+        color: background ??
+            Color.lerp(foreground, Theme.of(context).colorScheme.surface, 0.86),
         borderRadius: BorderRadius.circular(AppRadius.pill),
       ),
       child: Row(
@@ -598,12 +632,12 @@ class StatusPill {
     );
   }
 
-  static Widget stock(BuildContext context, int qty, {String? label}) {
+  static Widget stock(BuildContext context, int qty, {String? label, int lowThreshold = 5}) {
     if (qty <= 0) {
       return build(context,
           label: label ?? 'Out of stock', foreground: AppColors.danger, background: AppColors.dangerSoft);
     }
-    if (qty <= 5) {
+    if (qty <= lowThreshold) {
       return build(context,
           label: label ?? 'Low · $qty', foreground: AppColors.warning, background: AppColors.warningSoft);
     }
@@ -640,7 +674,7 @@ class EmptyState extends StatelessWidget {
             Container(
               width: 76,
               height: 76,
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                   color: AppColors.surfaceTint, shape: BoxShape.circle),
               child: Icon(icon, size: 34, color: AppColors.faint),
             ),
@@ -674,16 +708,16 @@ class KpiCard extends StatefulWidget {
   final String label;
   final String value;
   final IconData icon;
-  final Color color;
-  final Color soft;
+  final Color? color;
+  final Color? soft;
 
   const KpiCard({
     super.key,
     required this.label,
     required this.value,
     required this.icon,
-    this.color = AppColors.primary,
-    this.soft = AppColors.primarySoft,
+    this.color,
+    this.soft,
   });
 
   @override
@@ -695,8 +729,8 @@ class _KpiCardState extends State<KpiCard> {
 
   @override
   Widget build(BuildContext context) {
-    final color = widget.color;
-    final soft = widget.soft;
+    final color = widget.color ?? AppColors.primary;
+    final soft = widget.soft ?? AppColors.primarySoft;
     final valueColor = color == AppColors.primary ? AppColors.ink : color;
     return MouseRegion(
       onEnter: (_) => setState(() => _hover = true),
@@ -708,7 +742,7 @@ class _KpiCardState extends State<KpiCard> {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(AppRadius.md),
           boxShadow: _hover
-              ? const [BoxShadow(color: Color(0x1A4F46E5), blurRadius: 14, offset: Offset(0, 6))]
+              ? [BoxShadow(color: AppColors.primary.withValues(alpha: AppColors.isDark ? 0.28 : 0.10), blurRadius: 14, offset: const Offset(0, 6))]
               : const [],
         ),
         child: Card(
@@ -775,7 +809,7 @@ class InitialsAvatar extends StatelessWidget {
       width: size,
       height: size,
       decoration: BoxDecoration(
-        color: soft ?? Color.lerp(c, Colors.white, 0.9),
+        color: soft ?? Color.lerp(c, Theme.of(context).colorScheme.surface, 0.88),
         borderRadius: BorderRadius.circular(AppRadius.md),
       ),
       alignment: Alignment.center,
@@ -848,7 +882,7 @@ class QtyStepper extends StatelessWidget {
             width: 28,
             child: Text('$qty',
                 textAlign: TextAlign.center,
-                style: const TextStyle(
+                style: TextStyle(
                     fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.ink)),
           ),
           _btn(Icons.add_rounded, onPlus),
@@ -892,7 +926,7 @@ class ProductThumb extends StatelessWidget {
         width: size,
         height: size,
         alignment: Alignment.center,
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,

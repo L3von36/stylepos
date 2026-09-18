@@ -86,7 +86,7 @@ class _CloudSyncCardState extends State<CloudSyncCard> {
           FilledButton(
             style: FilledButton.styleFrom(
                 backgroundColor: AppColors.danger,
-                foregroundColor: Colors.white),
+                foregroundColor: AppColors.onError),
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('Erase & re-pull'),
           ),
@@ -127,7 +127,7 @@ class _CloudSyncCardState extends State<CloudSyncCard> {
           FilledButton(
             style: FilledButton.styleFrom(
                 backgroundColor: AppColors.danger,
-                foregroundColor: Colors.white),
+                foregroundColor: AppColors.onPrimary),
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('Clear sales history'),
           ),
@@ -181,10 +181,10 @@ class _CloudSyncCardState extends State<CloudSyncCard> {
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.info_outline_rounded,
+                  Icon(Icons.info_outline_rounded,
                       size: 16, color: AppColors.faint),
                   const SizedBox(width: 8),
-                  const Expanded(
+                  Expanded(
                     child: Text(
                       'Not connected. Sign out of the till, then use the '
                       'Manager tab on the login screen to open your shop '
@@ -228,7 +228,7 @@ class _CloudSyncCardState extends State<CloudSyncCard> {
                     children: [
                       Text(
                         _c.auth.currentSession?.user.email ?? '',
-                        style: const TextStyle(
+                        style: TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w700,
                             color: AppColors.ink),
@@ -251,7 +251,7 @@ class _CloudSyncCardState extends State<CloudSyncCard> {
                         Text(
                           '${_shop['name']}'
                           '${(_shop['code'] ?? '').isNotEmpty ? "  ·  shop code ${_shop['code']}" : ""}',
-                          style: const TextStyle(
+                          style: TextStyle(
                               fontSize: 12, color: AppColors.faint),
                           overflow: TextOverflow.ellipsis,
                         ),

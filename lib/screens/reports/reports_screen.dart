@@ -146,8 +146,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
                         label: 'Revenue 30 days',
                         value: settings.money(d30?.revenue ?? 0),
                         icon: Icons.calendar_month_rounded,
-                        color: const Color(0xFF7C3AED),
-                        soft: const Color(0xFFEDE9FE),
+                        color: AppColors.isDark ? const Color(0xFFA78BFA) : const Color(0xFF7C3AED),
+                        soft: AppColors.isDark ? const Color(0xFF3B2A6E) : const Color(0xFFEDE9FE),
                       ),
                     ),
                     SizedBox(
@@ -157,8 +157,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
                         value: settings.money(
                             d30 != null && d30.orders > 0 ? d30.revenue / d30.orders : 0),
                         icon: Icons.shopping_basket_rounded,
-                        color: const Color(0xFF0D9488),
-                        soft: const Color(0xFFCCFBF1),
+                        color: AppColors.isDark ? const Color(0xFF2DD4BF) : const Color(0xFF0D9488),
+                        soft: AppColors.isDark ? const Color(0xFF0B3B34) : const Color(0xFFCCFBF1),
                       ),
                     ),
                     SizedBox(
@@ -183,7 +183,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                 runSpacing: AppSpace.s2,
                 crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
-                  const Text('Period',
+                  Text('Period',
                       style: TextStyle(
                           fontFamily: 'Carlito',
                           fontSize: 13,
@@ -421,7 +421,7 @@ class _ManagerInsightsCard extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Staff performance',
+        Text('Staff performance',
             style: TextStyle(
                 fontFamily: 'Carlito',
                 fontSize: 13,
@@ -451,18 +451,18 @@ class _ManagerInsightsCard extends StatelessWidget {
                   const SizedBox(width: AppSpace.s2),
                   Expanded(
                     child: Text(s.name,
-                        style: const TextStyle(
+                        style: TextStyle(
                             fontFamily: 'Carlito',
                             fontSize: 13.5,
                             fontWeight: FontWeight.w700,
                             color: AppColors.ink)),
                   ),
                   Text('${s.orders} sale${s.orders == 1 ? '' : 's'}',
-                      style: const TextStyle(
+                      style: TextStyle(
                           fontFamily: 'Carlito', fontSize: 12, color: AppColors.muted)),
                   const SizedBox(width: AppSpace.s3),
                   Text(settings.money(s.revenue),
-                      style: const TextStyle(
+                      style: TextStyle(
                           fontFamily: 'Carlito',
                           fontSize: 13.5,
                           fontWeight: FontWeight.w700,
@@ -479,7 +479,7 @@ class _ManagerInsightsCard extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Payment methods',
+        Text('Payment methods',
             style: TextStyle(
                 fontFamily: 'Carlito',
                 fontSize: 13,
@@ -512,7 +512,7 @@ class _ManagerInsightsCard extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(_methodLabel(p.method),
-                            style: const TextStyle(
+                            style: TextStyle(
                                 fontFamily: 'Carlito',
                                 fontSize: 13.5,
                                 fontWeight: FontWeight.w700,
@@ -520,7 +520,7 @@ class _ManagerInsightsCard extends StatelessWidget {
                         Text(
                             '${p.orders} sale${p.orders == 1 ? '' : 's'} · '
                             '${total > 0 ? (p.total / total * 100).toStringAsFixed(0) : 0}% of revenue',
-                            style: const TextStyle(
+                            style: TextStyle(
                                 fontFamily: 'Carlito',
                                 fontSize: 11.5,
                                 color: AppColors.muted)),
@@ -528,7 +528,7 @@ class _ManagerInsightsCard extends StatelessWidget {
                     ),
                   ),
                   Text(settings.money(p.total),
-                      style: const TextStyle(
+                      style: TextStyle(
                           fontFamily: 'Carlito',
                           fontSize: 13.5,
                           fontWeight: FontWeight.w700,
@@ -561,7 +561,7 @@ class _RevenueLineChart extends StatelessWidget {
         maxY: maxY * 1.15,
         gridData: FlGridData(
           drawVerticalLine: false,
-          getDrawingHorizontalLine: (v) => const FlLine(
+          getDrawingHorizontalLine: (v) => FlLine(
             color: AppColors.borderSoft,
             strokeWidth: 1,
           ),
@@ -582,7 +582,7 @@ class _RevenueLineChart extends StatelessWidget {
                 return Padding(
                   padding: const EdgeInsets.only(top: 6),
                   child: Text('${d.day}/${d.month}',
-                      style: const TextStyle(
+                      style: TextStyle(
                           fontFamily: 'Carlito', fontSize: 11, color: AppColors.muted)),
                 );
               },
@@ -660,7 +660,7 @@ class _TopProductsBarChart extends StatelessWidget {
                 return Padding(
                   padding: const EdgeInsets.only(top: 6),
                   child: Text(short,
-                      style: const TextStyle(
+                      style: TextStyle(
                           fontFamily: 'Carlito', fontSize: 10, color: AppColors.muted)),
                 );
               },
@@ -758,7 +758,7 @@ class _CategoryPie extends StatelessWidget {
                   ),
                   const SizedBox(width: AppSpace.s1),
                   Text(data[i].$1,
-                      style: const TextStyle(fontFamily: 'Carlito', fontSize: 11.5, color: AppColors.body)),
+                      style: TextStyle(fontFamily: 'Carlito', fontSize: 11.5, color: AppColors.body)),
                 ],
               ),
           ],

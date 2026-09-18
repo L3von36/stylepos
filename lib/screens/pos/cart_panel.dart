@@ -30,9 +30,9 @@ class CartPanel extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(AppSpace.s4, AppSpace.s4, AppSpace.s2, 0),
           child: Row(
             children: [
-              const Icon(Icons.shopping_cart_outlined, size: 19, color: AppColors.primary),
+              Icon(Icons.shopping_cart_outlined, size: 19, color: AppColors.primary),
               const SizedBox(width: AppSpace.s2),
-              const Expanded(
+              Expanded(
                 child: Text('Current Sale',
                     style: TextStyle(
                         fontFamily: 'Carlito',
@@ -111,17 +111,17 @@ class CartPanel extends StatelessWidget {
                       children: [
                         Text(
                           cart.customer?.name ?? 'Walk-in customer',
-                          style: const TextStyle(
+                          style: TextStyle(
                               fontFamily: 'Carlito', fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink),
                           overflow: TextOverflow.ellipsis,
                         ),
                         if (cart.customer != null && cart.customer!.points > 0)
                           Text('${cart.customer!.points} loyalty points',
-                              style: const TextStyle(fontFamily: 'Carlito', fontSize: 11, color: AppColors.muted)),
+                              style: TextStyle(fontFamily: 'Carlito', fontSize: 11, color: AppColors.muted)),
                       ],
                     ),
                   ),
-                  const Icon(Icons.chevron_right_rounded, size: 19, color: AppColors.faint),
+                  Icon(Icons.chevron_right_rounded, size: 19, color: AppColors.faint),
                 ],
               ),
             ),
@@ -136,14 +136,14 @@ class CartPanel extends StatelessWidget {
                   children: [
                     const EmptyCartArt(),
                     const SizedBox(height: AppSpace.s3),
-                    const Text('Cart is empty',
+                    Text('Cart is empty',
                         style: TextStyle(
                             fontFamily: 'Carlito',
                             fontSize: 16,
                             fontWeight: FontWeight.w700,
                             color: AppColors.ink)),
                     const SizedBox(height: 4),
-                    const Padding(
+                    Padding(
                       padding: EdgeInsets.symmetric(horizontal: AppSpace.s5),
                       child: Text(
                         'Tap products or scan a barcode to add them.',
@@ -179,7 +179,7 @@ class CartPanel extends StatelessWidget {
                 Row(
                   children: [
                     Text('Discount (${settings.currencySymbol})',
-                        style: const TextStyle(fontFamily: 'Carlito', fontSize: 13, color: AppColors.muted)),
+                        style: TextStyle(fontFamily: 'Carlito', fontSize: 13, color: AppColors.muted)),
                     const Spacer(),
                     const _DiscountField(),
                   ],
@@ -196,7 +196,7 @@ class CartPanel extends StatelessWidget {
                 Divider(height: AppSpace.s4, color: AppColors.borderSoft, thickness: 1),
                 Row(
                   children: [
-                    const Text('TOTAL',
+                    Text('TOTAL',
                         style: TextStyle(
                             fontFamily: 'Carlito',
                             fontSize: 13.5,
@@ -259,7 +259,7 @@ class CartPanel extends StatelessWidget {
     final catalog = context.read<CatalogProvider>();
     await showModalBottomSheet(
       context: context,
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.xl)),
       ),
@@ -278,9 +278,9 @@ class CartPanel extends StatelessWidget {
                       AppSpace.s5, AppSpace.s5, AppSpace.s5, AppSpace.s2),
                   child: Row(
                     children: [
-                      const Icon(Icons.bookmark_rounded, size: 20, color: AppColors.primary),
+                      Icon(Icons.bookmark_rounded, size: 20, color: AppColors.primary),
                       const SizedBox(width: AppSpace.s2),
-                      const Expanded(
+                      Expanded(
                         child: Text('Held sales',
                             style: TextStyle(
                                 fontFamily: 'Carlito',
@@ -289,7 +289,7 @@ class CartPanel extends StatelessWidget {
                                 color: AppColors.ink)),
                       ),
                       Text('${held.length} parked',
-                          style: const TextStyle(
+                          style: TextStyle(
                               fontFamily: 'Carlito', fontSize: 12.5, color: AppColors.muted)),
                     ],
                   ),
@@ -335,7 +335,7 @@ class CartPanel extends StatelessWidget {
                                       h.customerName ?? 'Walk-in customer',
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                           fontFamily: 'Carlito',
                                           fontSize: 13.5,
                                           fontWeight: FontWeight.w700,
@@ -345,7 +345,7 @@ class CartPanel extends StatelessWidget {
                                       '${h.itemCount} item${h.itemCount == 1 ? '' : 's'} · '
                                       '${two(when.hour)}:${two(when.minute)}'
                                       '${h.discount > 0 ? ' · disc ${settings.money(h.discount)}' : ''}',
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                           fontFamily: 'Carlito', fontSize: 12, color: AppColors.muted),
                                     ),
                                   ],
@@ -353,7 +353,7 @@ class CartPanel extends StatelessWidget {
                               ),
                               IconButton(
                                 tooltip: 'Discard',
-                                icon: const Icon(Icons.delete_outline,
+                                icon: Icon(Icons.delete_outline,
                                     size: 19, color: AppColors.danger),
                                 onPressed: () async {
                                   // A held sale holds a customer's picks —
@@ -441,7 +441,7 @@ class CartPanel extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: Row(
         children: [
-          Text(label, style: const TextStyle(fontFamily: 'Carlito', fontSize: 13, color: AppColors.muted)),
+          Text(label, style: TextStyle(fontFamily: 'Carlito', fontSize: 13, color: AppColors.muted)),
           const Spacer(),
           Text(value, style: TextStyle(
               fontFamily: 'Carlito', fontSize: 13, fontWeight: FontWeight.w700,
@@ -484,7 +484,7 @@ class _CartTile extends StatelessWidget {
       margin: const EdgeInsets.symmetric(vertical: AppSpace.s1, horizontal: 0),
       padding: const EdgeInsets.fromLTRB(AppSpace.s3, AppSpace.s2, AppSpace.s2, AppSpace.s2),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(AppRadius.sm),
         border: Border.all(color: AppColors.borderSoft),
       ),
@@ -505,12 +505,12 @@ class _CartTile extends StatelessWidget {
                 Text(item.product.name,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
+                    style: TextStyle(
                         fontFamily: 'Carlito', fontWeight: FontWeight.w700, fontSize: 13.5, color: AppColors.ink)),
                 const SizedBox(height: 2),
                 Text(
                   '${item.variant.descriptor} · ${settings.money(item.variant.price)}',
-                  style: const TextStyle(fontFamily: 'Carlito', fontSize: 12, color: AppColors.muted),
+                  style: TextStyle(fontFamily: 'Carlito', fontSize: 12, color: AppColors.muted),
                 ),
               ],
             ),
@@ -529,7 +529,7 @@ class _CartTile extends StatelessWidget {
               child: Text(
                 settings.money(item.lineTotal),
                 maxLines: 1,
-                style: const TextStyle(
+                style: TextStyle(
                     fontFamily: 'Carlito', fontWeight: FontWeight.w700, fontSize: 13.5, color: AppColors.ink),
               ),
             ),
@@ -583,21 +583,21 @@ class _DiscountFieldState extends State<_DiscountField> {
         decoration: InputDecoration(
           isDense: true,
           filled: true,
-          fillColor: Colors.white,
+          fillColor: AppColors.surface,
           contentPadding: const EdgeInsets.symmetric(horizontal: AppSpace.s3, vertical: AppSpace.s2),
           prefixText: '- ',
-          prefixStyle: const TextStyle(color: AppColors.danger, fontWeight: FontWeight.w700),
+          prefixStyle: TextStyle(color: AppColors.danger, fontWeight: FontWeight.w700),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(AppRadius.sm),
-            borderSide: const BorderSide(color: AppColors.border),
+            borderSide: BorderSide(color: AppColors.border),
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(AppRadius.sm),
-            borderSide: const BorderSide(color: AppColors.border),
+            borderSide: BorderSide(color: AppColors.border),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(AppRadius.sm),
-            borderSide: const BorderSide(color: AppColors.primary, width: 2), // M3 2dp indicator
+            borderSide: BorderSide(color: AppColors.primary, width: 2), // M3 2dp indicator
           ),
         ),
         onChanged: (v) =>
@@ -626,7 +626,7 @@ class _CustomerPickerDialogState extends State<_CustomerPickerDialog> {
       titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
       contentPadding: const EdgeInsets.fromLTRB(24, AppSpace.s4, 24, 0),
       actionsPadding: const EdgeInsets.fromLTRB(AppSpace.s4, AppSpace.s2, AppSpace.s4, AppSpace.s4),
-      title: const Row(children: [
+      title: Row(children: [
         Icon(Icons.person_search_rounded, size: 22, color: AppColors.primary),
         SizedBox(width: AppSpace.s3),
         Text('Attach customer'),
@@ -650,7 +650,7 @@ class _CustomerPickerDialogState extends State<_CustomerPickerDialog> {
                   ListTile(
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(AppRadius.md),
-                        side: const BorderSide(color: AppColors.borderSoft)),
+                        side: BorderSide(color: AppColors.borderSoft)),
                     leading: const Icon(Icons.person_off_outlined, size: 21),
                     title: const Text('Walk-in customer'),
                     onTap: () => Navigator.pop(
@@ -661,12 +661,12 @@ class _CustomerPickerDialogState extends State<_CustomerPickerDialog> {
                     (c) => ListTile(
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(AppRadius.md),
-                          side: const BorderSide(color: AppColors.borderSoft)),
+                          side: BorderSide(color: AppColors.borderSoft)),
                       leading: InitialsAvatar(c.name, size: 34),
                       title: Text(c.name),
                       subtitle: Text(c.phone ?? ''),
                       trailing: Text('${c.points} pts',
-                          style: const TextStyle(
+                          style: TextStyle(
                               fontFamily: 'Carlito',
                               fontSize: 12,
                               fontWeight: FontWeight.w700,

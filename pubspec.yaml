@@ -31,6 +31,9 @@ dependencies:
   pdf: ^3.11.2
   printing: ^5.14.2
 
+  # Receipt logo import: pure-Dart decode/resize/encode (works on web too)
+  image: ^4.2.0
+
   # Password hashing
   crypto: ^3.0.6
 

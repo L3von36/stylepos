@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:sqflite/sqflite.dart' show ConflictAlgorithm;
 
@@ -19,6 +19,21 @@ class AppSettings extends ChangeNotifier {
   double taxRate = 0; // percent, e.g. 16 means 16%
   int lowStockDefault = 5;
   int loyaltyStep = 100; // award 1 point per this many currency units spent; 0 = off
+
+  /// Appearance: 'system' | 'light' | 'dark' (Material [ThemeMode]).
+  String themeModeName = 'system';
+  ThemeMode get themeMode => switch (themeModeName) {
+        'light' => ThemeMode.light,
+        'dark' => ThemeMode.dark,
+        _ => ThemeMode.system,
+      };
+
+  /// Receipt logo: base64 PNG (resized on import). Null = no logo set.
+  /// Synced with the settings table, so every device prints the same logo.
+  String? receiptLogoB64;
+
+  /// Whether receipts render the configured logo (default on).
+  bool receiptShowLogo = true;
 
   NumberFormat? _moneyFmt;
 
@@ -71,10 +86,15 @@ class AppSettings extends ChangeNotifier {
     taxRate = double.tryParse(g('tax_rate') ?? '') ?? taxRate;
     lowStockDefault = int.tryParse(g('low_stock_default') ?? '') ?? lowStockDefault;
     loyaltyStep = int.tryParse(g('loyalty_step') ?? '') ?? loyaltyStep;
+    themeModeName = g('theme_mode') ?? themeModeName;
+    receiptLogoB64 = g('receipt_logo_b64');
+    receiptShowLogo = (g('receipt_show_logo') ?? '1') != '0';
     _rebuildFormatter();
     notifyListeners();
   }
 
+  /// [receiptLogo] accepts a base64 PNG to set the logo, or an empty string
+  /// to clear it (null leaves the current value untouched).
   Future<void> save({
     String? shopName,
     String? shopAddress,
@@ -85,6 +105,9 @@ class AppSettings extends ChangeNotifier {
     double? taxRate,
     int? lowStockDefault,
     int? loyaltyStep,
+    String? themeMode,
+    String? receiptLogo,
+    bool? receiptShowLogo,
   }) async {
     if (shopName != null) this.shopName = shopName;
     if (shopAddress != null) this.shopAddress = shopAddress;
@@ -95,6 +118,9 @@ class AppSettings extends ChangeNotifier {
     if (taxRate != null) this.taxRate = taxRate;
     if (lowStockDefault != null) this.lowStockDefault = lowStockDefault;
     if (loyaltyStep != null) this.loyaltyStep = loyaltyStep;
+    if (themeMode != null) themeModeName = themeMode;
+    if (receiptLogo != null) receiptLogoB64 = receiptLogo.isEmpty ? null : receiptLogo;
+    if (receiptShowLogo != null) this.receiptShowLogo = receiptShowLogo;
 
     final db = await DB.instance();
     final map = <String, String>{
@@ -107,6 +133,9 @@ class AppSettings extends ChangeNotifier {
       'tax_rate': this.taxRate.toString(),
       'low_stock_default': this.lowStockDefault.toString(),
       'loyalty_step': this.loyaltyStep.toString(),
+      'theme_mode': themeModeName,
+      'receipt_show_logo': this.receiptShowLogo ? '1' : '0',
+      'receipt_logo_b64': ?receiptLogoB64,
     };
     final batch = db.batch();
     for (final e in map.entries) {

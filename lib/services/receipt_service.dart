@@ -11,11 +11,15 @@ import 'package:printing/printing.dart';
 import '../models/sale.dart';
 import '../state/settings.dart';
 
+import 'dart:convert' show base64Decode;
+
 /// Generates 80mm roll-style PDF receipts, saves them to disk and
 /// opens the platform print dialog.
 class ReceiptService {
   static pw.Font? _fontRegular;
   static pw.Font? _fontBold;
+  static pw.ImageProvider? _logo;
+  static String? _logoSrc;
 
   static Future<void> _ensureFonts() async {
     if (_fontRegular != null) return;
@@ -23,6 +27,21 @@ class ReceiptService {
     final bold = await rootBundle.load('assets/fonts/Carlito-Bold.ttf');
     _fontRegular = pw.Font.ttf(reg);
     _fontBold = pw.Font.ttf(bold);
+  }
+
+  /// Decodes the configured receipt logo (base64 PNG) once per value.
+  static pw.ImageProvider? _ensureLogo(AppSettings settings) {
+    final src = settings.receiptLogoB64;
+    if (!settings.receiptShowLogo || src == null || src.isEmpty) return null;
+    if (_logo != null && _logoSrc == src) return _logo;
+    try {
+      _logo = pw.MemoryImage(base64Decode(src));
+      _logoSrc = src;
+    } catch (_) {
+      _logo = null;
+      _logoSrc = null;
+    }
+    return _logo;
   }
 
   /// Builds the PDF bytes for a receipt.
@@ -50,6 +69,8 @@ class ReceiptService {
           final header = pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.center,
             children: [
+              // Shop logo (manager sets it in Settings → Receipt logo).
+              ?_logoWidget(settings),
               pw.Text(
                 settings.shopName,
                 style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold),
@@ -200,6 +221,21 @@ class ReceiptService {
     );
 
     return doc.save();
+  }
+
+  /// The receipt logo, scaled to fit the 80mm roll. Null when unset/hidden.
+  static pw.Widget? _logoWidget(AppSettings settings) {
+    final img = _ensureLogo(settings);
+    if (img == null) return null;
+    return pw.Padding(
+      padding: const pw.EdgeInsets.only(bottom: 6),
+      child: pw.Center(
+        child: pw.SizedBox(
+          height: 52,
+          child: pw.Image(img, fit: pw.BoxFit.contain),
+        ),
+      ),
+    );
   }
 
   /// Saves the receipt PDF to the device. Returns the created file.

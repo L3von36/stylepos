@@ -1,9 +1,13 @@
+import 'dart:convert' show base64Decode, base64Encode;
 import 'dart:io' show File, Platform, exit;
+import 'dart:typed_data' show Uint8List;
 
 import 'package:file_picker/file_picker.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:image/image.dart' as img;
+import 'package:image_picker/image_picker.dart';
 import 'package:path/path.dart' as p;
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
@@ -149,7 +153,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           FilledButton(
               style: FilledButton.styleFrom(
                   backgroundColor: AppColors.danger,
-                  foregroundColor: Colors.white),
+                  foregroundColor: AppColors.onError),
               onPressed: () => Navigator.pop(ctx, true),
               child: const Text('Replace everything')),
         ],
@@ -190,9 +194,57 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
+  /// Opens a picker, downscales the image to a receipt-friendly PNG and
+  /// stores it as base64 in the settings (synced to every device).
+  Future<void> _pickLogo() async {
+    final sp = context.read<AppSettings>();
+    try {
+      Uint8List? bytes;
+      if (kIsWeb || Platform.isAndroid || Platform.isIOS) {
+        final x = await ImagePicker().pickImage(
+          source: ImageSource.gallery,
+          imageQuality: 92,
+          maxWidth: 1400,
+        );
+        if (x == null) return;
+        bytes = await x.readAsBytes();
+      } else {
+        final f = await openFile(acceptedTypeGroups: const [
+          XTypeGroup(label: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp']),
+        ]);
+        if (f == null) return;
+        bytes = await File(f.path).readAsBytes();
+      }
+      if (bytes.lengthInBytes > 10 * 1024 * 1024) {
+        await _toast('That image is too large — please pick one under 10 MB', error: true);
+        return;
+      }
+      final decoded = img.decodeImage(bytes);
+      if (decoded == null) {
+        await _toast('Could not read that image', error: true);
+        return;
+      }
+      final resized = decoded.width > 480
+          ? img.copyResize(decoded, width: 480)
+          : decoded;
+      final b64 = base64Encode(img.encodePng(resized));
+      await sp.save(receiptLogo: b64);
+      await _toast('Receipt logo updated');
+    } catch (_) {
+      await _toast('Could not load that image', error: true);
+    }
+  }
+
+  Future<void> _removeLogo() async {
+    final sp = context.read<AppSettings>();
+    await sp.save(receiptLogo: '');
+    await _toast('Logo removed');
+  }
+
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
+    final s = context.watch<AppSettings>();
 
     // Pushed as a standalone page from the app bar (manager only), so it
     // owns a Scaffold with a back button.
@@ -238,6 +290,115 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     controller: _footer,
                     decoration: const InputDecoration(
                         labelText: 'Receipt footer message'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppSpace.s4),
+
+              // --- appearance (applies instantly, no save button) ---
+              SectionCard(
+                icon: Icons.contrast_rounded,
+                title: 'Appearance',
+                subtitle: 'Light, dark, or follow the device — applies instantly',
+                children: [
+                  SegmentedButton<String>(
+                    segments: const [
+                      ButtonSegment(
+                          value: 'system',
+                          label: Text('System'),
+                          icon: Icon(Icons.brightness_auto_outlined, size: 17)),
+                      ButtonSegment(
+                          value: 'light',
+                          label: Text('Light'),
+                          icon: Icon(Icons.light_mode_outlined, size: 17)),
+                      ButtonSegment(
+                          value: 'dark',
+                          label: Text('Dark'),
+                          icon: Icon(Icons.dark_mode_outlined, size: 17)),
+                    ],
+                    selected: {s.themeModeName},
+                    onSelectionChanged: (sel) =>
+                        context.read<AppSettings>().save(themeMode: sel.first),
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppSpace.s4),
+
+              // --- receipt logo ---
+              SectionCard(
+                icon: Icons.branding_watermark_outlined,
+                title: 'Receipt logo',
+                subtitle: 'Shown at the top of every PDF receipt',
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        width: 64,
+                        height: 64,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: AppColors.surfaceTint,
+                          borderRadius: BorderRadius.circular(AppRadius.md),
+                          border: Border.all(color: AppColors.borderSoft),
+                        ),
+                        child: (s.receiptLogoB64 != null)
+                            ? ClipRRect(
+                                borderRadius: BorderRadius.circular(AppRadius.md),
+                                child: Image.memory(
+                                  base64Decode(s.receiptLogoB64!),
+                                  width: 62,
+                                  height: 62,
+                                  fit: BoxFit.contain,
+                                  gaplessPlayback: true,
+                                ),
+                              )
+                            : Icon(Icons.image_outlined,
+                                size: 26, color: AppColors.faint),
+                      ),
+                      const SizedBox(width: AppSpace.s3),
+                      Expanded(
+                        child: Text(
+                          'A square logo works best (PNG or JPG). It is resized '
+                          'for the 80mm roll and synced to every device that '
+                          'prints your receipts.',
+                          style: TextStyle(
+                              fontSize: 12.5,
+                              color: AppColors.muted,
+                              height: 1.45),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpace.s3),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    dense: true,
+                    controlAffinity: ListTileControlAffinity.leading,
+                    activeThumbColor: AppColors.primary,
+                    title: const Text('Show logo on receipts'),
+                    value: s.receiptShowLogo,
+                    onChanged: (v) =>
+                        context.read<AppSettings>().save(receiptShowLogo: v),
+                  ),
+                  Row(
+                    children: [
+                      OutlinedButton.icon(
+                        onPressed: _pickLogo,
+                        icon: const Icon(Icons.upload_outlined, size: 18),
+                        label: Text(s.receiptLogoB64 == null
+                            ? 'Choose logo…'
+                            : 'Replace logo…'),
+                      ),
+                      if (s.receiptLogoB64 != null) ...[
+                        const SizedBox(width: AppSpace.s2),
+                        TextButton.icon(
+                          onPressed: _removeLogo,
+                          icon: const Icon(Icons.delete_outline_rounded, size: 18),
+                          label: const Text('Remove'),
+                        ),
+                      ],
+                    ],
                   ),
                 ],
               ),
@@ -323,12 +484,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       color: AppColors.primarySoft,
                       borderRadius: BorderRadius.circular(AppRadius.md),
                     ),
-                    child: const Icon(Icons.manage_accounts_outlined,
+                    child: Icon(Icons.manage_accounts_outlined,
                         color: AppColors.primary, size: 22),
                   ),
                   title: const Text('Staff accounts'),
                   subtitle: const Text('Add cashiers, reset passwords, deactivate'),
-                  trailing: const Icon(Icons.chevron_right_rounded, color: AppColors.faint),
+                  trailing: Icon(Icons.chevron_right_rounded, color: AppColors.faint),
                   onTap: () => Navigator.of(context).push(
                       MaterialPageRoute(builder: (_) => const UsersScreen())),
                 ),
@@ -403,10 +564,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.info_outline_rounded,
+                      Icon(Icons.info_outline_rounded,
                           size: 16, color: AppColors.faint),
                       const SizedBox(width: 8),
-                      const Expanded(
+                      Expanded(
                         child: Text(
                           'File backups are not available on the web — your '
                           'data is kept in this browser and synced to the '
@@ -449,7 +610,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text('Sami',
+                            Text('Sami',
                                 style: TextStyle(
                                     fontFamily: 'Carlito',
                                     fontSize: 15,
@@ -460,7 +621,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               'Offline point of sale for clothing shops\n'
                               'Signed in as ${auth.user?.name ?? "-"} '
                               '(${(auth.user?.isAdmin ?? false) ? "Manager" : "Sales"})',
-                              style: const TextStyle(
+                              style: TextStyle(
                                   fontFamily: 'Carlito', fontSize: 12.5, color: AppColors.muted, height: 1.4),
                             ),
                           ],

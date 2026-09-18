@@ -86,8 +86,11 @@ class EmptyCartArt extends StatelessWidget {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(AppRadius.lg),
         border: Border.all(color: AppColors.borderSoft),
-        boxShadow: const [
-          BoxShadow(color: Color(0x140F172A), blurRadius: 10, offset: Offset(0, 4)),
+        boxShadow: [
+          BoxShadow(
+              color: AppColors.isDark ? const Color(0x40000000) : const Color(0x140F172A),
+              blurRadius: 10,
+              offset: const Offset(0, 4)),
         ],
       ),
       child: ClipRRect(
@@ -97,7 +100,7 @@ class EmptyCartArt extends StatelessWidget {
           size: 150,
           fallback: Container(
             color: AppColors.surfaceTint,
-            child: const Icon(Icons.local_shipping_outlined,
+            child: Icon(Icons.local_shipping_outlined,
                 size: 40, color: AppColors.faint),
           ),
         ),
@@ -127,7 +130,7 @@ class SaleSuccessArt extends StatelessWidget {
       child: RiveView(
         asset: 'assets/rive/liquid_download.riv',
         size: size,
-        fallback: const Icon(Icons.check_rounded, size: 30, color: AppColors.success),
+        fallback: Icon(Icons.check_rounded, size: 30, color: AppColors.success),
       ),
     );
   }

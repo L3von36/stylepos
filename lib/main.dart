@@ -88,7 +88,7 @@ class StylePosApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        Provider<AppSettings>.value(value: settings),
+        ChangeNotifierProvider<AppSettings>.value(value: settings),
         ChangeNotifierProvider<AuthProvider>.value(value: auth),
         ChangeNotifierProvider<CatalogProvider>.value(value: catalog),
         ChangeNotifierProvider<CustomersProvider>.value(value: customers),
@@ -100,9 +100,26 @@ class StylePosApp extends StatelessWidget {
         title: 'Sami',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.build(),
+        darkTheme: AppTheme.dark(),
+        themeMode: settings.themeMode,
+        builder: (context, child) => _ThemeSync(child: child!),
         home: const _Root(),
       ),
     );
+  }
+}
+
+/// Keeps the static [AppColors] token table in step with the effective
+/// Material theme, so brightness-aware getters resolve correctly the moment
+/// the user switches System / Light / Dark.
+class _ThemeSync extends StatelessWidget {
+  final Widget child;
+  const _ThemeSync({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    AppColors.brightness = Theme.of(context).brightness;
+    return child;
   }
 }
 

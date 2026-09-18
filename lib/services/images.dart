@@ -43,7 +43,7 @@ class ProductImages {
         // Phones: let the user choose camera or gallery.
         final source = await showModalBottomSheet<ImageSource>(
           context: context,
-          backgroundColor: Colors.white,
+          backgroundColor: AppColors.surface,
           shape: const RoundedRectangleBorder(
             borderRadius:
                 BorderRadius.vertical(top: Radius.circular(28)),
@@ -53,33 +53,33 @@ class ProductImages {
               mainAxisSize: MainAxisSize.min,
               children: [
                 const SizedBox(height: 20),
-                const Text('Add product photo',
+                Text('Add product photo',
                     style: TextStyle(
                         fontSize: 17,
                         fontWeight: FontWeight.w700,
                         color: AppColors.ink)),
                 const SizedBox(height: 4),
-                const Text(
+                Text(
                     'Photos show on the sell screen so staff find items faster.',
                     style: TextStyle(
                         fontSize: 12.5, color: AppColors.muted)),
                 const SizedBox(height: 12),
                 ListTile(
-                  leading: const Icon(Icons.photo_camera_outlined,
+                  leading: Icon(Icons.photo_camera_outlined,
                       color: AppColors.primary),
                   title: const Text('Take a photo'),
                   onTap: () =>
                       Navigator.pop(sheetContext, ImageSource.camera),
                 ),
                 ListTile(
-                  leading: const Icon(Icons.photo_library_outlined,
+                  leading: Icon(Icons.photo_library_outlined,
                       color: AppColors.primary),
                   title: const Text('Choose from gallery'),
                   onTap: () =>
                       Navigator.pop(sheetContext, ImageSource.gallery),
                 ),
                 ListTile(
-                  leading: const Icon(Icons.close_rounded,
+                  leading: Icon(Icons.close_rounded,
                       color: AppColors.muted),
                   title: const Text('Cancel'),
                   onTap: () => Navigator.pop(sheetContext),

@@ -107,7 +107,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
                                   background: AppColors.primarySoft,
                                   icon: Icons.loyalty_outlined),
                               const SizedBox(width: AppSpace.s2),
-                              const Icon(Icons.chevron_right_rounded, size: 20, color: AppColors.faint),
+                              Icon(Icons.chevron_right_rounded, size: 20, color: AppColors.faint),
                             ],
                           ),
                         ),
@@ -214,7 +214,7 @@ class _CustomerDetailState extends State<_CustomerDetail> {
                         style: Theme.of(context).textTheme.titleLarge),
                     Text(
                       [c.phone, c.email].whereType<String>().join(' · '),
-                      style: const TextStyle(fontFamily: 'Carlito', fontSize: 12.5, color: AppColors.muted),
+                      style: TextStyle(fontFamily: 'Carlito', fontSize: 12.5, color: AppColors.muted),
                     ),
                   ],
                 ),
@@ -315,7 +315,7 @@ class _CustomerDetailState extends State<_CustomerDetail> {
             ],
           ),
           const SizedBox(height: AppSpace.s4),
-          const Text('Purchase history',
+          Text('Purchase history',
               style: TextStyle(
                   fontFamily: 'Carlito',
                   fontSize: 15,
@@ -340,33 +340,33 @@ class _CustomerDetailState extends State<_CustomerDetail> {
                             margin: const EdgeInsets.only(bottom: AppSpace.s2),
                             padding: const EdgeInsets.symmetric(horizontal: AppSpace.s4, vertical: AppSpace.s2 + 2),
                             decoration: BoxDecoration(
-                              color: Colors.white,
+                              color: AppColors.surface,
                               borderRadius: BorderRadius.circular(AppRadius.md),
                               border: Border.all(color: AppColors.borderSoft),
                             ),
                             child: Row(
                               children: [
-                                const Icon(Icons.receipt_long_outlined, size: 19, color: AppColors.muted),
+                                Icon(Icons.receipt_long_outlined, size: 19, color: AppColors.muted),
                                 const SizedBox(width: AppSpace.s3),
                                 Expanded(
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
                                       Text(s.receiptNo,
-                                          style: const TextStyle(
+                                          style: TextStyle(
                                               fontFamily: 'Carlito',
                                               fontSize: 13.5,
                                               fontWeight: FontWeight.w700,
                                               color: AppColors.ink)),
                                       Text(
                                           '${dt.day}/${dt.month}/${dt.year} · ${s.cashierName ?? ""}',
-                                          style: const TextStyle(
+                                          style: TextStyle(
                                               fontFamily: 'Carlito', fontSize: 12, color: AppColors.muted)),
                                     ],
                                   ),
                                 ),
                                 Text(settings.money(s.total),
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                         fontFamily: 'Carlito',
                                         fontSize: 14,
                                         fontWeight: FontWeight.w700,

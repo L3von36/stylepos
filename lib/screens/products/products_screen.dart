@@ -281,7 +281,7 @@ class _ProductTile extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(product.name,
-                        style: const TextStyle(
+                        style: TextStyle(
                             fontFamily: 'Carlito',
                             fontWeight: FontWeight.w700,
                             fontSize: 14,
@@ -291,7 +291,7 @@ class _ProductTile extends StatelessWidget {
                       '${product.variants.length} variant${product.variants.length == 1 ? '' : 's'}'
                       ' · ${product.variants.isEmpty ? '-' : settings.priceLabel(product.minPrice, product.maxPrice)}'
                       ' · ${_rowBarcode(product) ?? 'no barcode'}',
-                      style: const TextStyle(fontFamily: 'Carlito', fontSize: 12.5, color: AppColors.muted),
+                      style: TextStyle(fontFamily: 'Carlito', fontSize: 12.5, color: AppColors.muted),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ],
@@ -323,7 +323,7 @@ class _ProductTile extends StatelessWidget {
               const SizedBox(width: AppSpace.s2),
               if (canManage)
                 PopupMenuButton<String>(
-                  icon: const Icon(Icons.more_vert_rounded, size: 20, color: AppColors.muted),
+                  icon: Icon(Icons.more_vert_rounded, size: 20, color: AppColors.muted),
                   onSelected: (v) async {
                     if (v == 'stock') {
                       showDialog(
@@ -371,7 +371,7 @@ class _CategoriesDialogState extends State<_CategoriesDialog> {
       titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
       contentPadding: const EdgeInsets.fromLTRB(24, AppSpace.s4, 24, 0),
       actionsPadding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-      title: const Row(children: [
+      title: Row(children: [
         Icon(Icons.category_outlined, size: 22, color: AppColors.primary),
         SizedBox(width: AppSpace.s3),
         Text('Categories'),
@@ -389,8 +389,8 @@ class _CategoriesDialogState extends State<_CategoriesDialog> {
                   return ListTile(
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(AppRadius.md),
-                        side: const BorderSide(color: AppColors.borderSoft)),
-                    leading: const Icon(Icons.label_outline, size: 19, color: AppColors.muted),
+                        side: BorderSide(color: AppColors.borderSoft)),
+                    leading: Icon(Icons.label_outline, size: 19, color: AppColors.muted),
                     title: Text(c.name),
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
@@ -424,7 +424,7 @@ class _CategoriesDialogState extends State<_CategoriesDialog> {
                           },
                         ),
                         IconButton(
-                          icon: const Icon(Icons.delete_outline,
+                          icon: Icon(Icons.delete_outline,
                               size: 18, color: AppColors.danger),
                           onPressed: () async {
                             final err = await catalog.deleteCategory(c);

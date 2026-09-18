@@ -54,7 +54,7 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (c) => AlertDialog(
-        title: const Row(children: [
+        title: Row(children: [
           Icon(Icons.undo_rounded, size: 21, color: AppColors.danger),
           SizedBox(width: AppSpace.s3),
           Text('Refund this sale?'),
@@ -179,7 +179,7 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
                               Row(
                                 children: [
                                   Text('Receipt ${sale.receiptNo}',
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                           fontFamily: 'Carlito',
                                           fontSize: 17,
                                           fontWeight: FontWeight.w700,
@@ -196,7 +196,7 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
                               const SizedBox(height: AppSpace.s1),
                               Text('$when · Cashier: ${sale.cashierName ?? '-'}'
                                   ' · Customer: ${sale.customerName ?? 'Walk-in'}',
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                       fontFamily: 'Carlito', fontSize: 12.5, color: AppColors.muted)),
                             ],
                           ),
@@ -216,7 +216,7 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
                         padding: const EdgeInsets.fromLTRB(16, AppSpace.s3, 16, AppSpace.s2),
                         child: Row(
                           children: [
-                            const Text('Items',
+                            Text('Items',
                                 style: TextStyle(
                                     fontFamily: 'Carlito',
                                     fontSize: 13.5,
@@ -224,7 +224,7 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
                                     color: AppColors.ink)),
                             const Spacer(),
                             Text('${_items.length} line${_items.length == 1 ? '' : 's'}',
-                                style: const TextStyle(fontFamily: 'Carlito', fontSize: 12, color: AppColors.muted)),
+                                style: TextStyle(fontFamily: 'Carlito', fontSize: 12, color: AppColors.muted)),
                           ],
                         ),
                       ),
@@ -239,20 +239,20 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(it.productName,
-                                        style: const TextStyle(
+                                        style: TextStyle(
                                             fontFamily: 'Carlito',
                                             fontSize: 14,
                                             fontWeight: FontWeight.w700,
                                             color: AppColors.ink)),
                                     Text(
                                         '${it.variantDesc} · ${settings.money(it.unitPrice)} × ${it.qty}',
-                                        style: const TextStyle(
+                                        style: TextStyle(
                                             fontFamily: 'Carlito', fontSize: 12.5, color: AppColors.muted)),
                                   ],
                                 ),
                               ),
                               Text(settings.money(it.lineTotal),
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                       fontFamily: 'Carlito',
                                       fontSize: 14,
                                       fontWeight: FontWeight.w700,
@@ -281,7 +281,7 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
                         const Divider(height: AppSpace.s5),
                         Row(
                           children: [
-                            const Text('TOTAL',
+                            Text('TOTAL',
                                 style: TextStyle(
                                     fontFamily: 'Carlito',
                                     fontSize: 13.5,
@@ -290,7 +290,7 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
                                     color: AppColors.muted)),
                             const Spacer(),
                             Text(settings.money(sale.total),
-                                style: const TextStyle(
+                                style: TextStyle(
                                     fontFamily: 'Carlito',
                                     fontSize: 22,
                                     fontWeight: FontWeight.w700,
@@ -356,7 +356,7 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: Row(
         children: [
-          Text(label, style: const TextStyle(fontFamily: 'Carlito', fontSize: 13, color: AppColors.muted)),
+          Text(label, style: TextStyle(fontFamily: 'Carlito', fontSize: 13, color: AppColors.muted)),
           const Spacer(),
           Text(value, style: TextStyle(
               fontFamily: 'Carlito', fontSize: 13, fontWeight: FontWeight.w700,

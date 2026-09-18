@@ -225,7 +225,7 @@ class _PosScreenState extends State<PosScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.surface,
       shape: const RoundedRectangleBorder(
         // M3 modal bottom sheet: extra-large top corners
         borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.xl)),
@@ -272,14 +272,14 @@ class _PosScreenState extends State<PosScreen> {
                 color: AppColors.primarySoft,
                 borderRadius: BorderRadius.circular(AppRadius.sm),
               ),
-              child: const Icon(Icons.qr_code_scanner_rounded, size: 19, color: AppColors.primary),
+              child: Icon(Icons.qr_code_scanner_rounded, size: 19, color: AppColors.primary),
             ),
             prefixIconConstraints: const BoxConstraints(minWidth: 40),
             suffixIcon: Row(mainAxisSize: MainAxisSize.min, children: [
               if (_cameraAvailable)
                 IconButton(
                   tooltip: 'Scan with camera',
-                  icon: const Icon(Icons.photo_camera_outlined, size: 20, color: AppColors.primary),
+                  icon: Icon(Icons.photo_camera_outlined, size: 20, color: AppColors.primary),
                   onPressed: _openCameraScanner,
                 ),
               if (_query.isEmpty)
@@ -366,7 +366,7 @@ class _PosScreenState extends State<PosScreen> {
         color: selected ? AppColors.primaryDark : AppColors.muted,
       ),
       selectedColor: AppColors.primarySoft,
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.surface,
       side: BorderSide(color: selected ? AppColors.primary.withValues(alpha: 0.35) : AppColors.border),
       // M3 chips use the small shape (8dp)
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.sm)),
@@ -417,11 +417,11 @@ class _MyTodayStripState extends State<_MyTodayStrip> {
           ),
           child: Row(
             children: [
-              const Icon(Icons.badge_outlined, size: 16, color: AppColors.primary),
+              Icon(Icons.badge_outlined, size: 16, color: AppColors.primary),
               const SizedBox(width: AppSpace.s2),
               Text(
                 '${auth.user?.name ?? 'You'} · ${auth.user?.isAdmin == true ? 'Manager' : 'Sales'}',
-                style: const TextStyle(
+                style: TextStyle(
                     fontFamily: 'Carlito', fontSize: 12.5, fontWeight: FontWeight.w700,
                     color: AppColors.primaryDark),
               ),
@@ -431,13 +431,13 @@ class _MyTodayStripState extends State<_MyTodayStrip> {
                   'Today: ${s.orders} sale${s.orders == 1 ? '' : 's'} · '
                   '${s.itemsSold} item${s.itemsSold == 1 ? '' : 's'} · '
                   '${settings.money(s.revenue)}',
-                  style: const TextStyle(
+                  style: TextStyle(
                       fontFamily: 'Carlito', fontSize: 12.5, color: AppColors.body),
                 ),
               ] else
                 Text(
                   'No sales yet today — scan a garment to start',
-                  style: const TextStyle(fontFamily: 'Carlito', fontSize: 12.5, color: AppColors.muted),
+                  style: TextStyle(fontFamily: 'Carlito', fontSize: 12.5, color: AppColors.muted),
                 ),
             ],
           ),
@@ -476,16 +476,16 @@ class _ProductCardState extends State<_ProductCard> {
         child: AnimatedContainer(
         duration: AppMotion.fast,
         curve: AppMotion.standard,
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(AppRadius.md),
-          border: Border.all(
-            color: _hover ? AppColors.primary.withValues(alpha: 0.45) : AppColors.borderSoft,
-          ),
-          boxShadow: _hover
-              ? const [BoxShadow(color: Color(0x1A4F46E5), blurRadius: 14, offset: Offset(0, 6))]
-              : const [],
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(
+          color: _hover ? AppColors.primary.withValues(alpha: 0.45) : AppColors.borderSoft,
         ),
+        boxShadow: _hover
+            ? [BoxShadow(color: AppColors.primary.withValues(alpha: AppColors.isDark ? 0.28 : 0.10), blurRadius: 14, offset: const Offset(0, 6))]
+            : const [],
+      ),
         child: InkWell(
           onTap: widget.onTap,
           borderRadius: BorderRadius.circular(AppRadius.md),
@@ -536,7 +536,7 @@ class _ProductCardState extends State<_ProductCard> {
                   p.name,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
+                  style: TextStyle(
                       fontFamily: 'Carlito',
                       fontWeight: FontWeight.w700,
                       fontSize: 13.5,
@@ -551,7 +551,7 @@ class _ProductCardState extends State<_ProductCard> {
                         p.variants.isEmpty
                             ? '-'
                             : widget.settings.priceLabel(p.minPrice, p.maxPrice),
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontFamily: 'Carlito',
                           color: AppColors.primary,
                           fontWeight: FontWeight.w700,
@@ -561,7 +561,7 @@ class _ProductCardState extends State<_ProductCard> {
                     ),
                     Text(
                       '${p.variants.length} var',
-                      style: const TextStyle(fontFamily: 'Carlito', fontSize: 11, color: AppColors.faint),
+                      style: TextStyle(fontFamily: 'Carlito', fontSize: 11, color: AppColors.faint),
                     ),
                   ],
                 ),
@@ -619,11 +619,14 @@ class _MobileCartBar extends StatelessWidget {
         duration: AppMotion.normal,
         curve: AppMotion.emphasized,
         height: visible ? 64 + bottomPad : 0,
-        decoration: const BoxDecoration(
-          color: Colors.white,
+        decoration: BoxDecoration(
+          color: AppColors.surface,
           border: Border(top: BorderSide(color: AppColors.borderSoft)),
           boxShadow: [
-            BoxShadow(color: Color(0x140F172A), blurRadius: 12, offset: Offset(0, -4)),
+            BoxShadow(
+                color: AppColors.isDark ? const Color(0x40000000) : const Color(0x140F172A),
+                blurRadius: 12,
+                offset: const Offset(0, -4)),
           ],
         ),
         // Slide the row down while collapsing so nothing pokes out.
@@ -657,7 +660,7 @@ class _MobileCartBar extends StatelessWidget {
                               color: AppColors.primarySoft,
                               borderRadius: BorderRadius.circular(AppRadius.md),
                             ),
-                            child: const Icon(Icons.shopping_cart_outlined,
+                            child: Icon(Icons.shopping_cart_outlined,
                                 size: 20, color: AppColors.primary),
                           ),
                           if (cart.itemCount > 0)
@@ -673,16 +676,16 @@ class _MobileCartBar extends StatelessWidget {
                                   color: AppColors.primary,
                                   borderRadius:
                                       BorderRadius.circular(AppRadius.pill),
-                                  border: Border.all(color: Colors.white, width: 1.5),
+                                  border: Border.all(color: AppColors.onPrimary, width: 1.5),
                                 ),
                                 alignment: Alignment.center,
                                 child: Text(
                                   '${cart.itemCount}',
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                       fontFamily: 'Carlito',
                                       fontSize: 10.5,
                                       fontWeight: FontWeight.w700,
-                                      color: Colors.white),
+                                      color: AppColors.onPrimary),
                                 ),
                               ),
                             ),
@@ -699,7 +702,7 @@ class _MobileCartBar extends StatelessWidget {
                             cart.isNotEmpty
                                 ? '${cart.itemCount} item${cart.itemCount == 1 ? '' : 's'} in cart'
                                 : '${cart.heldCount} sale${cart.heldCount == 1 ? '' : 's'} held',
-                            style: const TextStyle(
+                            style: TextStyle(
                                 fontFamily: 'Carlito',
                                 fontSize: 12.5,
                                 color: AppColors.muted),
@@ -710,7 +713,7 @@ class _MobileCartBar extends StatelessWidget {
                                 : 'Tap to review',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
+                            style: TextStyle(
                                 fontFamily: 'Carlito',
                                 fontSize: 15.5,
                                 fontWeight: FontWeight.w700,
@@ -726,17 +729,17 @@ class _MobileCartBar extends StatelessWidget {
                         color: AppColors.primary,
                         borderRadius: BorderRadius.circular(AppRadius.pill),
                       ),
-                      child: const Row(
+                      child: Row(
                         children: [
                           Text('View cart',
                               style: TextStyle(
                                   fontFamily: 'Carlito',
                                   fontSize: 13.5,
                                   fontWeight: FontWeight.w700,
-                                  color: Colors.white)),
-                          SizedBox(width: AppSpace.s1),
+                                  color: AppColors.onPrimary)),
+                          const SizedBox(width: AppSpace.s1),
                           Icon(Icons.expand_less_rounded,
-                              size: 18, color: Colors.white),
+                              size: 18, color: AppColors.onPrimary),
                         ],
                       ),
                     ),

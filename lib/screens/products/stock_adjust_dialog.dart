@@ -60,7 +60,7 @@ class _StockAdjustDialogState extends State<StockAdjustDialog> {
             color: AppColors.primarySoft,
             borderRadius: BorderRadius.circular(AppRadius.sm),
           ),
-          child: const Icon(Icons.inventory_rounded, size: 19, color: AppColors.primary),
+          child: Icon(Icons.inventory_rounded, size: 19, color: AppColors.primary),
         ),
         const SizedBox(width: AppSpace.s3),
         Expanded(child: Text('Adjust stock · ${product.name}', overflow: TextOverflow.ellipsis)),
@@ -105,14 +105,14 @@ class _StockAdjustDialogState extends State<StockAdjustDialog> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(variant.descriptor,
-                            style: const TextStyle(
+                            style: TextStyle(
                                 fontFamily: 'Carlito',
                                 fontSize: 13,
                                 fontWeight: FontWeight.w700,
                                 color: AppColors.body)),
                         const SizedBox(height: AppSpace.s1),
                         Text('Current stock: ${variant.stock} pcs',
-                            style: const TextStyle(fontFamily: 'Carlito', fontSize: 12, color: AppColors.muted)),
+                            style: TextStyle(fontFamily: 'Carlito', fontSize: 12, color: AppColors.muted)),
                       ],
                     ),
                   ),

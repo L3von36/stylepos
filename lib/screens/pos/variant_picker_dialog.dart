@@ -52,7 +52,7 @@ class VariantPickerDialog extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Choose a size / color variant',
+            Text('Choose a size / color variant',
                 style: TextStyle(fontFamily: 'Carlito', fontSize: 12.5, color: AppColors.muted)),
             const SizedBox(height: 12),
             Flexible(

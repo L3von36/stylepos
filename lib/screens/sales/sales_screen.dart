@@ -204,7 +204,7 @@ class _SaleTile extends StatelessWidget {
                     Row(
                       children: [
                         Text(sale.receiptNo,
-                            style: const TextStyle(
+                            style: TextStyle(
                                 fontFamily: 'Carlito',
                                 fontWeight: FontWeight.w700,
                                 fontSize: 14,
@@ -223,7 +223,7 @@ class _SaleTile extends StatelessWidget {
                     Text(
                       '$when · ${sale.customerName ?? 'Walk-in'} · ${sale.cashierName ?? ''}',
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontFamily: 'Carlito', fontSize: 12.5, color: AppColors.muted),
+                      style: TextStyle(fontFamily: 'Carlito', fontSize: 12.5, color: AppColors.muted),
                     ),
                   ],
                 ),
@@ -239,7 +239,7 @@ class _SaleTile extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: AppSpace.s2),
-              const Icon(Icons.chevron_right_rounded, size: 20, color: AppColors.faint),
+              Icon(Icons.chevron_right_rounded, size: 20, color: AppColors.faint),
             ],
           ),
         ),

@@ -174,8 +174,8 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
               Container(
                 width: 34,
                 height: 34,
-                decoration: const BoxDecoration(color: AppColors.successSoft, shape: BoxShape.circle),
-                child: const Icon(Icons.check_rounded, size: 21, color: AppColors.success),
+                decoration: BoxDecoration(color: AppColors.successSoft, shape: BoxShape.circle),
+                child: Icon(Icons.check_rounded, size: 21, color: AppColors.success),
               )
             else
               Container(
@@ -185,7 +185,7 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
                   color: AppColors.primarySoft,
                   borderRadius: BorderRadius.circular(AppRadius.sm),
                 ),
-                child: const Icon(Icons.payments_outlined, size: 19, color: AppColors.primary),
+                child: Icon(Icons.payments_outlined, size: 19, color: AppColors.primary),
               ),
             const SizedBox(width: AppSpace.s3),
             Text(_stage == _Stage.done ? 'Sale complete' : 'Take payment'),
@@ -293,7 +293,7 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
         ),
         const SizedBox(height: 16),
 
-        const Text('Payment method',
+        Text('Payment method',
             style: TextStyle(fontFamily: 'Carlito', fontSize: 12.5, fontWeight: FontWeight.w700, color: AppColors.muted)),
         const SizedBox(height: 8),
         SegmentedButton<String>(
@@ -386,7 +386,7 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
                       _tenderedValue + 0.001 < total
                           ? 'Still owed'
                           : 'Change due',
-                      style: const TextStyle(fontFamily: 'Carlito', fontSize: 13.5, color: AppColors.body)),
+                      style: TextStyle(fontFamily: 'Carlito', fontSize: 13.5, color: AppColors.body)),
                   const Spacer(),
                   Text(
                     settings.money(_tenderedValue + 0.001 < total
@@ -416,12 +416,12 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
             ),
             child: Row(
               children: [
-                const Icon(Icons.loyalty_outlined, size: 17, color: AppColors.primary),
+                Icon(Icons.loyalty_outlined, size: 17, color: AppColors.primary),
                 const SizedBox(width: AppSpace.s2),
                 Expanded(
                   child: Text(
                     '${cart.customer!.name} earns ${(total / settings.loyaltyStep).floor()} loyalty points',
-                    style: const TextStyle(fontFamily: 'Carlito', fontSize: 12.5, color: AppColors.primaryDark),
+                    style: TextStyle(fontFamily: 'Carlito', fontSize: 12.5, color: AppColors.primaryDark),
                   ),
                 ),
               ],
@@ -439,11 +439,11 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
             ),
             child: Row(
               children: [
-                const Icon(Icons.error_outline_rounded, size: 17, color: AppColors.danger),
+                Icon(Icons.error_outline_rounded, size: 17, color: AppColors.danger),
                 const SizedBox(width: AppSpace.s2),
                 Expanded(
                   child: Text(_error!,
-                      style: const TextStyle(fontFamily: 'Carlito', fontSize: 12.5, color: AppColors.danger)),
+                      style: TextStyle(fontFamily: 'Carlito', fontSize: 12.5, color: AppColors.danger)),
                 ),
               ],
             ),
@@ -478,14 +478,14 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(settings.money(sale.total),
-                            style: const TextStyle(
+                            style: TextStyle(
                                 fontFamily: 'Carlito',
                                 fontSize: 28,
                                 fontWeight: FontWeight.w700,
                                 color: AppColors.success)),
                         const SizedBox(height: 2),
                         Text('${sale.receiptNo} · ${_methodLabel(sale.paymentMethod)}',
-                            style: const TextStyle(
+                            style: TextStyle(
                                 fontFamily: 'Carlito', fontSize: 13, color: AppColors.body)),
                       ],
                     ),
@@ -503,7 +503,7 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
                     ),
                     child: Text(
                       'Give change: ${settings.money(sale.changeDue)}',
-                      style: const TextStyle(
+                      style: TextStyle(
                           fontFamily: 'Carlito',
                           fontSize: 13.5,
                           fontWeight: FontWeight.w700,
@@ -515,7 +515,7 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
                   child: Text('+$_pointsEarned loyalty points',
-                      style: const TextStyle(fontFamily: 'Carlito', fontSize: 12.5, color: AppColors.success)),
+                      style: TextStyle(fontFamily: 'Carlito', fontSize: 12.5, color: AppColors.success)),
                 ),
             ],
           ),
@@ -526,7 +526,7 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
               ? 'Save or print the receipt below.'
               : 'Receipt saved: ${_savedPdf!.path.split('/').last}',
           textAlign: TextAlign.center,
-          style: const TextStyle(fontFamily: 'Carlito', fontSize: 12.5, color: AppColors.muted),
+          style: TextStyle(fontFamily: 'Carlito', fontSize: 12.5, color: AppColors.muted),
         ),
       ],
     );

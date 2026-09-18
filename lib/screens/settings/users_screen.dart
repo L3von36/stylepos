@@ -398,7 +398,7 @@ class _UsersScreenState extends State<UsersScreen> {
             '${u.isManager ? "Manager" : "Sales"}',
             style: const TextStyle(fontFamily: 'Carlito', fontSize: 12.5)),
         trailing: PopupMenuButton<String>(
-          icon: const Icon(Icons.more_vert_rounded, size: 20, color: AppColors.muted),
+          icon: Icon(Icons.more_vert_rounded, size: 20, color: AppColors.muted),
           onSelected: (v) async {
             if (v == 'edit') {
               _edit(u);
@@ -445,7 +445,7 @@ class _SectionHeader extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(title,
-                    style: const TextStyle(
+                    style: TextStyle(
                         fontFamily: 'Carlito',
                         fontSize: 12.5,
                         fontWeight: FontWeight.w700,
@@ -453,7 +453,7 @@ class _SectionHeader extends StatelessWidget {
                         color: AppColors.muted)),
                 const SizedBox(height: 2),
                 Text(subtitle,
-                    style: const TextStyle(
+                    style: TextStyle(
                         fontFamily: 'Carlito',
                         fontSize: 11.5,
                         height: 1.35,
@@ -477,14 +477,14 @@ class _EmptyCloudCard extends StatelessWidget {
         padding: const EdgeInsets.all(AppSpace.s4),
         child: Row(
           children: [
-            const Icon(Icons.group_add_rounded, size: 22, color: AppColors.primary),
+            Icon(Icons.group_add_rounded, size: 22, color: AppColors.primary),
             const SizedBox(width: AppSpace.s3),
             Expanded(
               child: Text(
                 'No staff yet — tap "Add staff" to create a cloud account. '
                 'Your staff signs in with that email and password on any '
                 'device, and every sale is attributed to them.',
-                style: const TextStyle(
+                style: TextStyle(
                     fontFamily: 'Carlito', fontSize: 12.5, height: 1.4,
                     color: AppColors.muted),
               ),
@@ -509,12 +509,12 @@ class _BannerCard extends StatelessWidget {
       child: ListTile(
         contentPadding:
             const EdgeInsets.symmetric(horizontal: AppSpace.s4, vertical: AppSpace.s1),
-        leading: const Icon(Icons.error_outline_rounded, size: 18, color: AppColors.danger),
+        leading: Icon(Icons.error_outline_rounded, size: 18, color: AppColors.danger),
         title: Text(text,
-            style: const TextStyle(
+            style: TextStyle(
                 fontFamily: 'Carlito', fontSize: 12.5, color: AppColors.danger)),
         trailing: IconButton(
-          icon: const Icon(Icons.close_rounded, size: 16, color: AppColors.danger),
+          icon: Icon(Icons.close_rounded, size: 16, color: AppColors.danger),
           onPressed: onClose,
         ),
       ),
@@ -659,14 +659,14 @@ class _UserEditDialogState extends State<_UserEditDialog> {
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.cloud_done_outlined,
+                      Icon(Icons.cloud_done_outlined,
                           size: 16, color: AppColors.primary),
                       const SizedBox(width: AppSpace.s2),
                       Expanded(
                         child: Text(
                           'Cloud account — works on every device. Staff signs '
                           'in with this email and password.',
-                          style: const TextStyle(
+                          style: TextStyle(
                               fontFamily: 'Carlito', fontSize: 11.5,
                               height: 1.35, color: AppColors.primaryDark),
                         ),
@@ -725,11 +725,11 @@ class _UserEditDialogState extends State<_UserEditDialog> {
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.error_outline_rounded, size: 17, color: AppColors.danger),
+                    Icon(Icons.error_outline_rounded, size: 17, color: AppColors.danger),
                     const SizedBox(width: AppSpace.s2),
                     Expanded(
                       child: Text(_error!,
-                          style: const TextStyle(
+                          style: TextStyle(
                               fontFamily: 'Carlito', fontSize: 12.5, color: AppColors.danger)),
                     ),
                   ],

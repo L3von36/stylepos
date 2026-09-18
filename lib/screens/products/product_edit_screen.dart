@@ -134,7 +134,7 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
                 color: AppColors.primarySoft,
                 borderRadius: BorderRadius.circular(AppRadius.sm),
               ),
-              child: const Icon(Icons.style_outlined, size: 19, color: AppColors.primary),
+              child: Icon(Icons.style_outlined, size: 19, color: AppColors.primary),
             ),
             const SizedBox(width: AppSpace.s3),
             Text(isNew ? 'Add variant' : 'Edit variant'),
@@ -239,11 +239,11 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
                     ),
                     child: Row(
                       children: [
-                        const Icon(Icons.error_outline_rounded, size: 17, color: AppColors.danger),
+                        Icon(Icons.error_outline_rounded, size: 17, color: AppColors.danger),
                         const SizedBox(width: AppSpace.s2),
                         Expanded(
                           child: Text(err!,
-                              style: const TextStyle(
+                              style: TextStyle(
                                   fontFamily: 'Carlito', fontSize: 12.5, color: AppColors.danger)),
                         ),
                       ],
@@ -313,7 +313,7 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
           titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
           contentPadding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
           actionsPadding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-          title: const Row(children: [
+          title: Row(children: [
             Icon(Icons.style_outlined, size: 22, color: AppColors.primary),
             SizedBox(width: AppSpace.s3),
             Text('Barcode labels'),
@@ -366,7 +366,7 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
                 ),
                 Text(
                   '${copies.fold<int>(0, (a, b) => a + b)} label(s) will be printed',
-                  style: const TextStyle(
+                  style: TextStyle(
                       fontFamily: 'Carlito', fontSize: 12.5, color: AppColors.muted),
                 ),
               ],
@@ -586,14 +586,14 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text('Product photo',
+                              Text('Product photo',
                                   style: TextStyle(
                                       fontFamily: 'Carlito',
                                       fontSize: 14,
                                       fontWeight: FontWeight.w700,
                                       color: AppColors.ink)),
                               const SizedBox(height: 2),
-                              const Text(
+                              Text(
                                 'Shows on the sell screen so staff spot items faster.',
                                 style: TextStyle(
                                     fontFamily: 'Carlito',
@@ -619,9 +619,9 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
                                     const SizedBox(width: AppSpace.s2),
                                     TextButton.icon(
                                       onPressed: _removePhoto,
-                                      icon: const Icon(Icons.delete_outline,
+                                      icon: Icon(Icons.delete_outline,
                                           size: 17, color: AppColors.danger),
-                                      label: const Text('Remove',
+                                      label: Text('Remove',
                                           style: TextStyle(color: AppColors.danger)),
                                     ),
                                   ],
@@ -742,7 +742,7 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
                                 v.size.isEmpty
                                     ? (v.color.isEmpty ? '•' : v.color[0].toUpperCase())
                                     : v.size,
-                                style: const TextStyle(
+                                style: TextStyle(
                                     fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.primary),
                               ),
                             ),
@@ -752,14 +752,14 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(v.descriptor,
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                           fontFamily: 'Carlito',
                                           fontWeight: FontWeight.w700,
                                           fontSize: 14,
                                           color: AppColors.ink)),
                                   Text(
                                     '${v.sku} · ${settings.money(v.price)} · stock: ${v.stock}',
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                         fontFamily: 'Carlito', fontSize: 12, color: AppColors.muted),
                                   ),
                                 ],
@@ -772,7 +772,7 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
                             ),
                             IconButton(
                               tooltip: 'Remove',
-                              icon: const Icon(Icons.delete_outline,
+                              icon: Icon(Icons.delete_outline,
                                   size: 19, color: AppColors.danger),
                               onPressed: () {
                                 setState(() {

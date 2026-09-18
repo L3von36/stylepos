@@ -239,7 +239,7 @@ class _HomeShellState extends State<HomeShell> {
                 onChangePassword: () => _showChangePassword(context),
                 onSignOut: () => _confirmSignOut(context),
               ),
-              const VerticalDivider(width: 1, thickness: 1, color: AppColors.borderSoft),
+              VerticalDivider(width: 1, thickness: 1, color: AppColors.borderSoft),
               Expanded(
                 child: Scaffold(
                   appBar: appBar,
@@ -292,7 +292,7 @@ class _HomeShellState extends State<HomeShell> {
                   width: 30,
                   height: 30,
                   decoration: BoxDecoration(
-                    gradient: const LinearGradient(
+                    gradient: LinearGradient(
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                       colors: AppColors.brandGradient,
@@ -335,7 +335,7 @@ class _HomeShellState extends State<HomeShell> {
                   ),
                   child: Text(
                     user.name.isEmpty ? '?' : user.name[0].toUpperCase(),
-                    style: const TextStyle(
+                    style: TextStyle(
                         fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.primaryDark),
                   ),
                 ),
@@ -371,13 +371,13 @@ class _HomeShellState extends State<HomeShell> {
                         ),
                         child: Text(
                           user.name.isEmpty ? '?' : user.name[0].toUpperCase(),
-                          style: const TextStyle(
+                          style: TextStyle(
                               fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.primary),
                         ),
                       ),
                       const SizedBox(width: AppSpace.s2),
                       Text(user.name,
-                          style: const TextStyle(
+                          style: TextStyle(
                               fontFamily: 'Carlito', fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink)),
                       const SizedBox(width: AppSpace.s2),
                       Container(
@@ -417,7 +417,7 @@ class _HomeShellState extends State<HomeShell> {
   void _showAccountSheet(BuildContext context, AppUser user) {
     showModalBottomSheet(
       context: context,
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.xl)),
       ),
@@ -438,14 +438,14 @@ class _HomeShellState extends State<HomeShell> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(user.name,
-                            style: const TextStyle(
+                            style: TextStyle(
                                 fontFamily: 'Carlito', fontSize: 16,
                                 fontWeight: FontWeight.w700, color: AppColors.ink)),
                         Text(
                           '${user.isAdmin ? 'Manager' : 'Sales'} · ${user.email}',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
+                          style: TextStyle(
                               fontFamily: 'Carlito', fontSize: 12.5, color: AppColors.muted),
                         ),
                       ],
@@ -456,7 +456,7 @@ class _HomeShellState extends State<HomeShell> {
             ),
             const Divider(),
             ListTile(
-              leading: const Icon(Icons.lock_reset_outlined, color: AppColors.muted),
+              leading: Icon(Icons.lock_reset_outlined, color: AppColors.muted),
               title: const Text('Change password'),
               onTap: () {
                 Navigator.pop(sheet);
@@ -465,7 +465,7 @@ class _HomeShellState extends State<HomeShell> {
             ),
             if (user.isAdmin)
               ListTile(
-                leading: const Icon(Icons.manage_accounts_outlined,
+                leading: Icon(Icons.manage_accounts_outlined,
                     color: AppColors.muted),
                 title: const Text('Staff accounts'),
                 subtitle: const Text('Add cashiers, reset passwords'),
@@ -476,8 +476,8 @@ class _HomeShellState extends State<HomeShell> {
                 },
               ),
             ListTile(
-              leading: const Icon(Icons.logout_rounded, color: AppColors.danger),
-              title: const Text('Sign out',
+              leading: Icon(Icons.logout_rounded, color: AppColors.danger),
+              title: Text('Sign out',
                   style: TextStyle(color: AppColors.danger)),
               onTap: () {
                 Navigator.pop(sheet);
@@ -521,7 +521,7 @@ class _HomeShellState extends State<HomeShell> {
           titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
           contentPadding: const EdgeInsets.fromLTRB(24, 16, 24, 4),
           actionsPadding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-          title: const Row(children: [
+          title: Row(children: [
             Icon(Icons.lock_reset_outlined, size: 22, color: AppColors.primary),
             SizedBox(width: AppSpace.s2 + 2),
             Text('Change password'),
@@ -551,7 +551,7 @@ class _HomeShellState extends State<HomeShell> {
                 if (error != null)
                   Padding(
                     padding: const EdgeInsets.only(top: AppSpace.s2),
-                    child: Text(error!, style: const TextStyle(color: AppColors.danger, fontSize: 13)),
+                    child: Text(error!, style: TextStyle(color: AppColors.danger, fontSize: 13)),
                   ),
               ],
             ),

@@ -360,7 +360,7 @@ class _LoginForm extends StatelessWidget {
                 style: theme.textTheme.headlineSmall,
               ),
               const SizedBox(height: AppSpace.s1),
-              const Text(
+              Text(
                 'Sign in to continue',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontFamily: 'Carlito', fontSize: 13.5, color: AppColors.muted),
@@ -489,9 +489,9 @@ class _StaffFields extends StatelessWidget {
           ),
           child: Row(
             children: [
-              const Icon(Icons.badge_outlined, size: 16, color: AppColors.faint),
+              Icon(Icons.badge_outlined, size: 16, color: AppColors.faint),
               const SizedBox(width: 8),
-              const Expanded(
+              Expanded(
                 child: Text(
                   'Staff accounts are created by your Manager '
                   '(Settings → Staff accounts). Cloud staff can sign in on '
@@ -600,9 +600,9 @@ class _ManagerFields extends StatelessWidget {
           ),
           child: Row(
             children: [
-              const Icon(Icons.admin_panel_settings_outlined, size: 16, color: AppColors.faint),
+              Icon(Icons.admin_panel_settings_outlined, size: 16, color: AppColors.faint),
               const SizedBox(width: 8),
-              const Expanded(
+              Expanded(
                 child: Text(
                   'The cloud account IS the Manager account. New shop? '
                   'Create one — you become the Manager and can add staff '
@@ -634,12 +634,12 @@ class _ErrorBox extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const Icon(Icons.error_outline_rounded, size: 18, color: AppColors.danger),
+          Icon(Icons.error_outline_rounded, size: 18, color: AppColors.danger),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
               text,
-              style: const TextStyle(
+              style: TextStyle(
                   fontFamily: 'Carlito', fontSize: 13, color: AppColors.danger),
             ),
           ),
