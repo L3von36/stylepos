@@ -8,6 +8,7 @@ import '../../state/nav.dart';
 import '../../state/sales.dart';
 import '../../state/settings.dart';
 import '../../widgets/ui.dart';
+import 'z_report_card.dart';
 
 /// Reports: KPI cards + revenue line chart + top products + category share.
 class ReportsScreen extends StatefulWidget {
@@ -176,6 +177,11 @@ class _ReportsScreenState extends State<ReportsScreen> {
                   ],
                 );
               }),
+              const SizedBox(height: AppSpace.s4),
+
+              // Day close (Z-report): pick a business day, print the
+              // A4 report, close the day with a signed snapshot.
+              const ZReportCard(),
               const SizedBox(height: AppSpace.s4),
 
               // range selector (Wrap: the segmented control can be wider

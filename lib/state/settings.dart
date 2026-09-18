@@ -29,11 +29,62 @@ class AppSettings extends ChangeNotifier {
       };
 
   /// Receipt logo: base64 PNG (resized on import). Null = no logo set.
-  /// Synced with the settings table, so every device prints the same logo.
   String? receiptLogoB64;
 
   /// Whether receipts render the configured logo (default on).
   bool receiptShowLogo = true;
+
+  /// Last successful backup on this device (epoch seconds), null = never.
+  /// Device-local on purpose: backups are per-device files, and the local
+  /// settings kv is not mirrored to the cloud.
+  int? lastBackupAt;
+
+  /// Backup nudge snoozed until this epoch second (banner "Later" button).
+  int? backupSnoozeUntil;
+
+  /// How often the manager should be nudged to export a backup.
+  static const backupReminderDays = 7;
+
+  /// True when the backup-reminder banner should show: manager-only is
+  /// decided by the caller; here — never backed up, or the last backup is
+  /// older than [backupReminderDays] days and the nudge isn't snoozed.
+  bool get backupReminderDue {
+    if (backupSnoozeUntil != null &&
+        backupSnoozeUntil! > DateTime.now().millisecondsSinceEpoch ~/ 1000) {
+      return false;
+    }
+    final last = lastBackupAt;
+    if (last == null || last <= 0) return true;
+    final ageDays =
+        (DateTime.now().millisecondsSinceEpoch ~/ 1000 - last) / 86400.0;
+    return ageDays >= backupReminderDays;
+  }
+
+  /// Records that a backup was just produced on this device.
+  Future<void> markBackedUp() async {
+    lastBackupAt = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    backupSnoozeUntil = null;
+    final db = await DB.instance();
+    final batch = db.batch();
+    batch.insert('settings',
+        {'key': 'last_backup_at', 'value': '$lastBackupAt'},
+        conflictAlgorithm: ConflictAlgorithm.replace);
+    batch.insert('settings', {'key': 'backup_snooze_until', 'value': ''},
+        conflictAlgorithm: ConflictAlgorithm.replace);
+    await batch.commit(noResult: true);
+    notifyListeners();
+  }
+
+  /// Postpones the backup nudge (banner "Not now").
+  Future<void> snoozeBackupReminder({int days = 3}) async {
+    backupSnoozeUntil =
+        DateTime.now().add(Duration(days: days)).millisecondsSinceEpoch ~/ 1000;
+    final db = await DB.instance();
+    await db.insert('settings',
+        {'key': 'backup_snooze_until', 'value': '$backupSnoozeUntil'},
+        conflictAlgorithm: ConflictAlgorithm.replace);
+    notifyListeners();
+  }
 
   NumberFormat? _moneyFmt;
 
@@ -93,6 +144,8 @@ class AppSettings extends ChangeNotifier {
     themeModeName = g('theme_mode') ?? themeModeName;
     receiptLogoB64 = g('receipt_logo_b64');
     receiptShowLogo = (g('receipt_show_logo') ?? '1') != '0';
+    lastBackupAt = int.tryParse(g('last_backup_at') ?? '');
+    backupSnoozeUntil = int.tryParse(g('backup_snooze_until') ?? '');
     _rebuildFormatter();
     notifyListeners();
   }

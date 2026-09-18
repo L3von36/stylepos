@@ -17,6 +17,7 @@ import '../state/catalog.dart';
 import '../state/nav.dart';
 import '../state/settings.dart';
 import '../widgets/app_sidebar.dart';
+import '../widgets/backup_reminder.dart';
 import '../widgets/ui.dart';
 import 'sync_status_pill.dart';
 
@@ -256,7 +257,21 @@ class _HomeShellState extends State<HomeShell> {
               Expanded(
                 child: Scaffold(
                   appBar: appBar,
-                  body: IndexedStack(index: index, children: [for (final d in all) d.page]),
+                  body: Column(
+                    children: [
+                      BackupReminderBanner.maybe(
+                        context,
+                        onBackup: () => Navigator.of(context).push(
+                            MaterialPageRoute(
+                                builder: (_) => const SettingsScreen())),
+                      ) ?? const SizedBox.shrink(),
+                      Expanded(
+                        child: IndexedStack(
+                            index: index,
+                            children: [for (final d in all) d.page]),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ],
@@ -267,7 +282,19 @@ class _HomeShellState extends State<HomeShell> {
       // Phone layout: content + M3 bottom navigation bar.
       return Scaffold(
         appBar: appBar,
-        body: IndexedStack(index: index, children: [for (final d in all) d.page]),
+        body: Column(
+          children: [
+            BackupReminderBanner.maybe(
+              context,
+              onBackup: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const SettingsScreen())),
+            ) ?? const SizedBox.shrink(),
+            Expanded(
+              child: IndexedStack(
+                  index: index, children: [for (final d in all) d.page]),
+            ),
+          ],
+        ),
         bottomNavigationBar: NavigationBar(
           selectedIndex: index,
           onDestinationSelected: (i) => nav.goTo(all[i].id),

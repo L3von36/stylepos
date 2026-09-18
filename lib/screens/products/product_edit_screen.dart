@@ -4,8 +4,7 @@ import 'package:provider/provider.dart';
 import '../../models/product.dart';
 import '../../services/barcode.dart';
 import '../../services/images.dart';
-import '../../services/label_service.dart';
-import '../../services/receipt_service.dart';
+import 'label_print_dialog.dart';
 import '../../state/catalog.dart';
 import '../../state/settings.dart';
 import '../../widgets/ui.dart';
@@ -295,147 +294,23 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
   }
 
   /// Print tag labels (item name + size/color + price + barcode) so the
-  /// sales person can ring up garments straight off the rack.
+  /// sales person can ring up garments straight off the rack. Shares the
+  /// bulk dialog with the Products screen (paper choice, per-variant
+  /// copies, Print / Save PDF).
   Future<void> _printLabels() async {
     if (_variants.isEmpty) {
       _snack(context, 'Add at least one variant first.');
       return;
     }
-    final settings = context.read<AppSettings>();
-    final messenger = ScaffoldMessenger.of(context);
-    LabelPaper paper = LabelPaper.a4;
-    final copies = [for (final _ in _variants) 1];
-
-    await showDialog(
-      context: context,
-      builder: (c) => StatefulBuilder(
-        builder: (c, setD) => AlertDialog(
-          titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
-          contentPadding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
-          actionsPadding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-          title: Row(children: [
-            Icon(Icons.style_outlined, size: 22, color: AppColors.primary),
-            SizedBox(width: AppSpace.s3),
-            Text('Barcode labels'),
-          ]),
-          content: SizedBox(
-            width: 430,
-            height: 400,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                SegmentedButton<LabelPaper>(
-                  showSelectedIcon: false,
-                  segments: const [
-                    ButtonSegment(value: LabelPaper.a4, label: Text('A4 sheet')),
-                    ButtonSegment(
-                        value: LabelPaper.roll50x30, label: Text('50×30 roll')),
-                  ],
-                  selected: {paper},
-                  onSelectionChanged: (s) => setD(() => paper = s.first),
-                ),
-                const SizedBox(height: AppSpace.s3),
-                Expanded(
-                  child: ListView.builder(
-                    itemCount: _variants.length,
-                    itemBuilder: (context, i) {
-                      final v = _variants[i];
-                      return ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        dense: true,
-                        title: Text(v.descriptor,
-                            style: const TextStyle(
-                                fontFamily: 'Carlito',
-                                fontSize: 13.5,
-                                fontWeight: FontWeight.w700)),
-                        subtitle: Text(v.barcode?.isEmpty == false
-                            ? v.barcode!
-                            : v.sku,
-                            style: const TextStyle(
-                                fontFamily: 'Carlito', fontSize: 12)),
-                        trailing: QtyStepper(
-                          qty: copies[i],
-                          onMinus: () => setD(() =>
-                              copies[i] = (copies[i] - 1).clamp(0, 99)),
-                          onPlus: () => setD(
-                              () => copies[i] = (copies[i] + 1).clamp(0, 99)),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-                Text(
-                  '${copies.fold<int>(0, (a, b) => a + b)} label(s) will be printed',
-                  style: TextStyle(
-                      fontFamily: 'Carlito', fontSize: 12.5, color: AppColors.muted),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(c), child: const Text('Cancel')),
-            TextButton.icon(
-              onPressed: () async {
-                try {
-                  final bytes = await LabelService.build(
-                    settings: settings,
-                    paper: paper,
-                    entries: [
-                      for (var i = 0; i < _variants.length; i++)
-                        (
-                          Product(
-                              name: _name.text.isEmpty
-                                  ? 'Product'
-                                  : _name.text,
-                              createdAt: 0),
-                          _variants[i],
-                          copies[i],
-                        ),
-                    ],
-                  );
-                  final file = await ReceiptService.savePdf(
-                      bytes, 'labels-${DateTime.now().millisecondsSinceEpoch}');
-                  messenger.showSnackBar(
-                      SnackBar(content: Text('Saved to ${file.path}')));
-                } catch (e) {
-                  messenger.showSnackBar(
-                      SnackBar(content: Text('Could not build labels: $e')));
-                }
-              },
-              icon: const Icon(Icons.save_outlined, size: 17),
-              label: const Text('Save PDF'),
-            ),
-            FilledButton.icon(
-              onPressed: () async {
-                try {
-                  final bytes = await LabelService.build(
-                    settings: settings,
-                    paper: paper,
-                    entries: [
-                      for (var i = 0; i < _variants.length; i++)
-                        (
-                          Product(
-                              name: _name.text.isEmpty
-                                  ? 'Product'
-                                  : _name.text,
-                              createdAt: 0),
-                          _variants[i],
-                          copies[i],
-                        ),
-                    ],
-                  );
-                  await ReceiptService.printPdf(bytes);
-                } catch (e) {
-                  messenger.showSnackBar(
-                      SnackBar(content: Text('Could not print: $e')));
-                }
-              },
-              icon: const Icon(Icons.print_outlined, size: 17),
-              label: const Text('Print'),
-            ),
-          ],
+    await showLabelPrintDialog(
+      context,
+      groups: [
+        LabelGroup(
+          Product(
+              name: _name.text.isEmpty ? 'Product' : _name.text, createdAt: 0),
+          List<ProductVariant>.from(_variants),
         ),
-      ),
+      ],
     );
   }
 

@@ -6,6 +6,7 @@ import '../../state/auth.dart';
 import '../../state/catalog.dart';
 import '../../state/settings.dart';
 import '../../widgets/ui.dart';
+import 'label_print_dialog.dart';
 import 'product_edit_screen.dart';
 import 'stock_adjust_dialog.dart';
 
@@ -104,6 +105,18 @@ class _ProductsScreenState extends State<ProductsScreen> {
                 '${catalog.products.length} in catalog · $lowCount need restocking'
                 '${canManage ? '' : ' · view only'}',
             actions: [
+              if (canManage)
+                OutlinedButton.icon(
+                  onPressed: () => showLabelPrintDialog(
+                    context,
+                    groups: [
+                      for (final p in products)
+                        if (p.variants.isNotEmpty) LabelGroup(p, p.variants),
+                    ],
+                  ),
+                  icon: const Icon(Icons.style_outlined, size: 17),
+                  label: const Text('Print labels'),
+                ),
               if (canManage)
                 OutlinedButton.icon(
                   onPressed: () => _manageCategories(context),
@@ -330,12 +343,21 @@ class _ProductTile extends StatelessWidget {
                         context: context,
                         builder: (_) => StockAdjustDialog(product: product),
                       );
+                    } else if (v == 'labels') {
+                      if (product.variants.isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                            content: Text('Add a variant first — labels are printed per size/color.')));
+                        return;
+                      }
+                      showLabelPrintDialog(context,
+                          groups: [LabelGroup(product, product.variants)]);
                     } else if (v == 'archive') {
                       await onArchive(product);
                     }
                   },
                   itemBuilder: (_) => const [
                     PopupMenuItem(value: 'stock', child: Text('Adjust stock')),
+                    PopupMenuItem(value: 'labels', child: Text('Print labels')),
                     PopupMenuItem(value: 'archive', child: Text('Archive')),
                   ],
                 ),

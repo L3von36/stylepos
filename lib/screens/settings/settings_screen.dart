@@ -97,6 +97,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
     try {
       final path = await BackupService.createBackup();
       if (!mounted) return;
+      // The zip exists now — count this as a real backup even if the
+      // share/save step is cancelled, so the reminder stays honest.
+      await context.read<AppSettings>().markBackedUp();
+      if (!mounted) return;
       if (Platform.isAndroid || Platform.isIOS) {
         await SharePlus.instance.share(ShareParams(
           files: [XFile(path, mimeType: 'application/zip')],
@@ -239,6 +243,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final sp = context.read<AppSettings>();
     await sp.save(receiptLogo: '');
     await _toast('Logo removed');
+  }
+
+  /// Human label for the last backup stamp on this device.
+  String _lastBackupLabel(AppSettings s) {
+    final t = s.lastBackupAt;
+    if (t == null || t <= 0) return 'never on this device';
+    final d = DateTime.fromMillisecondsSinceEpoch(t * 1000);
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final day = DateTime(d.year, d.month, d.day);
+    final days = today.difference(day).inDays;
+    final hh = d.hour.toString().padLeft(2, '0');
+    final mm = d.minute.toString().padLeft(2, '0');
+    if (days == 0) return 'today at $hh:$mm';
+    if (days == 1) return 'yesterday at $hh:$mm';
+    if (days < 30) return '$days days ago';
+    return '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
   }
 
   @override
@@ -521,6 +542,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           fontSize: 12.5,
                           color: AppColors.muted,
                           height: 1.45),
+                    ),
+                    const SizedBox(height: AppSpace.s2),
+                    Row(
+                      children: [
+                        Icon(Icons.history_rounded,
+                            size: 15,
+                            color: s.backupReminderDue
+                                ? AppColors.warning
+                                : AppColors.success),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Last backup: ${_lastBackupLabel(s)}',
+                          style: TextStyle(
+                              fontFamily: 'Carlito',
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w700,
+                              color: s.backupReminderDue
+                                  ? AppColors.warning
+                                  : AppColors.body),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: AppSpace.s3),
                     Row(
