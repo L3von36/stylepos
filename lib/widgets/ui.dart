@@ -112,6 +112,29 @@ abstract final class AppColors {
 }
 
 // ---------------------------------------------------------------------------
+// Shared component styles
+// ---------------------------------------------------------------------------
+
+/// Segmented-button selection in the primary tone. The theme's mint
+/// secondaryContainer reads as "success" — right for the payment toggle
+/// (money = green), wrong for tabs that select a time range.
+ButtonStyle primarySegmentStyle() => ButtonStyle(
+      backgroundColor: WidgetStateProperty.resolveWith((states) =>
+          states.contains(WidgetState.selected)
+              ? AppColors.primarySoft
+              : null),
+      foregroundColor: WidgetStateProperty.resolveWith((states) =>
+          states.contains(WidgetState.selected)
+              ? AppColors.primaryDark
+              : null),
+      side: WidgetStateProperty.resolveWith((states) => BorderSide(
+            color: states.contains(WidgetState.selected)
+                ? AppColors.primary.withValues(alpha: 0.35)
+                : AppColors.border,
+          )),
+    );
+
+// ---------------------------------------------------------------------------
 // Theme — global M3 component themes
 // ---------------------------------------------------------------------------
 
@@ -619,7 +642,10 @@ class EmptyState extends StatelessWidget {
             ],
             if (actionLabel != null) ...[
               const SizedBox(height: AppSpace.s4),
-              FilledButton.tonal(onPressed: onAction, child: Text(actionLabel!)),
+              // Primary-filled (not tonal): the empty state is THE call to
+              // action of a fresh shop — mint/tonal reads as "success chip",
+              // not as "tap me".
+              FilledButton(onPressed: onAction, child: Text(actionLabel!)),
             ],
           ],
         ),

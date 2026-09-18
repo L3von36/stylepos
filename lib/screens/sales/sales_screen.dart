@@ -95,6 +95,7 @@ class _SalesScreenState extends State<SalesScreen> {
             );
             final periods = SegmentedButton<int>(
               showSelectedIcon: false,
+              style: primarySegmentStyle(),
               segments: const [
                 ButtonSegment(value: 1, label: Text('Today')),
                 ButtonSegment(value: 7, label: Text('7 days')),

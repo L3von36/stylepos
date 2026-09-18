@@ -18,6 +18,20 @@ class ProductsScreen extends StatefulWidget {
   State<ProductsScreen> createState() => _ProductsScreenState();
 }
 
+/// Barcode shown in the catalog row: the product-level default code if set,
+/// otherwise the first variant that carries one. The old code only looked
+/// at the product-level field and printed "no barcode" even when every
+/// variant had a scannable code.
+String? _rowBarcode(Product product) {
+  if (product.barcode != null && product.barcode!.trim().isNotEmpty) {
+    return product.barcode;
+  }
+  for (final v in product.variants) {
+    if (v.barcode != null && v.barcode!.trim().isNotEmpty) return v.barcode;
+  }
+  return null;
+}
+
 class _ProductsScreenState extends State<ProductsScreen> {
   final _search = TextEditingController();
   String _query = '';
@@ -185,7 +199,11 @@ class _ProductsScreenState extends State<ProductsScreen> {
             child: products.isEmpty
                 ? EmptyState(
                     icon: Icons.inventory_2_outlined,
-                    title: 'No products found',
+                    // "Not found" is for filtered views; a fresh shop with
+                    // zero rows should read as a welcome, not a failure.
+                    title: _query.isNotEmpty || _lowOnly || _categoryFilter >= 0
+                        ? 'No products found'
+                        : 'No products yet',
                     message: _query.isNotEmpty || _lowOnly || _categoryFilter >= 0
                         ? 'Try clearing the search or filters.'
                         : 'Add your first product to start tracking stock.',
@@ -270,9 +288,9 @@ class _ProductTile extends StatelessWidget {
                             color: AppColors.ink)),
                     const SizedBox(height: 2),
                     Text(
-                      '${product.variants.length} variants'
+                      '${product.variants.length} variant${product.variants.length == 1 ? '' : 's'}'
                       ' · ${product.variants.isEmpty ? '-' : settings.priceLabel(product.minPrice, product.maxPrice)}'
-                      ' · ${product.barcode ?? 'no barcode'}',
+                      ' · ${_rowBarcode(product) ?? 'no barcode'}',
                       style: const TextStyle(fontFamily: 'Carlito', fontSize: 12.5, color: AppColors.muted),
                       overflow: TextOverflow.ellipsis,
                     ),

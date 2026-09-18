@@ -316,7 +316,13 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
             controller: _tendered,
             autofocus: true,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            onChanged: (_) => setState(() {}),
+            // Changing the amount invalidates a previously-shown
+            // underpayment error — otherwise the dialog can show the red
+            // "collect more" banner and the green "Change due" banner at
+            // the same time.
+            onChanged: (_) {
+              if (_error != null) setState(() => _error = null);
+            },
             style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
             decoration: InputDecoration(
               labelText: 'Cash received (${settings.currencySymbol})',
@@ -341,7 +347,12 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
                   side: BorderSide.none,
                   onPressed: () {
                     _tendered.text = quick.toStringAsFixed(0);
-                    setState(() {});
+                    // Same stale-error rule as typing: re-tendering clears it.
+                    if (_error != null) {
+                      setState(() => _error = null);
+                    } else {
+                      setState(() {});
+                    }
                   },
                 ),
             ],

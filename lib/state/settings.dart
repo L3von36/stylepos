@@ -6,7 +6,11 @@ import '../data/database.dart';
 
 /// Shop-wide settings persisted in the `settings` key/value table.
 class AppSettings extends ChangeNotifier {
-  String shopName = 'My Clothing Shop';
+  /// Untouched factory value — a device still showing this after the shop
+  /// exists means the real shop name never landed locally.
+  static const defaultShopName = 'My Clothing Shop';
+
+  String shopName = defaultShopName;
   String shopAddress = '';
   String shopPhone = '';
   String receiptFooter = 'Thank you for shopping with us!';

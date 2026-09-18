@@ -109,6 +109,13 @@ class _LoginScreenState extends State<LoginScreen> {
                 'then sign in here.'
             : err;
       });
+      return;
+    }
+    if (create) {
+      // Persist the shop name locally right away so the app bar and
+      // receipts show it from the first second (the cloud shop was just
+      // created with exactly this name).
+      await context.read<AppSettings>().save(shopName: _managerName.text);
     }
     // On success CloudAuth opens the local session; _Root swaps to HomeShell.
   }

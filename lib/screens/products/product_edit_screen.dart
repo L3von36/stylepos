@@ -263,9 +263,12 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
                   setD(() => err = 'Enter a valid price.');
                   return;
                 }
+                // The auto-created "Standard" variant ships with an empty
+                // SKU. Demanding one here used to dead-end the manager right
+                // after they typed a price ("SKU is required." with no way
+                // forward but the tiny wand icon) — generate a code instead.
                 if (sku.text.trim().isEmpty) {
-                  setD(() => err = 'SKU is required.');
-                  return;
+                  sku.text = _autoSku('');
                 }
                 Navigator.pop(c, v.copyWith(
                   size: size.text.trim(),
@@ -701,7 +704,7 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
                         label: const Text('Labels'),
                       ),
                       const SizedBox(width: AppSpace.s2),
-                      FilledButton.tonalIcon(
+                      FilledButton.icon(
                         onPressed: () {
                           setState(() {
                             _variants.add(ProductVariant(

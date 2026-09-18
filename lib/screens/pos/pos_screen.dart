@@ -10,6 +10,7 @@ import '../../services/scan_gate.dart';
 import '../../state/auth.dart';
 import '../../state/cart.dart';
 import '../../state/catalog.dart';
+import '../../state/nav.dart';
 import '../../state/sales.dart';
 import '../../state/settings.dart';
 import '../../widgets/ui.dart';
@@ -320,10 +321,16 @@ class _PosScreenState extends State<PosScreen> {
           child: products.isEmpty
               ? EmptyState(
                   icon: Icons.storefront_outlined,
-                  title: 'No products match',
-                  message: _query.isNotEmpty
-                      ? 'Try a different search term or clear the filters.'
-                      : 'Add products under the Products tab to start selling.',
+                  // An empty catalog is a different situation from a search
+                  // that matched nothing — say so, and offer the way out.
+                  title: _query.isEmpty ? 'No products yet' : 'No products match',
+                  message: _query.isEmpty
+                      ? 'Add your first product under the Products tab, then come back here to sell.'
+                      : 'Try a different search term or clear the filters.',
+                  actionLabel: _query.isEmpty ? 'Go to Products' : null,
+                  onAction: _query.isEmpty
+                      ? () => context.read<NavProvider>().goTo(NavId.products)
+                      : null,
                 )
               : GridView.builder(
                   padding: const EdgeInsets.only(bottom: AppSpace.s4),

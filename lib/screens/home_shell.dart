@@ -74,6 +74,23 @@ class _HomeShellState extends State<HomeShell> {
     } catch (_) {// Never block the till on the gate.
     }
 
+    // ---- gate 3: keep the local shop name in step with the cloud shop ---
+    // Signing up on one device used to leave the app bar / receipts saying
+    // the factory name ("My Clothing Shop") forever. Heal devices that
+    // still carry the untouched default; a manager-customized receipt name
+    // in Settings is never overwritten.
+    try {
+      final cloud = await CloudAuth.fetchMyShop();
+      final cloudName = cloud?['name'] ?? '';
+      if (cloudName.isNotEmpty && mounted) {
+        final sp = context.read<AppSettings>();
+        if (sp.shopName == AppSettings.defaultShopName) {
+          await sp.save(shopName: cloudName);
+        }
+      }
+    } catch (_) {// Cosmetic heal — never block the till.
+    }
+
     // ---- gate 2: first-run staff hint (managers) ---------------------
     if (!mounted || !user.isAdmin) return;
     try {

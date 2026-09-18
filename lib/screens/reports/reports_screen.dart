@@ -191,6 +191,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                           color: AppColors.muted)),
                   SegmentedButton<int>(
                     showSelectedIcon: false,
+                    style: primarySegmentStyle(),
                     segments: const [
                       ButtonSegment(value: 7, label: Text('7 days')),
                       ButtonSegment(value: 30, label: Text('30 days')),
