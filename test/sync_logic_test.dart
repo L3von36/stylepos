@@ -15,6 +15,10 @@ import 'package:stylepos/state/settings.dart';
 class FakeGateway implements CloudGateway {
   final tables = <String, Map<String, Map<String, dynamic>>>{};
 
+  /// Table names -> error message: simulate the cloud rejecting upserts
+  /// (e.g. an RLS 42501 on variants for a cashier session).
+  Map<String, String>? failUpsertsFor;
+
   Map<String, Map<String, dynamic>> _t(String table) =>
       tables.putIfAbsent(table, () => {});
 
@@ -38,6 +42,8 @@ class FakeGateway implements CloudGateway {
   @override
   Future<void> upsertRows(
       String table, List<Map<String, dynamic>> rows) async {
+    final err = failUpsertsFor?[table];
+    if (err != null) throw Exception(err);
     for (final r in rows) {
       _t(table)[r['id'] as String] = Map<String, dynamic>.from(r);
     }
@@ -639,6 +645,101 @@ void main() {
       await sync.run();
       s = await dbh.query('sales', where: 'cloud_id = ?', whereArgs: [saleId]);
       expect(s.first['status'], 'refunded');
+    });
+  });
+
+  group('partial failure isolation', () {
+    test('a rejected variant push (RLS) never blocks sales push or pulls',
+        () async {
+      // Baseline: catalog pushed, everything clean.
+      await seedTestCatalog();
+      await sync.run();
+      expect(sync.phase, SyncPhase.idle);
+      final dbh = await db();
+
+      // The cashier sells — checkout dirties the sold variant (stock).
+      final settings = AppSettings();
+      await settings.load();
+      final catalog = CatalogProvider();
+      await catalog.reload();
+      final cart = CartProvider();
+      final product = catalog.products.first;
+      expect(cart.add(product, product.variants.first), isTrue);
+      final sales = SalesProvider();
+      final sale = await sales.checkout(
+        cart: cart,
+        userId: 1,
+        paymentMethod: 'cash',
+        amountPaid: 500,
+        settings: settings,
+      );
+
+      // Meanwhile the manager makes a sale on another device.
+      cloud.tables['app_users'] = {
+        'uid-2': {
+          'id': 'uid-2',
+          'name': 'Bob',
+          'email': 'bob@shop.test',
+          'role': 'admin',
+        },
+      };
+      final remoteSaleId = 'ssssssss-8888-0000-1111-222222222222';
+      cloud.tables['sales']![remoteSaleId] = {
+        'id': remoteSaleId,
+        'receipt_no': 'R-DEVB01-000009',
+        'device': 'DEVB01',
+        'customer_id': null,
+        'user_id': 'uid-2',
+        'subtotal': 100.0,
+        'discount': 0.0,
+        'tax': 0.0,
+        'total': 100.0,
+        'payment_method': 'cash',
+        'amount_paid': 100.0,
+        'change_due': 0.0,
+        'status': 'completed',
+        'created_at': iso(_now()),
+        'updated_at': iso(_now() + 10),
+      };
+
+      // The cloud rejects variant upserts for this session (the exact
+      // cashier bug: 42501 on variants, pre-patch7).
+      cloud.failUpsertsFor = {
+        'variants':
+            'PostgREST 42501 new row violates row-level security policy '
+                'for table "variants"'
+      };
+
+      await sync.run();
+
+      // The failure is VISIBLE (red pill)…
+      expect(sync.phase, SyncPhase.error);
+      expect(sync.lastError, contains('row-level security'));
+      // …but the new sale still reached the cloud,
+      final pushed =
+          cloud.tables['sales']!.values.where((s) => s['receipt_no'] == sale.receiptNo);
+      expect(pushed, isNotEmpty);
+      // …the remote sale still landed locally (pulls never starve),
+      final pulled =
+          await dbh.query('sales', where: 'cloud_id = ?', whereArgs: [remoteSaleId]);
+      expect(pulled.length, 1);
+      expect(pulled.first['receipt_no'], 'R-DEVB01-000009');
+      // …and the rejected variant stays dirty, queued for the next cycle.
+      final dirty = await dbh.rawQuery(
+          'SELECT COUNT(*) AS n FROM variants WHERE dirty = 1');
+      expect(dirty.first['n'], 1);
+
+      // Patch7 lands (cloud accepts variants again) → one more run
+      // converges everything without user action.
+      cloud.failUpsertsFor = null;
+      await sync.run();
+      expect(sync.phase, SyncPhase.idle);
+      final stillDirty = await dbh.rawQuery(
+          'SELECT COUNT(*) AS n FROM variants WHERE dirty = 1');
+      expect(stillDirty.first['n'], 0);
+      // Cloud stock now reflects the checkout (10 - 1 = 9).
+      final cloudVar = cloud.tables['variants']!.values.first;
+      expect((cloudVar['stock'] as num).toInt(), 9);
     });
   });
 }

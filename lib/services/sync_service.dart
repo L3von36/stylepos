@@ -368,6 +368,12 @@ class SyncService extends ChangeNotifier {
   }
 
   /// Runs a full push+pull cycle now (no-op when signed out).
+  ///
+  /// Every step is isolated: one failing table (a row the cloud's RLS
+  /// rejected, a transient network blip) must never starve the others.
+  /// Before this, a cashier's rejected variant-stock push aborted the
+  /// whole cycle — the device froze in a red "Sync issue" state AND
+  /// stopped pulling, so sales made elsewhere never appeared.
   Future<void> run() async {
     if (!signedIn) return;
     if (_running) {
@@ -378,52 +384,71 @@ class SyncService extends ChangeNotifier {
     phase = SyncPhase.syncing;
     lastError = null;
     notifyListeners();
-    try {
-      // Another device may have cleared the sales history — honour that
-      // before anything else so old sales never resurrect here.
-      await _applySalesClearMarker();
-      // Push order respects foreign keys: parents before children.
-      await _pushCategories();
-      await _pushProducts();
-      await _pushVariants();
-      await _pushCustomers();
-      await _pushSales();
-      await _pushSaleItems();
-      await _pushMovements();
-      // Pull order likewise: parents first so ids resolve.
-      await _pullCategories();
-      await _pullProducts();
-      await _pullVariants();
-      await _pullCustomers();
-      await _pullSales();
-      await _pullSaleItems();
-      await _pullMovements();
+    Object? firstError;
+    Future<void> step(String name, Future<void> Function() action) async {
+      try {
+        await action();
+      } catch (e) {
+        firstError ??= e;
+        debugPrint('sync step $name failed: $e');
+      }
+    }
 
-      // Rows that never matched anything in the cloud (created before this
-      // device first synced, e.g. seed catalog) get pushed as new rows.
-      // The second push round is a no-op when nothing was marked.
+    // Another device may have cleared the sales history — honour that
+    // before anything else so old sales never resurrect here.
+    await step('sales clear marker', _applySalesClearMarker);
+    // Push order respects foreign keys: parents before children.
+    await step('push categories', _pushCategories);
+    await step('push products', _pushProducts);
+    await step('push variants', _pushVariants);
+    await step('push customers', _pushCustomers);
+    await step('push sales', _pushSales);
+    await step('push sale items', _pushSaleItems);
+    await step('push movements', _pushMovements);
+    // Pull order likewise: parents first so ids resolve.
+    await step('pull categories', _pullCategories);
+    await step('pull products', _pullProducts);
+    await step('pull variants', _pullVariants);
+    await step('pull customers', _pullCustomers);
+    await step('pull sales', _pullSales);
+    await step('pull sale items', _pullSaleItems);
+    await step('pull movements', _pullMovements);
+
+    // Rows that never matched anything in the cloud (created before this
+    // device first synced, e.g. seed catalog) get pushed as new rows.
+    // The second push round is a no-op when nothing was marked.
+    await step('mark unsynced rows', () async {
       final db = await _db;
       for (final t in [...kSyncTables, ...kSalesTables]) {
         await db.execute('UPDATE $t SET dirty = 1 WHERE cloud_id IS NULL');
       }
-      await _pushCategories();
-      await _pushProducts();
-      await _pushVariants();
-      await _pushCustomers();
-      await _pushSales();
-      await _pushSaleItems();
-      await _pushMovements();
+    });
+    await step('push categories 2', _pushCategories);
+    await step('push products 2', _pushProducts);
+    await step('push variants 2', _pushVariants);
+    await step('push customers 2', _pushCustomers);
+    await step('push sales 2', _pushSales);
+    await step('push sale items 2', _pushSaleItems);
+    await step('push movements 2', _pushMovements);
 
-      lastSyncAt = DateTime.now();
+    // Red "Sync issue" only when at least one step actually failed;
+    // failed rows stay dirty and are retried on the next cycle.
+    if (firstError != null) {
+      phase = SyncPhase.error;
+      lastError = firstError.toString();
+    } else {
       phase = SyncPhase.idle;
+      lastSyncAt = DateTime.now();
+    }
+    // Refresh the UI with whatever landed locally — even when a push
+    // failed, pulled rows are already in SQLite and must be visible.
+    try {
       await onSynced?.call();
     } catch (e) {
-      phase = SyncPhase.error;
-      lastError = e.toString();
-    } finally {
-      _running = false;
-      notifyListeners();
+      debugPrint('onSynced listener failed: $e');
     }
+    _running = false;
+    notifyListeners();
     if (_queued) {
       _queued = false;
       scheduleSync(const Duration(seconds: 1));

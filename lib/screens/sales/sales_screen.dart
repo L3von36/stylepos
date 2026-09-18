@@ -23,10 +23,12 @@ class _SalesScreenState extends State<SalesScreen> {
   String _query = '';
   List<Sale>? _sales;
   Timer? _debounce;
+  int _lastRevision = 0;
 
   @override
   void initState() {
     super.initState();
+    _lastRevision = context.read<SalesProvider>().revision;
     _load();
   }
 
@@ -48,6 +50,16 @@ class _SalesScreenState extends State<SalesScreen> {
   @override
   Widget build(BuildContext context) {
     final settings = context.watch<AppSettings>();
+    // Realtime: a local checkout bumps the revision, and sync bumps it
+    // again when sales from other devices land — reload after this frame
+    // so the list always shows the newest receipts without a pull.
+    final salesRev = context.watch<SalesProvider>().revision;
+    if (salesRev != _lastRevision) {
+      _lastRevision = salesRev;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _load();
+      });
+    }
     final totalRevenue =
         _sales?.where((s) => !s.isRefunded).fold(0.0, (sum, s) => sum + s.total) ?? 0.0;
 
