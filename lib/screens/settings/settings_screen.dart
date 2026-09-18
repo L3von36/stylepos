@@ -302,6 +302,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 subtitle: 'Light, dark, or follow the device — applies instantly',
                 children: [
                   SegmentedButton<String>(
+                    style: primarySegmentStyle(),
+                    showSelectedIcon: false,
                     segments: const [
                       ButtonSegment(
                           value: 'system',

@@ -96,15 +96,33 @@ class StylePosApp extends StatelessWidget {
         ChangeNotifierProvider<SalesProvider>.value(value: sales),
         ChangeNotifierProvider<NavProvider>.value(value: nav),
       ],
-      child: MaterialApp(
-        title: 'Sami',
-        debugShowCheckedModeBanner: false,
-        theme: AppTheme.build(),
-        darkTheme: AppTheme.dark(),
-        themeMode: settings.themeMode,
-        builder: (context, child) => _ThemeSync(child: child!),
-        home: const _Root(),
-      ),
+      child: Builder(builder: (context) {
+        // Watch settings so a System/Light/Dark switch rebuilds MaterialApp.
+        final mode = context.watch<AppSettings>().themeMode;
+        // Resolve the effective brightness BEFORE building the themes — the
+        // ThemeData factories read AppColors statics, which must already
+        // reflect the new mode (the in-app _ThemeSync runs too late for
+        // theme construction).
+        final platformDark = WidgetsBinding
+                .instance.platformDispatcher.platformBrightness ==
+            Brightness.dark;
+        AppColors.brightness =
+            mode == ThemeMode.dark || (mode == ThemeMode.system && platformDark)
+                ? Brightness.dark
+                : Brightness.light;
+        return MaterialApp(
+          // Keyed by mode: a switch rebuilds the whole tree atomically
+          // (static tokens + theme-dependent paints stay in step).
+          key: ValueKey<ThemeMode>(mode),
+          title: 'Sami',
+          debugShowCheckedModeBanner: false,
+          theme: AppTheme.build(),
+          darkTheme: AppTheme.dark(),
+          themeMode: mode,
+          builder: (context, child) => _ThemeSync(child: child!),
+          home: const _Root(),
+        );
+      }),
     );
   }
 }

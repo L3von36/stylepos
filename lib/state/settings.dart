@@ -37,6 +37,10 @@ class AppSettings extends ChangeNotifier {
 
   NumberFormat? _moneyFmt;
 
+  /// Forces listeners to re-read settings (e.g. the OS dark-mode flip while
+  /// in System mode re-resolves the effective brightness).
+  void resync() => notifyListeners();
+
   AppSettings() {
     _rebuildFormatter();
   }

@@ -411,9 +411,9 @@ class _MyTodayStripState extends State<_MyTodayStrip> {
         return Container(
           padding: const EdgeInsets.symmetric(horizontal: AppSpace.s4, vertical: AppSpace.s2),
           decoration: BoxDecoration(
-            color: AppColors.primarySoft.withValues(alpha: 0.55),
+            color: AppColors.primarySoft,
             borderRadius: BorderRadius.circular(AppRadius.sm),
-            border: Border.all(color: AppColors.primary.withValues(alpha: 0.18)),
+            border: Border.all(color: AppColors.primary.withValues(alpha: 0.25)),
           ),
           child: Row(
             children: [

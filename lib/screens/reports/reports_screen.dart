@@ -26,7 +26,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
   List<({String name, int orders, double revenue})>? _staff;
   List<({String method, int orders, double total})>? _payments;
   double? _cogs;
-  int _lowStock = 0;
   int _lastRevision = 0;
 
   @override
@@ -46,7 +45,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
       sales.revenueByDay(_range),
       sales.topProducts(_range, limit: 5),
       sales.categoryShare(_range),
-      sales.lowStockCount(),
       sales.staffPerformance(_range),
       sales.cogs(_range),
       sales.paymentBreakdown(_range),
@@ -61,11 +59,10 @@ class _ReportsScreenState extends State<ReportsScreen> {
       _revenue = results[4] as List<(DateTime, double)>;
       _top = results[5] as List<(String, int, double)>;
       _categories = results[6] as List<(String, double)>;
-      _lowStock = results[7] as int;
-      _staff = results[8]
+      _staff = results[7]
           as List<({String name, int orders, double revenue})>;
-      _cogs = results[9] as double;
-      _payments = results[10]
+      _cogs = results[8] as double;
+      _payments = results[9]
           as List<({String method, int orders, double total})>;
     });
   }
@@ -73,6 +70,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
   @override
   Widget build(BuildContext context) {
     final settings = context.watch<AppSettings>();
+    // Live catalog so the low-stock KPI matches the sidebar badge exactly.
+    final liveLow = context.watch<CatalogProvider>().lowStockItems().length;
     // Realtime: when sync lands sales from other devices, revision bumps
     // and the whole report reloads after this frame.
     final salesRev = context.watch<SalesProvider>().revision;
@@ -168,10 +167,10 @@ class _ReportsScreenState extends State<ReportsScreen> {
                       width: w,
                       child: KpiCard(
                         label: 'Low stock items',
-                        value: '$_lowStock',
+                        value: '$liveLow',
                         icon: Icons.warning_amber_rounded,
-                        color: _lowStock > 0 ? AppColors.danger : AppColors.success,
-                        soft: _lowStock > 0 ? AppColors.dangerSoft : AppColors.successSoft,
+                        color: liveLow > 0 ? AppColors.danger : AppColors.success,
+                        soft: liveLow > 0 ? AppColors.dangerSoft : AppColors.successSoft,
                       ),
                     ),
                   ],
