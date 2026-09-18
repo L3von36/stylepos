@@ -1,4 +1,4 @@
-/// Supabase project credentials for StylePOS cloud sync.
+/// Supabase project credentials for Sami cloud sync.
 ///
 /// The anon key is a *publishable* key: it is safe to embed in the app.
 /// Data protection comes from Row Level Security (no login = no data),

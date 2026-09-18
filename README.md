@@ -1,6 +1,6 @@
-# StylePOS 🛍️
+# Sami 🛍️
 
-An **offline-first Point of Sale app for clothing shops**, built with **Flutter**.
+**Sami** (formerly StylePOS) is an **offline-first Point of Sale app for clothing shops**, built with **Flutter**.
 Runs on **Android** (phone/tablet at the counter) and **Windows** (desktop),
 with a local SQLite database — no internet or server required.
 
@@ -73,8 +73,8 @@ does everything in the cloud:
 
 | Trigger | What you get |
 |---|---|
-| Push to `main` (or manual *Run workflow*) | **Analyze → Test → Build** on both platforms. Download **`StylePOS-android-apk`** and **`StylePOS-windows-x64`** artifacts from the run's page. |
-| Push a tag `v*` (e.g. `v1.0.0`) | Everything above **plus a GitHub Release** with `StylePOS-android.apk` and `StylePOS-windows-x64.zip` attached. |
+| Push to `main` (or manual *Run workflow*) | **Analyze → Test → Build** on both platforms. Download **`Sami-android-apk`** and **`Sami-windows-x64`** artifacts from the run's page. |
+| Push a tag `v*` (e.g. `v1.0.0`) | Everything above **plus a GitHub Release** with `Sami-android-arm64.apk` and `Sami-windows-x64.zip` attached. |
 
 Release a new version:
 
@@ -83,7 +83,7 @@ git tag v1.0.0
 git push origin v1.0.0
 ```
 
-> The Windows zip contains `StylePOS.exe` + the runtime DLLs — unzip it
+> The Windows zip contains `sami.exe` + the runtime DLLs — unzip it
 > anywhere on Windows 10/11 and run the exe. The APK installs directly on
 > any Android 7+ device (allow "install from unknown sources").
 

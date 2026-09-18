@@ -1,4 +1,4 @@
-# StylePOS R8 rules.
+# Sami R8 rules.
 #
 # mobile_scanner (7.x) ships consumer rules that keep ML Kit / CameraX /
 # barhopper classes, and the Flutter Gradle plugin injects the engine and

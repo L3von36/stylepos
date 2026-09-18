@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../services/photo_store.dart';
 
-/// StylePOS design system — built on the Material Design 3 (2021) spec.
+/// Sami design system — built on the Material Design 3 (2021) spec.
 ///
 /// Tokens follow the official M3 guidelines:
 ///  * Color ........ 26 color roles in a full [ColorScheme]; semantic extras

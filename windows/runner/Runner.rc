@@ -89,13 +89,13 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "dev.stylepos" "\0"
-            VALUE "FileDescription", "StylePOS" "\0"
+            VALUE "CompanyName", "Sami" "\0"
+            VALUE "FileDescription", "Sami - Point of Sale" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "stylepos" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2026 dev.stylepos. All rights reserved." "\0"
-            VALUE "OriginalFilename", "stylepos.exe" "\0"
-            VALUE "ProductName", "StylePOS" "\0"
+            VALUE "InternalName", "sami" "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026 Sami. All rights reserved." "\0"
+            VALUE "OriginalFilename", "sami.exe" "\0"
+            VALUE "ProductName", "Sami" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

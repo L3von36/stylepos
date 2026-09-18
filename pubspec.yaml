@@ -1,7 +1,7 @@
 name: stylepos
-description: "StylePOS - an offline-first point-of-sale app for clothing shops, built with Flutter (Android + Windows + Web)."
+description: "Sami (formerly StylePOS) - an offline-first point-of-sale app for clothing shops, built with Flutter (Android + Windows + Web)."
 publish_to: 'none'
-version: 1.11.1+18
+version: 1.11.2+19
 
 environment:
   sdk: ^3.13.3
@@ -50,7 +50,7 @@ dependencies:
   sqflite_common_ffi_web: ^0.4.0
 
   # Rive animations (empty-cart delivery truck, checkout success, login hero)
-  rive: ^0.13.20
+  rive: ^0.13.20  # pinned: 0.14.x changed the native API; 0.13.20 is stable on all 3 platforms
 
 dev_dependencies:
   flutter_test:
