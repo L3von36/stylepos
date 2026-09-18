@@ -7,6 +7,7 @@ import '../../state/catalog.dart';
 import '../../state/customers.dart';
 import '../../state/nav.dart';
 import '../../state/settings.dart';
+import '../../widgets/rive_view.dart';
 import '../../widgets/ui.dart';
 import 'checkout_dialog.dart';
 
@@ -130,10 +131,31 @@ class CartPanel extends StatelessWidget {
         // items
         Expanded(
           child: cart.isEmpty
-              ? EmptyState(
-                  icon: Icons.shopping_basket_outlined,
-                  title: 'Cart is empty',
-                  message: 'Tap products or scan a barcode to add them.',
+              ? Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const EmptyCartArt(),
+                    const SizedBox(height: AppSpace.s3),
+                    const Text('Cart is empty',
+                        style: TextStyle(
+                            fontFamily: 'Carlito',
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.ink)),
+                    const SizedBox(height: 4),
+                    const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: AppSpace.s5),
+                      child: Text(
+                        'Tap products or scan a barcode to add them.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                            fontFamily: 'Carlito',
+                            fontSize: 12.5,
+                            height: 17 / 12.5,
+                            color: AppColors.muted),
+                      ),
+                    ),
+                  ],
                 )
               : ListView.builder(
                   padding: const EdgeInsets.fromLTRB(AppSpace.s3, AppSpace.s2, AppSpace.s3, AppSpace.s1),

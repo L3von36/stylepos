@@ -80,7 +80,7 @@ class _AppSidebarState extends State<AppSidebar> {
     if (!_extended) {
       return Padding(
         padding: const EdgeInsets.only(top: AppSpace.s5, bottom: AppSpace.s1),
-        child: Center(child: Tooltip(message: 'StylePOS', child: tile)),
+        child: Center(child: Tooltip(message: 'Sami', child: tile)),
       );
     }
     return Padding(
@@ -94,7 +94,7 @@ class _AppSidebarState extends State<AppSidebar> {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text('StylePOS',
+                Text('Sami',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
@@ -162,24 +162,38 @@ class _AppSidebarState extends State<AppSidebar> {
       child: _extended
           ? Row(
               children: [
-                Icon(selected ? activeIcon : icon, size: 21, color: fg),
+                AnimatedSlide(
+                  duration: AppMotion.fast,
+                  curve: AppMotion.standard,
+                  offset: hovered ? const Offset(0.14, 0) : Offset.zero,
+                  child: Icon(selected ? activeIcon : icon, size: 21, color: fg),
+                ),
                 const SizedBox(width: AppSpace.s3),
                 Expanded(
-                  child: Text(
-                    label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                  child: AnimatedDefaultTextStyle(
+                    duration: AppMotion.fast,
+                    curve: AppMotion.standard,
                     style: TextStyle(
                         fontFamily: 'Carlito',
                         fontSize: 14,
                         letterSpacing: 0.1,
-                        fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
+                        fontWeight: selected || hovered ? FontWeight.w700 : FontWeight.w400,
                         color: fg),
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
                 ),
               ],
             )
-          : Icon(selected ? activeIcon : icon, size: 22, color: fg),
+          : AnimatedSlide(
+              duration: AppMotion.fast,
+              curve: AppMotion.standard,
+              offset: hovered ? const Offset(0.14, 0) : Offset.zero,
+              child: Icon(selected ? activeIcon : icon, size: 22, color: fg),
+            ),
     );
 
     Widget row = Padding(

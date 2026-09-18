@@ -96,8 +96,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (Platform.isAndroid || Platform.isIOS) {
         await SharePlus.instance.share(ShareParams(
           files: [XFile(path, mimeType: 'application/zip')],
-          subject: 'StylePOS backup',
-          text: 'StylePOS shop backup — keep this file somewhere safe.',
+          subject: 'Sami backup',
+          text: 'Sami shop backup — keep this file somewhere safe.',
         ));
       } else {
         final loc = await getSaveLocation(suggestedName: p.basename(path));
@@ -125,7 +125,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     } else {
       final f = await openFile(acceptedTypeGroups: const [
         XTypeGroup(
-            label: 'StylePOS backup', extensions: ['stylepos', 'zip']),
+            label: 'Sami backup', extensions: ['stylepos', 'zip']),
       ]);
       picked = f?.path;
     }
@@ -169,13 +169,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
           content: const SizedBox(
             width: 360,
             child: Text(
-                'Your shop data was restored. Close and reopen StylePOS '
+                'Your shop data was restored. Close and reopen Sami '
                 'now to finish.'),
           ),
           actions: [
             FilledButton(
               onPressed: () => exit(0),
-              child: const Text('Close StylePOS'),
+              child: const Text('Close Sami'),
             ),
           ],
         ),
@@ -449,7 +449,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text('StylePOS',
+                            const Text('Sami',
                                 style: TextStyle(
                                     fontFamily: 'Carlito',
                                     fontSize: 15,

@@ -668,8 +668,9 @@ class EmptyState extends StatelessWidget {
   }
 }
 
-/// KPI card for reports & dashboards.
-class KpiCard extends StatelessWidget {
+/// KPI card for reports & dashboards. Lifts 3dp on hover (desktop pointer
+/// affordance) with a soft brand shadow.
+class KpiCard extends StatefulWidget {
   final String label;
   final String value;
   final IconData icon;
@@ -686,48 +687,72 @@ class KpiCard extends StatelessWidget {
   });
 
   @override
+  State<KpiCard> createState() => _KpiCardState();
+}
+
+class _KpiCardState extends State<KpiCard> {
+  bool _hover = false;
+
+  @override
   Widget build(BuildContext context) {
+    final color = widget.color;
+    final soft = widget.soft;
     final valueColor = color == AppColors.primary ? AppColors.ink : color;
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpace.s4),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      child: AnimatedContainer(
+        duration: AppMotion.fast,
+        curve: AppMotion.standard,
+        transform: Matrix4.translationValues(0, _hover ? -3 : 0, 0),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          boxShadow: _hover
+              ? const [BoxShadow(color: Color(0x1A4F46E5), blurRadius: 14, offset: Offset(0, 6))]
+              : const [],
+        ),
+        child: Card(
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpace.s4),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                      color: soft, borderRadius: BorderRadius.circular(AppRadius.sm)),
-                  child: Icon(icon, size: 19, color: color),
+                Row(
+                  children: [
+                    Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                          color: soft, borderRadius: BorderRadius.circular(AppRadius.sm)),
+                      child: Icon(widget.icon, size: 19, color: color),
+                    ),
+                    const SizedBox(width: AppSpace.s2 + 2),
+                    Expanded(
+                      child: Text(
+                        widget.label.toUpperCase(),
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
+                        style: Theme.of(context)
+                            .textTheme
+                            .labelSmall
+                            ?.copyWith(color: AppColors.muted),
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: AppSpace.s2 + 2),
-                Expanded(
-                  child: Text(
-                    label.toUpperCase(),
-                    overflow: TextOverflow.ellipsis,
-                    maxLines: 1,
-                    style: Theme.of(context)
-                        .textTheme
-                        .labelSmall
-                        ?.copyWith(color: AppColors.muted),
-                  ),
+                const SizedBox(height: AppSpace.s3),
+                Text(
+                  widget.value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleLarge
+                      ?.copyWith(fontSize: 22, color: valueColor),
                 ),
               ],
             ),
-            const SizedBox(height: AppSpace.s3),
-            Text(
-              value,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context)
-                  .textTheme
-                  .titleLarge
-                  ?.copyWith(fontSize: 22, color: valueColor),
-            ),
-          ],
+          ),
         ),
       ),
     );

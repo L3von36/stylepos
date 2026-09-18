@@ -86,7 +86,7 @@ class _ScanDialogState extends State<ScanDialog> {
                         size: 44, color: Colors.white70),
                     const SizedBox(height: AppSpace.s3),
                     Text(
-                      'Camera unavailable.\nGrant StylePOS camera permission in system settings to scan barcodes.',
+                      'Camera unavailable.\nGrant Sami camera permission in system settings to scan barcodes.',
                       textAlign: TextAlign.center,
                       style: const TextStyle(color: Colors.white70, fontSize: 14, height: 1.4),
                     ),

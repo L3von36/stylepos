@@ -469,7 +469,11 @@ class _ProductCardState extends State<_ProductCard> {
     return MouseRegion(
       onEnter: (_) => setState(() => _hover = true),
       onExit: (_) => setState(() => _hover = false),
-      child: AnimatedContainer(
+      child: AnimatedScale(
+        duration: AppMotion.fast,
+        curve: AppMotion.standard,
+        scale: _hover ? 1.02 : 1,
+        child: AnimatedContainer(
         duration: AppMotion.fast,
         curve: AppMotion.standard,
         decoration: BoxDecoration(
@@ -564,6 +568,7 @@ class _ProductCardState extends State<_ProductCard> {
               ],
             ),
           ),
+        ),
         ),
       ),
     );

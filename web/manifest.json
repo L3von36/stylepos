@@ -1,11 +1,11 @@
 {
-    "name": "stylepos",
-    "short_name": "stylepos",
+    "name": "Sami",
+    "short_name": "Sami",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#F4F5F9",
+    "theme_color": "#4F46E5",
+    "description": "Sami — an offline-first point-of-sale app for clothing shops, synced to every device.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

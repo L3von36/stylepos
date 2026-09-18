@@ -97,7 +97,7 @@ class StylePosApp extends StatelessWidget {
         ChangeNotifierProvider<NavProvider>.value(value: nav),
       ],
       child: MaterialApp(
-        title: 'StylePOS',
+        title: 'Sami',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.build(),
         home: const _Root(),

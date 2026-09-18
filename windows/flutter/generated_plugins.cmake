@@ -6,6 +6,7 @@ list(APPEND FLUTTER_PLUGIN_LIST
   app_links
   file_selector_windows
   printing
+  rive_common
   share_plus
   url_launcher_windows
 )

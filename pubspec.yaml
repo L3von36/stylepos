@@ -1,7 +1,7 @@
 name: stylepos
 description: "StylePOS - an offline-first point-of-sale app for clothing shops, built with Flutter (Android + Windows + Web)."
 publish_to: 'none'
-version: 1.10.4+16
+version: 1.11.0+17
 
 environment:
   sdk: ^3.13.3
@@ -49,16 +49,21 @@ dependencies:
   uuid: ^4.5.1
   sqflite_common_ffi_web: ^0.4.0
 
+  # Rive animations (empty-cart delivery truck, checkout success, login hero)
+  rive: ^0.13.20
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.4
 
 flutter:
   uses-material-design: true
 
   assets:
     - assets/fonts/
+    - assets/rive/
 
   # App-wide UI font (also used by the PDF receipt generator for consistency;
   # good unicode currency coverage, fully offline)
@@ -73,3 +78,19 @@ flutter:
         - asset: assets/fonts/Carlito-Regular.ttf
         - asset: assets/fonts/Carlito-Bold.ttf
           weight: 700
+
+# Launcher icons for every device (generated once via `dart run flutter_launcher_icons`):
+# Android adaptive (gradient background + glyph foreground) & legacy, Windows .ico, web favicon.
+flutter_launcher_icons:
+  image_path: assets/icon/sami_icon.png
+  android: true
+  adaptive_icon_background: assets/icon/sami_background.png
+  adaptive_icon_foreground: assets/icon/sami_foreground.png
+  windows:
+    generate: true
+    image_path: assets/icon/sami_icon.png
+    icon_size: 256
+  web:
+    generate: true
+    image_path: assets/icon/sami_icon.png
+    favicon: true

@@ -185,7 +185,7 @@ class ReceiptService {
                 textAlign: pw.TextAlign.center,
               ),
               pw.SizedBox(height: 2),
-              pw.Text('Powered by StylePOS',
+              pw.Text('Powered by Sami',
                   style: const pw.TextStyle(fontSize: 6.5, color: PdfColors.grey600),
                   textAlign: pw.TextAlign.center),
             ],
@@ -205,7 +205,7 @@ class ReceiptService {
   /// Saves the receipt PDF to the device. Returns the created file.
   static Future<File> savePdf(Uint8List bytes, String receiptNo) async {
     final docs = await getApplicationDocumentsDirectory();
-    final dir = Directory(p.join(docs.path, 'StylePOS Receipts'));
+    final dir = Directory(p.join(docs.path, 'Sami Receipts'));
     if (!dir.existsSync()) dir.createSync(recursive: true);
     final file = File(p.join(dir.path, '$receiptNo.pdf'));
     await file.writeAsBytes(bytes, flush: true);

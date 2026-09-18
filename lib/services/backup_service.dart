@@ -70,7 +70,7 @@ class BackupService {
     final out = outPath ??
         p.join(
           (await getTemporaryDirectory()).path,
-          'StylePOS-backup-${_stamp()}.stylepos',
+          'Sami-backup-${_stamp()}.stylepos',
         );
     final zip = ZipEncoder().encode(archive);
     File(out)
@@ -92,11 +92,11 @@ class BackupService {
     try {
       archive = ZipDecoder().decodeBytes(bytes);
     } catch (_) {
-      throw const BackupException('That file is not a valid StylePOS backup.');
+      throw const BackupException('That file is not a valid Sami backup.');
     }
     if (archive.findFile(dbFileName) == null ||
         archive.findFile(metaName) == null) {
-      throw const BackupException('That file is missing shop data — not a StylePOS backup.');
+      throw const BackupException('That file is missing shop data — not a Sami backup.');
     }
 
     final dbDir = dbDirOverride ?? await _dbDir();

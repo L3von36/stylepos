@@ -215,7 +215,7 @@ class _BrandPane extends StatelessWidget {
               ),
               const SizedBox(width: AppSpace.s3),
               const Text(
-                'StylePOS',
+                'Sami',
                 style: TextStyle(
                   fontFamily: 'Carlito',
                   fontSize: 20,

@@ -12,6 +12,7 @@ import '../../state/catalog.dart';
 import '../../state/customers.dart';
 import '../../state/sales.dart';
 import '../../state/settings.dart';
+import '../../widgets/rive_view.dart';
 import '../../widgets/ui.dart';
 
 enum _Stage { payment, processing, done }
@@ -467,15 +468,30 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
           ),
           child: Column(
             children: [
-              Text(settings.money(sale.total),
-                  style: const TextStyle(
-                      fontFamily: 'Carlito',
-                      fontSize: 32,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.success)),
-              const SizedBox(height: 4),
-              Text('${sale.receiptNo} · ${_methodLabel(sale.paymentMethod)}',
-                  style: const TextStyle(fontFamily: 'Carlito', fontSize: 13, color: AppColors.body)),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  const SaleSuccessArt(size: 64),
+                  const SizedBox(width: AppSpace.s3),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(settings.money(sale.total),
+                            style: const TextStyle(
+                                fontFamily: 'Carlito',
+                                fontSize: 28,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.success)),
+                        const SizedBox(height: 2),
+                        Text('${sale.receiptNo} · ${_methodLabel(sale.paymentMethod)}',
+                            style: const TextStyle(
+                                fontFamily: 'Carlito', fontSize: 13, color: AppColors.body)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
               if (sale.changeDue > 0)
                 Padding(
                   padding: const EdgeInsets.only(top: AppSpace.s2),

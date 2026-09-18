@@ -2,7 +2,7 @@
     <!-- Camera access for in-app barcode scanning at the POS -->
     <uses-permission android:name="android.permission.CAMERA" />
     <application
-        android:label="StylePOS"
+        android:label="Sami"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
