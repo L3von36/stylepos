@@ -3,6 +3,8 @@ name: Build StylePOS
 # Builds on every push to main, and produces downloadable installers.
 # Pushing a tag like v1.0.0 additionally creates a GitHub Release
 # with the Android APKs and the Windows zip attached.
+# Every main push / tag also redeploys the web app to GitHub Pages:
+# https://l3von36.github.io/stylepos/
 #
 # APK size strategy (v1.5.0): per-ABI splits (arm64 primary, armv7 fallback,
 # x86_64 emulators skipped), R8 + resource shrinking, and Dart obfuscation
@@ -140,6 +142,52 @@ jobs:
           name: StylePOS-web
           path: StylePOS-web.zip
           retention-days: 30
+
+  # GitHub Pages live site (https://l3von36.github.io/stylepos/).
+  # Built with --base-href=/stylepos/ so all assets resolve under the
+  # project-pages sub-path. Runs on main pushes and version tags.
+  deploy-web:
+    name: Deploy web to GitHub Pages
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    concurrency:
+      group: github-pages
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.47.4
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build web for GitHub Pages
+        run: flutter build web --release --base-href=/stylepos/
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/web
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
 
   release:
     name: Publish GitHub Release
