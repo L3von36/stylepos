@@ -78,6 +78,10 @@ class CartProvider extends ChangeNotifier {
   Customer? customer;
   double orderDiscount = 0; // flat amount off the subtotal
 
+  /// Set when this cart was started from an exchange flow (shows a banner
+  /// in the cart panel reminding the cashier which receipt was returned).
+  String? exchangeNote;
+
   final List<HeldSale> _held = [];
 
   List<CartItem> get items => _items.values.toList(growable: false);
@@ -136,6 +140,7 @@ class CartProvider extends ChangeNotifier {
     _items.clear();
     customer = null;
     orderDiscount = 0;
+    exchangeNote = null;
     notifyListeners();
   }
 
@@ -144,6 +149,7 @@ class CartProvider extends ChangeNotifier {
   List<CartItem>? _undoSnapshot;
   Customer? _undoCustomer;
   double _undoDiscount = 0;
+  String? _undoExchangeNote;
 
   /// Captures the current cart so the next [clear] can be reversed with
   /// [undoClear]. Only the cart's Clear button stages this — never the
@@ -153,6 +159,7 @@ class CartProvider extends ChangeNotifier {
     _undoSnapshot = items;
     _undoCustomer = customer;
     _undoDiscount = orderDiscount;
+    _undoExchangeNote = exchangeNote;
   }
 
   /// Restores the cart captured by [stageUndo], replacing whatever is in
@@ -166,6 +173,8 @@ class CartProvider extends ChangeNotifier {
       ..addEntries([for (final i in snap) MapEntry(i.key, i)]);
     customer = _undoCustomer;
     orderDiscount = _undoDiscount;
+    exchangeNote = _undoExchangeNote;
+    _undoExchangeNote = null;
     notifyListeners();
   }
 
@@ -279,6 +288,21 @@ class CartProvider extends ChangeNotifier {
     _held.remove(h);
     notifyListeners();
     await _persistHeld();
+  }
+
+  /// Clears the cart and marks it as an exchange for [fromReceiptNo].
+  /// The cashier then scans/selects the replacement items.
+  void startExchange(String fromReceiptNo) {
+    _items.clear();
+    customer = null;
+    orderDiscount = 0;
+    exchangeNote = 'Exchange for $fromReceiptNo';
+    notifyListeners();
+  }
+
+  void clearExchange() {
+    exchangeNote = null;
+    notifyListeners();
   }
 
   double get subtotal => _items.values.fold(0, (s, i) => s + i.lineTotal);

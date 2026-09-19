@@ -27,6 +27,9 @@ const kOpsTables = [
   'commissions'
 ];
 
+/// Staff attendance table mirrored to the cloud (Phase 3).
+const kAttendanceTables = ['attendance'];
+
 /// How the sync engine talks to the cloud. The real implementation uses
 /// Supabase (PostgREST + Storage); tests plug in an in-memory fake.
 abstract class CloudGateway {
@@ -274,6 +277,7 @@ class SyncService extends ChangeNotifier {
         ...kSyncTables,
         ...kSalesTables,
         ...kOpsTables,
+        ...kAttendanceTables,
         'settings',
         'app_users'
       ]) {
@@ -418,11 +422,11 @@ class SyncService extends ChangeNotifier {
     await step('push customers', _pushCustomers);
     await step('push sales', _pushSales);
     await step('push sale items', _pushSaleItems);
-    await step('push movements', _pushMovements);
     await step('push suppliers', _pushSuppliers);
     await step('push purchase orders', _pushPOs);
     await step('push PO items', _pushPOItems);
     await step('push commissions', _pushCommissions);
+    await step('push attendance', _pushAttendance);
     // Pull order likewise: parents first so ids resolve.
     await step('pull categories', _pullCategories);
     await step('pull products', _pullProducts);
@@ -435,15 +439,20 @@ class SyncService extends ChangeNotifier {
     await step('pull purchase orders', _pullPOs);
     await step('pull PO items', _pullPOItems);
     await step('pull commissions', _pullCommissions);
+    await step('pull attendance', _pullAttendance);
 
     // Rows that never matched anything in the cloud (created before this
     // device first synced, e.g. seed catalog) get pushed as new rows.
     // The second push round is a no-op when nothing was marked.
     await step('mark unsynced rows', () async {
       final db = await _db;
-      for (final t in [...kSyncTables, ...kSalesTables, ...kOpsTables]) {
-        await db.execute(
-            'UPDATE $t SET dirty = 1 WHERE cloud_id IS NULL');
+      for (final t in [
+        ...kSyncTables,
+        ...kSalesTables,
+        ...kOpsTables,
+        ...kAttendanceTables
+      ]) {
+        await db.execute('UPDATE $t SET dirty = 1 WHERE cloud_id IS NULL');
       }
     });
     await step('push categories 2', _pushCategories);
@@ -457,6 +466,7 @@ class SyncService extends ChangeNotifier {
     await step('push purchase orders 2', _pushPOs);
     await step('push PO items 2', _pushPOItems);
     await step('push commissions 2', _pushCommissions);
+    await step('push attendance 2', _pushAttendance);
 
     // Red "Sync issue" only when at least one step actually failed;
     // failed rows stay dirty and are retried on the next cycle.
@@ -986,6 +996,7 @@ class SyncService extends ChangeNotifier {
       varCloud[v['id'] as int] = v['cloud_id'] as String?;
     }
     final uid = _cloudUid;
+    final device = await _deviceCode();
 
     final payload = <Map<String, dynamic>>[];
     final ids = <int, String>{};
@@ -1001,6 +1012,7 @@ class SyncService extends ChangeNotifier {
         'reason': r['reason'],
         'note': r['note'],
         'user_id': uid,
+        'device_id': r['device_id'] ?? device,
         'created_at': _iso(r['created_at'] as int? ?? 0),
         'updated_at': _iso(r['updated_at'] as int? ?? 0),
       });
@@ -1010,6 +1022,41 @@ class SyncService extends ChangeNotifier {
     }
     for (final e in ids.entries) {
       await db.update('stock_movements', {'dirty': 0, 'cloud_id': e.value},
+          where: 'id = ?', whereArgs: [e.key]);
+    }
+  }
+
+  Future<void> _pushAttendance() async {
+    final db = await _db;
+    final rows = await db.query('attendance', where: 'dirty = 1');
+    if (rows.isEmpty) return;
+
+    final userCloud = <int, String?>{};
+    for (final u in await db.query('users', columns: ['id', 'cloud_id'])) {
+      userCloud[u['id'] as int] = u['cloud_id'] as String?;
+    }
+
+    final payload = <Map<String, dynamic>>[];
+    final ids = <int, String>{};
+    for (final r in rows) {
+      final userCloudId = userCloud[r['user_id'] as int?];
+      if (userCloudId == null) continue; // user not cloud-mapped yet
+      final cloudId = (r['cloud_id'] as String?) ?? _uuid.v4();
+      ids[r['id'] as int] = cloudId;
+      payload.add({
+        'id': cloudId,
+        'user_id': userCloudId,
+        'clock_in': _iso(r['clock_in'] as int? ?? 0),
+        'clock_out': r['clock_out'] != null ? _iso(r['clock_out'] as int) : null,
+        'created_at': _iso(r['clock_in'] as int? ?? 0),
+        'updated_at': _iso(r['updated_at'] as int? ?? 0),
+      });
+    }
+    if (payload.isNotEmpty) {
+      await _gateway.upsertRows('attendance', payload);
+    }
+    for (final e in ids.entries) {
+      await db.update('attendance', {'dirty': 0, 'cloud_id': e.value},
           where: 'id = ?', whereArgs: [e.key]);
     }
   }
@@ -1080,6 +1127,8 @@ class SyncService extends ChangeNotifier {
 
   Future<void> _pullCommissions() async {
     await _pullTable('commissions', (r, ts) => _mergeCommission(r, ts));
+  Future<void> _pullAttendance() async {
+    await _pullTable('attendance', (r, ts) => _mergeAttendance(r, ts));
   }
 
   Future<void> _mergeCategory(Map<String, dynamic> r, int cloudTs) async {
@@ -1436,17 +1485,73 @@ class SyncService extends ChangeNotifier {
     final v = await _byCloudId('variants', r['variant_id']);
     if (v.isEmpty) return; // variant unknown here yet
     final userId = await _localUserIdFor(r['user_id'] as String?);
+    final variantId = v.first['id'] as int;
+    final delta = r['qty'] as int? ?? 0;
     await db.insert('stock_movements', {
-      'variant_id': v.first['id'],
-      'qty': r['qty'] as int? ?? 0,
+      'variant_id': variantId,
+      'qty': delta,
       'reason': r['reason'] ?? 'adjust',
       'note': r['note'],
       'user_id': userId,
       'created_at': _epoch(r['created_at']),
       'cloud_id': r['id'],
+      'device_id': r['device_id'] as String?,
       'dirty': 0,
       'updated_at': cloudTs,
     });
+    // Delta-based stock synchronization: apply this movement's delta to
+    // the local variant so multi-device concurrent sales properly decrement
+    // stock without losing deltas to last-write-wins collisions.
+    if (delta != 0) {
+      await db.rawUpdate('''
+        UPDATE variants
+        SET stock = MAX(stock + ?, 0), sync_version = sync_version + 1, updated_at = ?
+        WHERE id = ?
+      ''', [delta, cloudTs, variantId]);
+    }
+  }
+
+  Future<void> _mergeAttendance(Map<String, dynamic> r, int cloudTs) async {
+    final db = await _db;
+    var rows = await _byCloudId('attendance', r['id']);
+
+    final clockIn = _epoch(r['clock_in']);
+    final clockOut = r['clock_out'] != null ? _epoch(r['clock_out']) : null;
+    final userId = await _localUserIdFor(r['user_id'] as String?);
+
+    if (rows.isEmpty) {
+      // De-duplicate by user_id and clock_in
+      rows = await db.query('attendance',
+          where: 'user_id = ? AND clock_in = ? AND cloud_id IS NULL',
+          whereArgs: [userId, clockIn],
+          limit: 1);
+      if (rows.isNotEmpty) {
+        await db.update('attendance', {'cloud_id': r['id']},
+            where: 'id = ?', whereArgs: [rows.first['id']]);
+      }
+    }
+
+    if (rows.isEmpty) {
+      await db.insert('attendance', {
+        'user_id': userId,
+        'clock_in': clockIn,
+        'clock_out': clockOut,
+        'cloud_id': r['id'],
+        'dirty': 0,
+        'updated_at': cloudTs,
+      });
+      return;
+    }
+
+    final local = rows.first;
+    final localTs = local['updated_at'] as int? ?? 0;
+    if ((local['dirty'] as int? ?? 0) == 1 && localTs >= cloudTs) return;
+
+    await db.update('attendance', {
+      'clock_out': clockOut,
+      'updated_at': cloudTs,
+      'dirty': 0,
+    }, where: 'id = ?', whereArgs: [local['id']]);
   }
 
   // -------------------------------------------------- ops merges (Task 28)

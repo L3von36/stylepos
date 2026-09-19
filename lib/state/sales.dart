@@ -93,7 +93,7 @@ class SalesProvider extends ChangeNotifier {
           'updated_at': now,
         });
         await txn.rawUpdate(
-          'UPDATE variants SET stock = MAX(stock - ?, 0), dirty = 1, updated_at = ? WHERE id = ?',
+          'UPDATE variants SET stock = MAX(stock - ?, 0), sync_version = sync_version + 1, dirty = 1, updated_at = ? WHERE id = ?',
           [item.qty, now, item.variant.id],
         );
         await txn.insert('stock_movements', {
@@ -104,6 +104,7 @@ class SalesProvider extends ChangeNotifier {
           'user_id': userId,
           'created_at': now,
           'cloud_id': null,
+          'device_id': deviceCode,
           'dirty': 1,
           'updated_at': now,
         });
@@ -233,6 +234,7 @@ class SalesProvider extends ChangeNotifier {
   Future<void> refund(Sale sale, int adminId) async {
     final db = await DB.instance();
     final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    final deviceCode = await _deviceCode(db);
     await db.transaction((txn) async {
       await txn.rawUpdate(
           'UPDATE sales SET status = ?, dirty = 1, updated_at = ? WHERE id = ?',
@@ -243,7 +245,7 @@ class SalesProvider extends ChangeNotifier {
         final qty = r['qty'] as int;
         final variantId = r['variant_id'] as int;
         await txn.rawUpdate(
-            'UPDATE variants SET stock = stock + ?, dirty = 1, updated_at = ? WHERE id = ?',
+            'UPDATE variants SET stock = stock + ?, sync_version = sync_version + 1, dirty = 1, updated_at = ? WHERE id = ?',
             [qty, now, variantId]);
         await txn.insert('stock_movements', {
           'variant_id': variantId,
@@ -253,6 +255,7 @@ class SalesProvider extends ChangeNotifier {
           'user_id': adminId,
           'created_at': now,
           'cloud_id': null,
+          'device_id': deviceCode,
           'dirty': 1,
           'updated_at': now,
         });
@@ -261,6 +264,59 @@ class SalesProvider extends ChangeNotifier {
     revision++;
     notifyListeners();
     SyncService.I.scheduleSync();
+  }
+
+  /// Partially refunds a sale: only the selected [items] are returned to stock.
+  /// The sale status becomes 'partial_refund' (unless all items are selected,
+  /// in which case it behaves like a full refund and status = 'refunded').
+  /// Returns the refunded total so the caller can display it.
+  Future<double> refundItems({
+    required Sale sale,
+    required List<SaleItem> items,
+    required int actorId,
+    required bool isExchange,
+  }) async {
+    if (items.isEmpty) return 0;
+    final db = await DB.instance();
+    final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    final deviceCode = await _deviceCode(db);
+    // Fetch ALL items to decide if this is a full or partial refund.
+    final allItems = await itemsForSale(sale.id!);
+    final allIds = allItems.map((i) => i.id).toSet();
+    final selIds = items.map((i) => i.id).toSet();
+    final isFullRefund = selIds.containsAll(allIds) && allIds.containsAll(selIds);
+    final newStatus = isFullRefund ? 'refunded' : 'partial_refund';
+    double refundedTotal = 0;
+    await db.transaction((txn) async {
+      for (final item in items) {
+        refundedTotal += item.lineTotal;
+        await txn.rawUpdate(
+          'UPDATE variants SET stock = stock + ?, sync_version = sync_version + 1, dirty = 1, updated_at = ? WHERE id = ?',
+          [item.qty, now, item.variantId],
+        );
+        final reason = isExchange ? 'exchange' : 'refund';
+        await txn.insert('stock_movements', {
+          'variant_id': item.variantId,
+          'qty': item.qty,
+          'reason': reason,
+          'note': sale.receiptNo,
+          'user_id': actorId,
+          'created_at': now,
+          'cloud_id': null,
+          'device_id': deviceCode,
+          'dirty': 1,
+          'updated_at': now,
+        });
+      }
+      await txn.rawUpdate(
+        'UPDATE sales SET status = ?, dirty = 1, updated_at = ? WHERE id = ?',
+        [newStatus, now, sale.id],
+      );
+    });
+    revision++;
+    notifyListeners();
+    SyncService.I.scheduleSync();
+    return refundedTotal;
   }
 
   // ---- report queries (completed sales only) ----

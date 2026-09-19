@@ -35,6 +35,44 @@ class CartPanel extends StatelessWidget {
     final content = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        if (cart.exchangeNote != null)
+          Container(
+            margin: const EdgeInsets.fromLTRB(AppSpace.s4, AppSpace.s3, AppSpace.s4, 0),
+            padding: const EdgeInsets.symmetric(
+                horizontal: AppSpace.s4, vertical: AppSpace.s2 + 2),
+            decoration: BoxDecoration(
+              color: AppColors.warningSoft,
+              borderRadius: BorderRadius.circular(AppRadius.sm),
+              border:
+                  Border.all(color: AppColors.warning.withValues(alpha: 0.4)),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.swap_horiz_rounded,
+                    size: 16, color: AppColors.warning),
+                const SizedBox(width: AppSpace.s2),
+                Expanded(
+                  child: Text(
+                    cart.exchangeNote!,
+                    style: TextStyle(
+                        fontFamily: 'Carlito',
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.warning),
+                  ),
+                ),
+                InkWell(
+                  onTap: () => cart.clearExchange(),
+                  borderRadius: BorderRadius.circular(AppRadius.pill),
+                  child: Padding(
+                    padding: const EdgeInsets.all(2),
+                    child: Icon(Icons.close_rounded,
+                        size: 14, color: AppColors.warning),
+                  ),
+                ),
+              ],
+            ),
+          ),
         Padding(
           padding: const EdgeInsets.fromLTRB(AppSpace.s4, AppSpace.s4, AppSpace.s2, 0),
           child: Row(

@@ -113,17 +113,51 @@ class DB {
         if (oldVersion < 6) {
           await _createAccountabilityTables(db);
         }
-        // v7: purchasing (suppliers + purchase orders + received goods) and
+        // v7: (a) purchasing (suppliers + purchase orders + received goods) and
         // commissions, cost snapshot on sale lines (true margins), staff
         // permissions (discount/refund rights) and commission rates.
+        // (b) device_id on stock_movements — tracks which device
+        //     originated each movement so conflict reports are actionable.
+        // (c) sync_version on variants — incremented on every stock change
+        //     so the sync engine can detect concurrent edits.
+        // (d) cloud sync columns on attendance — shifts are now mirrored
+        //     to Supabase so managers on any device see who is clocked in.
         if (oldVersion < 7) {
           await _createOpsTables(db);
+          try {
+            await db.execute(
+                'ALTER TABLE users ADD COLUMN permissions TEXT');
+          } catch (_) {}
+          try {
+            await db.execute(
+                'ALTER TABLE users ADD COLUMN commission_rate REAL NOT NULL DEFAULT 0');
+          } catch (_) {}
+          try {
+            await db.execute(
+                'ALTER TABLE sale_items ADD COLUMN unit_cost REAL NOT NULL DEFAULT 0');
+          } catch (_) {}
+          try {
+            await db.execute(
+                'ALTER TABLE stock_movements ADD COLUMN device_id TEXT');
+          } catch (_) {}
+          try {
+            await db.execute(
+                'ALTER TABLE variants ADD COLUMN sync_version INTEGER NOT NULL DEFAULT 0');
+          } catch (_) {}
+          try {
+            await db.execute(
+                'ALTER TABLE attendance ADD COLUMN cloud_id TEXT');
+          } catch (_) {}
+          try {
+            await db.execute(
+                'ALTER TABLE attendance ADD COLUMN dirty INTEGER NOT NULL DEFAULT 0');
+          } catch (_) {}
+          try {
+            await db.execute(
+                'ALTER TABLE attendance ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0');
+          } catch (_) {}
           await db.execute(
-              'ALTER TABLE users ADD COLUMN permissions TEXT');
-          await db.execute(
-              'ALTER TABLE users ADD COLUMN commission_rate REAL NOT NULL DEFAULT 0');
-          await db.execute(
-              'ALTER TABLE sale_items ADD COLUMN unit_cost REAL NOT NULL DEFAULT 0');
+              'UPDATE attendance SET updated_at = clock_in WHERE updated_at = 0');
         }
       },
       onCreate: (db, version) async {
@@ -185,7 +219,8 @@ class DB {
             cloud_id TEXT,
             dirty INTEGER NOT NULL DEFAULT 0,
             deleted INTEGER NOT NULL DEFAULT 0,
-            updated_at INTEGER NOT NULL DEFAULT 0
+            updated_at INTEGER NOT NULL DEFAULT 0,
+            sync_version INTEGER NOT NULL DEFAULT 0
           )
         ''');
         await db.execute('CREATE INDEX idx_variants_product ON variants(product_id)');
@@ -254,6 +289,7 @@ class DB {
             user_id INTEGER,
             created_at INTEGER NOT NULL,
             cloud_id TEXT,
+            device_id TEXT,
             dirty INTEGER NOT NULL DEFAULT 0,
             updated_at INTEGER NOT NULL DEFAULT 0
           )
@@ -362,7 +398,10 @@ class DB {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER NOT NULL,
         clock_in INTEGER NOT NULL,
-        clock_out INTEGER
+        clock_out INTEGER,
+        cloud_id TEXT,
+        dirty INTEGER NOT NULL DEFAULT 0,
+        updated_at INTEGER NOT NULL DEFAULT 0
       )
     ''');
     await db.execute(

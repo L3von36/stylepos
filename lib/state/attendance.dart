@@ -1,6 +1,10 @@
 import 'package:flutter/foundation.dart';
+import 'package:uuid/uuid.dart';
 
 import '../data/database.dart';
+import '../services/sync_service.dart';
+
+const _uuid = Uuid();
 
 /// One shift: a clock-in, and (eventually) a clock-out.
 class Shift {
@@ -42,6 +46,11 @@ class AttendanceProvider extends ChangeNotifier {
   /// refresh.
   int revision = 0;
 
+  void bump() {
+    revision++;
+    notifyListeners();
+  }
+
   /// The open (running) shift for [userId], or null when punched out.
   Future<Shift?> openShift(int userId) async {
     final db = await DB.instance();
@@ -58,37 +67,52 @@ class AttendanceProvider extends ChangeNotifier {
 
   Future<void> clockIn(int userId) async {
     final db = await DB.instance();
+    final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
     // Safety: close any stale open shift (e.g. app killed mid-shift) before
     // starting a new one, so a user never carries two open shifts.
     final stale = await openShift(userId);
     if (stale != null) {
       await db.update(
         'attendance',
-        {'clock_out': DateTime.now().millisecondsSinceEpoch ~/ 1000},
+        {
+          'clock_out': now,
+          'dirty': 1,
+          'updated_at': now,
+        },
         where: 'id = ?',
         whereArgs: [stale.id],
       );
     }
     await db.insert('attendance', {
       'user_id': userId,
-      'clock_in': DateTime.now().millisecondsSinceEpoch ~/ 1000,
+      'clock_in': now,
+      'cloud_id': _uuid.v4(),
+      'dirty': 1,
+      'updated_at': now,
     });
     revision++;
     notifyListeners();
+    SyncService.I.scheduleSync();
   }
 
   Future<void> clockOut(int userId) async {
     final db = await DB.instance();
     final open = await openShift(userId);
     if (open == null) return;
+    final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
     await db.update(
       'attendance',
-      {'clock_out': DateTime.now().millisecondsSinceEpoch ~/ 1000},
+      {
+        'clock_out': now,
+        'dirty': 1,
+        'updated_at': now,
+      },
       where: 'id = ?',
       whereArgs: [open.id],
     );
     revision++;
     notifyListeners();
+    SyncService.I.scheduleSync();
   }
 
   /// Shifts for the shift-log screen, joined with user names. Newest first.

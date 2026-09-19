@@ -55,6 +55,7 @@ Future<void> main() async {
       await purchasing.reloadAll(); // suppliers + POs arrive from the cloud
       await commissions.reload();
       sales.bump(); // reports + POS strip refresh with cloud sales
+      attendance.bump(); // shift logs refresh when remote punches arrive
     };
     SyncService.I.start();
   } catch (_) {

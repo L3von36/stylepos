@@ -6,12 +6,14 @@ import '../../services/approvals.dart';
 import '../../services/audit.dart';
 import '../../services/receipt_service.dart';
 import '../../state/auth.dart';
+import '../../state/cart.dart';
 import '../../state/catalog.dart';
+import '../../state/nav.dart';
 import '../../state/sales.dart';
 import '../../state/settings.dart';
 import '../../widgets/ui.dart';
 
-/// Receipt view for one sale: items, totals, PDF actions and refund (admin).
+/// Receipt view for one sale: items, totals, PDF actions and refund/exchange.
 class SaleDetailScreen extends StatefulWidget {
   final int saleId;
   const SaleDetailScreen({super.key, required this.saleId});
@@ -24,6 +26,10 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
   Sale? _sale;
   List<SaleItem> _items = [];
   bool _loaded = false;
+
+  /// Which items the user has checked for partial refund / exchange.
+  final Set<int?> _selected = {};
+  bool _selectMode = false; // true = show checkboxes
 
   @override
   void initState() {
@@ -48,82 +54,137 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
         _sale = sale;
         _items = items;
         _loaded = true;
+        _selected
+          ..clear()
+          ..addAll(items.map((i) => i.id));
       });
     }
   }
 
-  Future<void> _refund() async {
+  List<SaleItem> get _selectedItems =>
+      _items.where((i) => _selected.contains(i.id)).toList();
+
+  void _toggleSelectMode() {
+    setState(() {
+      _selectMode = !_selectMode;
+      if (!_selectMode) {
+        _selected
+          ..clear()
+          ..addAll(_items.map((i) => i.id));
+      }
+    });
+  }
+
+  Future<Approval?> _requestApproval(String reason) async {
     final auth = context.read<AuthProvider>();
-    final actor = auth.user!;
+    final actor = auth.user;
+    if (actor == null || actor.isAdmin || actor.canRefund) return null;
+    return Approvals.request(context,
+        title: 'Manager approval required', reason: reason);
+  }
+
+  Future<void> _doRefund({required bool isExchange}) async {
     final settings = context.read<AppSettings>();
     final sale = _sale!;
-
-    // Salespeople can process a return, but unless they were granted the
-    // refund permission a manager must approve it (PIN, or a manager
-    // account password when no PIN is configured).
-    Approval? approval;
-    if (!actor.canRefund) {
-      approval = await Approvals.request(
-        context,
-        title: 'Refund needs approval',
-        reason:
-            'Refunding ${sale.receiptNo} (${settings.money(sale.total)}) '
-            'restores the items to stock and reverses the takings. '
-            'A manager must approve it.',
-      );
-      if (approval == null) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Refund cancelled — manager approval is required'),
-          behavior: SnackBarBehavior.floating,
-        ));
-        return;
-      }
+    final toReturn = _selectedItems;
+    if (toReturn.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Select at least one item to return')));
+      return;
     }
-    if (!mounted) return;
+    final auth = context.read<AuthProvider>();
+    final actor = auth.user!;
+    final returnedTotal = toReturn.fold(0.0, (s, i) => s + i.lineTotal);
 
+    final approval = await _requestApproval(
+      '${isExchange ? 'Exchange' : 'Refund'} ${toReturn.length} item(s) '
+      'from ${sale.receiptNo} (${settings.money(returnedTotal)}) '
+      'restores the items to stock. A manager must approve it.',
+    );
+    if (!mounted) return;
+    if (approval == null && !actor.isAdmin && !actor.canRefund) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Cancelled — manager approval required')));
+      return;
+    }
+
+    final actionLabel = isExchange ? 'Exchange' : 'Refund';
     final ok = await showDialog<bool>(
       context: context,
       builder: (c) => AlertDialog(
         title: Row(children: [
-          Icon(Icons.undo_rounded, size: 21, color: AppColors.danger),
-          SizedBox(width: AppSpace.s3),
-          Text('Refund this sale?'),
+          Icon(
+            isExchange ? Icons.swap_horiz_rounded : Icons.undo_rounded,
+            size: 21,
+            color: AppColors.danger,
+          ),
+          const SizedBox(width: AppSpace.s3),
+          Text('$actionLabel ${toReturn.length} item(s)?'),
         ]),
-        content: const SizedBox(
-            width: 380,
-            child: Text(
-                'All items will be returned to stock and the sale marked as refunded. This cannot be undone.')),
+        content: SizedBox(
+          width: 380,
+          child: Text(
+            isExchange
+                ? 'The selected items will be returned to stock. '
+                    'The cart will open so you can scan the replacement items.'
+                : 'The selected items will be returned to stock and '
+                    'the sale ${toReturn.length == _items.length ? 'marked as refunded' : 'partially refunded'}. '
+                    'This cannot be undone.',
+          ),
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')),
+          TextButton(
+              onPressed: () => Navigator.pop(c, false),
+              child: const Text('Cancel')),
           FilledButton(
-            style: FilledButton.styleFrom(
-                backgroundColor: AppColors.danger),
+            style: FilledButton.styleFrom(backgroundColor: AppColors.danger),
             onPressed: () => Navigator.pop(c, true),
-            child: const Text('Refund'),
+            child: Text(actionLabel),
           ),
         ],
       ),
     );
     if (ok != true || !mounted) return;
+
     final messenger = ScaffoldMessenger.of(context);
     final sales = context.read<SalesProvider>();
     final catalog = context.read<CatalogProvider>();
-    await sales.refund(_sale!, actor.id!);
+    final cart = context.read<CartProvider>();
+    final nav = context.read<NavProvider>();
+
+    final refundedTotal = await sales.refundItems(
+      sale: sale,
+      items: toReturn,
+      actorId: actor.id!,
+      isExchange: isExchange,
+    );
     await catalog.reload();
     await _load();
 
-    // Audit trail: who refunded, and (for salespeople) who approved.
+    final details = '${sale.receiptNo} · ${settings.money(refundedTotal)} · '
+        '${toReturn.length} item(s)'
+        '${approval != null ? ' · approved by ${approval.userName} via ${approval.methodLabel}' : ''}';
     await Audit.add(
-      'refund',
-      '${sale.receiptNo} · ${settings.money(sale.total)}'
-      '${approval != null ? ' · approved by ${approval.userName} via ${approval.methodLabel}' : ''}',
+      isExchange ? 'exchange_return' : 'partial_refund',
+      details,
       userId: actor.id,
       userName: actor.name,
     );
-    if (mounted) {
-      messenger.showSnackBar(
-          const SnackBar(content: Text('Sale refunded, stock restored')));
+
+    if (!mounted) return;
+    if (isExchange) {
+      cart.startExchange(sale.receiptNo);
+      nav.goTo(NavId.pos);
+      Navigator.of(context).pop();
+      messenger.showSnackBar(SnackBar(
+        content: Text('${toReturn.length} item(s) returned — scan replacement items'),
+        behavior: SnackBarBehavior.floating,
+      ));
+    } else {
+      messenger.showSnackBar(SnackBar(
+        content: Text('${toReturn.length} item(s) refunded, stock restored'),
+        behavior: SnackBarBehavior.floating,
+      ));
     }
   }
 
@@ -170,18 +231,42 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
     final when =
         '${two(dt.day)}/${two(dt.month)}/${dt.year} ${two(dt.hour)}:${two(dt.minute)}';
 
+    final canAct = !sale.isRefunded && sale.status != 'refunded';
+    final selectedTotal =
+        _selectedItems.fold(0.0, (s, i) => s + i.lineTotal);
+
     return Scaffold(
       appBar: AppBar(
         title: Text(sale.receiptNo),
         actions: [
-          if (!sale.isRefunded)
+          if (canAct) ...[
             IconButton(
-              tooltip: (auth.user?.isAdmin ?? false)
-                  ? 'Refund'
-                  : 'Refund (manager approval required)',
-              icon: const Icon(Icons.undo_rounded),
-              onPressed: _refund,
+              tooltip: _selectMode ? 'Cancel selection' : 'Select items to return',
+              icon: Icon(_selectMode
+                  ? Icons.close_rounded
+                  : Icons.checklist_rounded),
+              onPressed: _toggleSelectMode,
             ),
+            if (_selectMode) ...[
+              IconButton(
+                tooltip: 'Exchange selected items',
+                icon: const Icon(Icons.swap_horiz_rounded),
+                onPressed: () => _doRefund(isExchange: true),
+              ),
+              IconButton(
+                tooltip: 'Refund selected items',
+                icon: const Icon(Icons.undo_rounded),
+                onPressed: () => _doRefund(isExchange: false),
+              ),
+            ] else
+              IconButton(
+                tooltip: (auth.user?.isAdmin ?? false)
+                    ? 'Refund'
+                    : 'Refund (manager approval required)',
+                icon: const Icon(Icons.undo_rounded),
+                onPressed: () => _doRefund(isExchange: false),
+              ),
+          ],
           const SizedBox(width: AppSpace.s2),
         ],
       ),
@@ -193,6 +278,56 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                if (_selectMode)
+                  Container(
+                    margin: const EdgeInsets.only(bottom: AppSpace.s3),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpace.s4, vertical: AppSpace.s3),
+                    decoration: BoxDecoration(
+                      color: AppColors.primarySoft,
+                      borderRadius: BorderRadius.circular(AppRadius.sm),
+                      border: Border.all(
+                          color: AppColors.primary.withValues(alpha: 0.3)),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.info_outline_rounded,
+                            size: 17, color: AppColors.primary),
+                        const SizedBox(width: AppSpace.s2),
+                        Expanded(
+                          child: Text(
+                            _selected.isEmpty
+                                ? 'Tap items below to select them for return or exchange'
+                                : '${_selected.length} item(s) selected · ${settings.money(selectedTotal)} to return',
+                            style: TextStyle(
+                                fontFamily: 'Carlito',
+                                fontSize: 13,
+                                color: AppColors.primaryDark),
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: () => setState(() {
+                            if (_selected.length == _items.length) {
+                              _selected.clear();
+                            } else {
+                              _selected
+                                ..clear()
+                                ..addAll(_items.map((i) => i.id));
+                            }
+                          }),
+                          style: TextButton.styleFrom(
+                              foregroundColor: AppColors.primary,
+                              visualDensity: VisualDensity.compact),
+                          child: Text(
+                            _selected.length == _items.length
+                                ? 'None'
+                                : 'All',
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
                 // header
                 Card(
                   child: Padding(
@@ -203,13 +338,23 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
                           width: 48,
                           height: 48,
                           decoration: BoxDecoration(
-                            color: sale.isRefunded ? AppColors.dangerSoft : AppColors.primarySoft,
+                            color: sale.isRefunded
+                                ? AppColors.dangerSoft
+                                : sale.status == 'partial_refund'
+                                    ? AppColors.warningSoft
+                                    : AppColors.primarySoft,
                             borderRadius: BorderRadius.circular(AppRadius.md),
                           ),
                           child: Icon(
-                            sale.isRefunded ? Icons.undo_rounded : Icons.receipt_long_rounded,
+                            sale.isRefunded || sale.status == 'partial_refund'
+                                ? Icons.undo_rounded
+                                : Icons.receipt_long_rounded,
                             size: 23,
-                            color: sale.isRefunded ? AppColors.danger : AppColors.primary,
+                            color: sale.isRefunded
+                                ? AppColors.danger
+                                : sale.status == 'partial_refund'
+                                    ? AppColors.warning
+                                    : AppColors.primary,
                           ),
                         ),
                         const SizedBox(width: AppSpace.s4),
@@ -231,6 +376,12 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
                                         label: 'REFUNDED',
                                         foreground: AppColors.danger,
                                         background: AppColors.dangerSoft),
+                                  ] else if (sale.status == 'partial_refund') ...[
+                                    const SizedBox(width: AppSpace.s2),
+                                    StatusPill.build(context,
+                                        label: 'PART. REFUND',
+                                        foreground: AppColors.warning,
+                                        background: AppColors.warningSoft),
                                   ],
                                 ],
                               ),
@@ -271,34 +422,57 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
                       ),
                       const Divider(indent: 16, endIndent: 16),
                       for (final it in _items)
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: AppSpace.s2),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(it.productName,
-                                        style: TextStyle(
-                                            fontFamily: 'Carlito',
-                                            fontSize: 14,
-                                            fontWeight: FontWeight.w700,
-                                            color: AppColors.ink)),
-                                    Text(
-                                        '${it.variantDesc} · ${settings.money(it.unitPrice)} × ${it.qty}',
-                                        style: TextStyle(
-                                            fontFamily: 'Carlito', fontSize: 12, color: AppColors.muted)),
-                                  ],
+                        InkWell(
+                          onTap: _selectMode
+                              ? () => setState(() {
+                                    if (_selected.contains(it.id)) {
+                                      _selected.remove(it.id);
+                                    } else {
+                                      _selected.add(it.id);
+                                    }
+                                  })
+                              : null,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: AppSpace.s2),
+                            child: Row(
+                              children: [
+                                if (_selectMode)
+                                  Checkbox(
+                                    value: _selected.contains(it.id),
+                                    activeColor: AppColors.primary,
+                                    onChanged: (_) => setState(() {
+                                      if (_selected.contains(it.id)) {
+                                        _selected.remove(it.id);
+                                      } else {
+                                        _selected.add(it.id);
+                                      }
+                                    }),
+                                  ),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(it.productName,
+                                          style: TextStyle(
+                                              fontFamily: 'Carlito',
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.w700,
+                                              color: AppColors.ink)),
+                                      Text(
+                                          '${it.variantDesc} · ${settings.money(it.unitPrice)} × ${it.qty}',
+                                          style: TextStyle(
+                                              fontFamily: 'Carlito', fontSize: 12, color: AppColors.muted)),
+                                    ],
+                                  ),
                                 ),
-                              ),
-                              Text(settings.money(it.lineTotal),
-                                  style: TextStyle(
-                                      fontFamily: 'Carlito',
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w700,
-                                      color: AppColors.body)),
-                            ],
+                                Text(settings.money(it.lineTotal),
+                                    style: TextStyle(
+                                        fontFamily: 'Carlito',
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w700,
+                                        color: AppColors.body)),
+                              ],
+                            ),
                           ),
                         ),
                       const SizedBox(height: AppSpace.s1),
@@ -362,6 +536,32 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
                   ),
                 ),
                 const SizedBox(height: AppSpace.s4),
+                if (canAct && _selectMode) ...[
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                              foregroundColor: AppColors.warning),
+                          onPressed: () => _doRefund(isExchange: true),
+                          icon: const Icon(Icons.swap_horiz_rounded, size: 18),
+                          label: const Text('Exchange'),
+                        ),
+                      ),
+                      const SizedBox(width: AppSpace.s3),
+                      Expanded(
+                        child: FilledButton.icon(
+                          style: FilledButton.styleFrom(
+                              backgroundColor: AppColors.danger),
+                          onPressed: () => _doRefund(isExchange: false),
+                          icon: const Icon(Icons.undo_rounded, size: 18),
+                          label: const Text('Refund'),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpace.s3),
+                ],
                 Row(
                   children: [
                     Expanded(
