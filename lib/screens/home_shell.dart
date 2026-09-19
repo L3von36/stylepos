@@ -24,6 +24,17 @@ import 'sync_status_pill.dart';
 import 'verify/receipt_verifier_screen.dart';
 import '../state/cart.dart';
 
+/// Phone bottom bar composition: exactly FOUR primary tabs + "More".
+///
+/// The bar's hard ceiling stays SIX destination cells + More (seven taps
+/// total) so it can never crowd the till — but the shipped configuration is
+/// four. Anything beyond the four primaries (Purchasing, Reports today;
+/// anything added tomorrow) automatically lands inside the More sheet
+/// because the shell splits the destination list at [kBarTabs]. NEVER add
+/// new menus to the bar directly — append them to the list and let the
+/// split do the work.
+const int kBarTabs = 4;
+
 class _Dest {
   final NavId id;
   final IconData icon;
@@ -312,13 +323,17 @@ class _HomeShellState extends State<HomeShell> {
       }
 
       // Phone layout: content + compact bottom bar. The trailing "More"
-      // slot opens the account sheet (settings, staff, password, sign out)
-      // so every manager tool stays one tap away without crowding the bar.
+      // slot opens the account sheet, which now doubles as the overflow
+      // menu: every destination past the four primary tabs (Purchasing,
+      // Reports today) is listed there, plus the account tools.
       //
-      // Bar cap: at most SIX destination cells + More (seven taps total).
-      // Anything beyond that must live inside the More sheet — the bar
-      // itself never grows past 7 so it stays small and tappable.
-      final barDestinations = all.length > 6 ? all.sublist(0, 6) : all;
+      // Shipped composition: FOUR primary tabs + More (see kBarTabs). The
+      // bar's absolute ceiling remains six cells + More — never exceeded,
+      // new menus go inside the More sheet, never the bar itself.
+      final barDestinations = all.take(kBarTabs).toList();
+      final moreDestinations = all.skip(kBarTabs).toList();
+      final moreActive =
+          barDestinations.indexWhere((d) => d.id == nav.id) == -1;
       return Scaffold(
         appBar: appBar,
         body: Column(
@@ -343,6 +358,7 @@ class _HomeShellState extends State<HomeShell> {
                 'More', isMore: true),
           ],
           selectedIndex: barDestinations.indexWhere((d) => d.id == nav.id),
+          moreActive: moreActive,
           lowStock: lowCount,
           lowStockIndex:
               barDestinations.indexWhere((d) => d.id == NavId.products),
@@ -359,7 +375,7 @@ class _HomeShellState extends State<HomeShell> {
               nav.goTo(barDestinations[i].id);
             });
           },
-          onMore: () => _showAccountSheet(context, user),
+          onMore: () => _showAccountSheet(context, user, moreDestinations),
         ),
       );
     });
@@ -439,9 +455,12 @@ class _HomeShellState extends State<HomeShell> {
     return appBar;
   }
 
-  /// Compact account sheet for phones: who is signed in, change password,
-  /// sign out.
-  void _showAccountSheet(BuildContext context, AppUser user) {
+  /// Compact account sheet for phones: who is signed in, the overflow
+  /// destinations that didn't fit the four primary tabs ([moreDests] —
+  /// Purchasing and Reports today, anything added tomorrow), then the
+  /// account tools (password, sign out).
+  void _showAccountSheet(
+      BuildContext context, AppUser user, List<_Dest> moreDests) {
     showModalBottomSheet(
       context: context,
       backgroundColor: AppColors.surface,
@@ -482,6 +501,29 @@ class _HomeShellState extends State<HomeShell> {
               ),
             ),
             const Divider(),
+            if (moreDests.isNotEmpty) ...[
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                    AppSpace.s5, AppSpace.s1, AppSpace.s5, AppSpace.s1),
+                child: Text('MENU',
+                    style: TextStyle(
+                        fontFamily: 'Carlito',
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.8,
+                        color: AppColors.muted)),
+              ),
+              for (final d in moreDests)
+                ListTile(
+                  leading: Icon(d.icon, color: AppColors.muted),
+                  title: Text(d.label),
+                  onTap: () {
+                    Navigator.pop(sheet);
+                    context.read<NavProvider>().goTo(d.id);
+                  },
+                ),
+              const Divider(),
+            ],
             ListTile(
               leading:
                   Icon(Icons.verified_user_outlined, color: AppColors.muted),
@@ -634,12 +676,15 @@ class _HomeShellState extends State<HomeShell> {
 }
 
 /// Compact phone bottom bar: 54dp of content over the safe area, 20dp
-/// icons and 10dp labels. Fits Sell/Products/Sales/Customers (+ Purchasing
-/// and Reports for managers) plus a "More" slot without the chunky M3
-/// indicator strip — active tabs get a small pill behind the icon instead.
+/// icons and 10dp labels. Exactly FOUR primary tabs (Sell / Products /
+/// Sales / Customers) plus a trailing "More" slot that holds everything
+/// else (see kBarTabs). No chunky M3 indicator strip — active tabs get a
+/// small pill behind the icon instead; [moreActive] lights the More pill
+/// whenever the current destination lives inside the More sheet.
 class _PhoneNavBar extends StatelessWidget {
   final List<_NavItem> items;
   final int selectedIndex;
+  final bool moreActive;
   final int lowStock;
   final int lowStockIndex;
   final ValueChanged<int> onSelect;
@@ -648,6 +693,7 @@ class _PhoneNavBar extends StatelessWidget {
   const _PhoneNavBar({
     required this.items,
     required this.selectedIndex,
+    required this.moreActive,
     required this.lowStock,
     required this.lowStockIndex,
     required this.onSelect,
@@ -675,7 +721,7 @@ class _PhoneNavBar extends StatelessWidget {
 
   Widget _cell(int i) {
     final item = items[i];
-    final selected = !item.isMore && i == selectedIndex;
+    final selected = item.isMore ? moreActive : i == selectedIndex;
     final color = selected ? AppColors.primary : AppColors.muted;
     final badge = (i == lowStockIndex && lowStock > 0) ? lowStock : null;
 
