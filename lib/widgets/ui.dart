@@ -523,27 +523,56 @@ class PageHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final header = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title, style: Theme.of(context).textTheme.headlineSmall),
+        if (subtitle != null) ...[
+          const SizedBox(height: AppSpace.s1),
+          Text(subtitle!, style: Theme.of(context).textTheme.bodyMedium),
+        ],
+      ],
+    );
+    if (actions.isEmpty) {
+      return Padding(padding: const EdgeInsets.only(bottom: AppSpace.s4), child: header);
+    }
+    // Phones: action buttons move under the title. A Row with 3-4
+    // inflexible buttons (~460dp) overflows a ~380dp phone width — the
+    // flex collapse squeezed the title into a one-character column that
+    // grew taller than the screen and pushed the whole page body
+    // off-screen (Products looked empty / "not clickable").
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpace.s4),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
+      // Fill the parent width: the stacked phone branch must not
+      // shrink-wrap (a shrink-wrapped header centers under the screen's
+      // default center alignment).
+      child: SizedBox(
+        width: double.infinity,
+        child: LayoutBuilder(builder: (context, c) {
+          if (c.maxWidth < 480) {
+            return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: Theme.of(context).textTheme.headlineSmall),
-                if (subtitle != null) ...[
-                  const SizedBox(height: AppSpace.s1),
-                  Text(subtitle!, style: Theme.of(context).textTheme.bodyMedium),
-                ],
+                header,
+                const SizedBox(height: AppSpace.s3),
+                Wrap(
+                  spacing: AppSpace.s2,
+                  runSpacing: AppSpace.s2,
+                  children: actions,
+                ),
               ],
-            ),
-          ),
-          for (final a in actions) ...[
-            const SizedBox(width: AppSpace.s2),
-            a,
-          ],
-        ],
+            );
+          }
+          return Row(
+            children: [
+              Expanded(child: header),
+              for (final a in actions) ...[
+                const SizedBox(width: AppSpace.s2),
+                a,
+              ],
+            ],
+          );
+        }),
       ),
     );
   }
@@ -576,33 +605,50 @@ class SectionCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Row(
-              children: [
-                if (icon != null) ...[
-                  Container(
-                    width: 32,
-                    height: 32,
-                    decoration: BoxDecoration(
-                      color: AppColors.primarySoft,
-                      borderRadius: BorderRadius.circular(AppRadius.sm),
+            // Narrow cards: the action moves under the title row — a wide
+            // button pair (e.g. Labels + Add variant) squeezed the title
+            // column into a few characters per line on phones.
+            LayoutBuilder(builder: (context, c) {
+              final titleRow = Row(
+                children: [
+                  if (icon != null) ...[
+                    Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: AppColors.primarySoft,
+                        borderRadius: BorderRadius.circular(AppRadius.sm),
+                      ),
+                      child: Icon(icon, size: 18, color: AppColors.primary),
                     ),
-                    child: Icon(icon, size: 18, color: AppColors.primary),
+                    const SizedBox(width: AppSpace.s2 + 2),
+                  ],
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(title, style: Theme.of(context).textTheme.titleMedium),
+                        if (subtitle != null)
+                          Text(subtitle!, style: Theme.of(context).textTheme.bodySmall),
+                      ],
+                    ),
                   ),
-                  const SizedBox(width: AppSpace.s2 + 2),
                 ],
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(title, style: Theme.of(context).textTheme.titleMedium),
-                      if (subtitle != null)
-                        Text(subtitle!, style: Theme.of(context).textTheme.bodySmall),
-                    ],
-                  ),
-                ),
-                ?action,
-              ],
-            ),
+              );
+              final a = action;
+              if (a == null) return titleRow;
+              if (c.maxWidth < 480) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    titleRow,
+                    const SizedBox(height: AppSpace.s3),
+                    a,
+                  ],
+                );
+              }
+              return Row(children: [Expanded(child: titleRow), a]);
+            }),
             const SizedBox(height: AppSpace.s4),
             ...children,
           ],

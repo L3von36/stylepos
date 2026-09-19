@@ -276,12 +276,22 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
       _method = settings.paymentMethods.first;
     }
 
+    // Phones get the touch-first layout: on-screen keypad (no IME eating
+    // half the dialog), compact header with a close button and one
+    // full-width thumb-zone confirm button. Desktop keeps the text field.
+    final mobile = MediaQuery.sizeOf(context).width < 720;
+
     return PopScope(
       canPop: _stage != _Stage.processing && _stage != _Stage.done,
       child: AlertDialog(
-        titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
-        contentPadding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
+        titlePadding: EdgeInsets.fromLTRB(16, 16, mobile ? 8 : 24, 0),
+        contentPadding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
         actionsPadding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+        // Phones: the default 40dp side insets shrink the dialog to ~280dp
+        // and everything wraps awkwardly — 16dp keeps it readable without
+        // touching the screen edges.
+        insetPadding: EdgeInsets.symmetric(
+            horizontal: mobile ? 12 : 16, vertical: mobile ? 16 : 24),
         title: Row(
           children: [
             if (_stage == _Stage.done)
@@ -302,11 +312,22 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
                 child: Icon(Icons.payments_outlined, size: 19, color: AppColors.primary),
               ),
             const SizedBox(width: AppSpace.s3),
-            Text(_stage == _Stage.done ? 'Sale complete' : 'Take payment'),
+            Expanded(
+              child: Text(_stage == _Stage.done ? 'Sale complete' : 'Take payment'),
+            ),
+            if (mobile && _stage == _Stage.payment)
+              IconButton(
+                tooltip: 'Cancel',
+                icon: const Icon(Icons.close_rounded, size: 21),
+                onPressed: () => Navigator.pop(context),
+              ),
           ],
         ),
-        content: SizedBox(
-          width: 410,
+        // Responsive width: the fixed 410dp SizedBox forced the dialog to
+        // overflow (clipped right edge) on phone screens — a maxWidth cap
+        // fills whatever the phone gives and keeps 410dp on desktop.
+        content: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: mobile ? 440 : 410),
           child: switch (_stage) {
             _Stage.done => _buildDone(context, settings),
             _Stage.processing => const Padding(
@@ -320,52 +341,43 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
                   ],
                 ),
               ),
-            _Stage.payment => _buildPayment(context, settings, total),
+            // Scrollable: with the keyboard up on a small phone the payment
+            // column no longer clips the actions at the bottom.
+            _Stage.payment =>
+              SingleChildScrollView(child: _buildPayment(context, settings, total, mobile: mobile)),
           },
         ),
         actions: _stage == _Stage.done
             ? [
-                // Share / Save rely on a local file system (not on web);
-                // on web, Print opens the browser dialog which can save PDFs.
-                if (!kIsWeb && (Platform.isAndroid || Platform.isIOS))
-                  TextButton.icon(
-                    onPressed: _sharePdf,
-                    icon: const Icon(Icons.share_outlined, size: 17),
-                    label: const Text('Share'),
+                // Full-width thumb-zone primary (mobile pattern); on wide
+                // screens it sits beside the receipt actions.
+                SizedBox(
+                  width: mobile ? double.infinity : null,
+                  child: FilledButton.icon(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.add_shopping_cart, size: 17),
+                    label: const Text('New sale'),
                   ),
-                if (!kIsWeb)
-                  TextButton.icon(
-                    onPressed: _savePdf,
-                    icon: const Icon(Icons.save_outlined, size: 17),
-                    label: const Text('Save PDF'),
-                  ),
-                TextButton.icon(
-                  onPressed: _printPdf,
-                  icon: const Icon(Icons.print_outlined, size: 17),
-                  label: const Text('Print'),
-                ),
-                FilledButton.icon(
-                  onPressed: () => Navigator.pop(context),
-                  icon: const Icon(Icons.add_shopping_cart, size: 17),
-                  label: const Text('New sale'),
                 ),
               ]
             : [
-                TextButton(
-                  onPressed:
-                      _stage == _Stage.processing ? null : () => Navigator.pop(context),
-                  child: const Text('Cancel'),
-                ),
-                FilledButton(
-                  onPressed: _stage == _Stage.payment ? _completeSale : null,
-                  child: const Text('Complete sale'),
+                SizedBox(
+                  width: mobile ? double.infinity : null,
+                  child: FilledButton(
+                    style: FilledButton.styleFrom(minimumSize: const Size(0, 50)),
+                    onPressed: _stage == _Stage.payment ? _completeSale : null,
+                    child: Text(mobile
+                        ? 'Complete sale · ${settings.money(total)}'
+                        : 'Complete sale'),
+                  ),
                 ),
               ],
       ),
     );
   }
 
-  Widget _buildPayment(BuildContext context, AppSettings settings, double total) {
+  Widget _buildPayment(BuildContext context, AppSettings settings, double total,
+      {required bool mobile}) {
     final cart = context.watch<CartProvider>();
     final change = _changeDue(total);
     return Column(
@@ -386,65 +398,95 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Amount due',
-                  style: TextStyle(
-                      fontFamily: 'Carlito',
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0.4,
-                      color: Colors.white.withValues(alpha: 0.8))),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text('AMOUNT DUE',
+                        style: TextStyle(
+                            fontFamily: 'Carlito',
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.8,
+                            color: Colors.white.withValues(alpha: 0.75))),
+                  ),
+                  if (cart.itemCount > 0)
+                    Text('${cart.itemCount} item${cart.itemCount == 1 ? '' : 's'}',
+                        style: TextStyle(
+                            fontFamily: 'Carlito',
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white.withValues(alpha: 0.75))),
+                ],
+              ),
               const SizedBox(height: AppSpace.s1),
               Text(
                 settings.money(total),
                 style: const TextStyle(
                     fontFamily: 'Carlito',
-                    fontSize: 24,
+                    fontSize: 30,
                     fontWeight: FontWeight.w700,
                     color: Colors.white),
               ),
             ],
           ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 14),
 
         Text('Payment method',
             style: TextStyle(fontFamily: 'Carlito', fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.muted)),
         const SizedBox(height: 8),
-        SegmentedButton<String>(
-          showSelectedIcon: false,
-          style: const ButtonStyle(
-            visualDensity: VisualDensity(vertical: 1.6),
-          ),
-          segments: [
-            for (final m in settings.paymentMethods)
-              ButtonSegment(
-                value: m,
-                icon: Icon(_methodIcon(m), size: 18),
-                label: Text(_methodLabel(m)),
-              ),
-          ],
-          selected: {_method},
-          onSelectionChanged: (s) => setState(() => _method = s.first),
-        ),
+        // Three methods with icons + full labels overflow phone-sized
+        // dialogs (~280dp content width) — compact them on tight widths.
+        LayoutBuilder(builder: (context, lc) {
+          final compact = lc.maxWidth < 400 || settings.paymentMethods.length > 3;
+          return SegmentedButton<String>(
+            showSelectedIcon: false,
+            style: const ButtonStyle(
+              visualDensity: VisualDensity(vertical: 1.6),
+            ),
+            segments: [
+              for (final m in settings.paymentMethods)
+                ButtonSegment(
+                  value: m,
+                  icon: compact ? null : Icon(_methodIcon(m), size: 18),
+                  label: Text(compact ? _shortMethodLabel(m) : _methodLabel(m)),
+                ),
+            ],
+            selected: {_method},
+            onSelectionChanged: (s) => setState(() => _method = s.first),
+          );
+        }),
 
         if (_method == 'cash') ...[
           const SizedBox(height: AppSpace.s4),
-          TextField(
-            controller: _tendered,
-            autofocus: true,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            // Changing the amount invalidates a previously-shown
-            // underpayment error — otherwise the dialog can show the red
-            // "collect more" banner and the green "Change due" banner at
-            // the same time.
-            onChanged: (_) {
-              if (_error != null) setState(() => _error = null);
-            },
-            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
-            decoration: InputDecoration(
-              labelText: 'Cash received (${settings.currencySymbol})',
+          if (mobile) ...[
+            // Touch-first cash entry: a read-only display + on-screen
+            // keypad. The soft keyboard used to cover half the dialog and
+            // made the payment stage feel broken on small phones.
+            _TenderedDisplay(
+              value: _tendered.text,
+              symbol: settings.currencySymbol,
+              onClear: () => _keypadApply('C'),
             ),
-          ),
+            const SizedBox(height: AppSpace.s3),
+            _PaymentKeypad(onKey: _keypadApply),
+          ] else
+            TextField(
+              controller: _tendered,
+              autofocus: true,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              // Changing the amount invalidates a previously-shown
+              // underpayment error — otherwise the dialog can show the red
+              // "collect more" banner and the green "Change due" banner at
+              // the same time.
+              onChanged: (_) {
+                if (_error != null) setState(() => _error = null);
+              },
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+              decoration: InputDecoration(
+                labelText: 'Cash received (${settings.currencySymbol})',
+              ),
+            ),
           const SizedBox(height: AppSpace.s3),
           Wrap(
             spacing: AppSpace.s2,
@@ -463,13 +505,18 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
                   backgroundColor: AppColors.primarySoft,
                   side: BorderSide.none,
                   onPressed: () {
-                    _tendered.text = quick.toStringAsFixed(0);
-                    // Same stale-error rule as typing: re-tendering clears it.
-                    if (_error != null) {
-                      setState(() => _error = null);
-                    } else {
+                    // Defer the controller write + rebuild out of the gesture
+                    // dispatch: mutating the focused field's text mid-tap
+                    // fouled the web pointer stream — every later tap on the
+                    // dialog (actions included) was swallowed until some
+                    // unrelated relayout unstuck it.
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (!mounted) return;
+                      _tendered.text = quick.toStringAsFixed(0);
+                      // Same stale-error rule as typing: re-tendering clears it.
+                      _error = null;
                       setState(() {});
-                    }
+                    });
                   },
                 ),
             ],
@@ -569,6 +616,35 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
     );
   }
 
+  /// Keypad input: digits, '.', '00', backspace and 'C' (clear).
+  /// Mutations run post-frame — the same guard the quick-cash chips use —
+  /// because mutating state during pointer dispatch fouls the web tap
+  /// stream (taps on later targets get swallowed until a relayout).
+  void _keypadApply(String key) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _stage != _Stage.payment) return;
+      var v = _tendered.text;
+      switch (key) {
+        case 'C':
+          v = '';
+        case '<':
+          if (v.isNotEmpty) v = v.substring(0, v.length - 1);
+        case '.':
+          if (!v.contains('.')) v = v.isEmpty ? '0.' : '$v.';
+        case '00':
+          if (v.isNotEmpty && v != '0' && v.length < 9) v = '${v}00';
+        default: // digits
+          if (v == '0') v = key;
+          if (v.length < 9) v = v + key;
+      }
+      setState(() {
+        _tendered.text = v;
+        _error = null; // re-tendering clears a stale underpayment error
+      });
+    });
+    setState(() {}); // schedule the frame the post-frame callback runs after
+  }
+
   Widget _buildDone(BuildContext context, AppSettings settings) {
     final sale = _sale!;
     final canEmail = (_customerEmail ?? '').trim().isNotEmpty;
@@ -660,6 +736,35 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
           ),
           const SizedBox(height: AppSpace.s2),
         ],
+        // Receipt actions moved out of the (now single-button) actions row —
+        // four buttons wrapped onto two cramped rows on phones.
+        Wrap(
+          alignment: WrapAlignment.center,
+          spacing: AppSpace.s1 + 2,
+          runSpacing: AppSpace.s1,
+          children: [
+            // Share / Save rely on a local file system (not on web);
+            // on web, Print opens the browser dialog which can save PDFs.
+            if (!kIsWeb && (Platform.isAndroid || Platform.isIOS))
+              TextButton.icon(
+                onPressed: _sharePdf,
+                icon: const Icon(Icons.share_outlined, size: 17),
+                label: const Text('Share'),
+              ),
+            if (!kIsWeb)
+              TextButton.icon(
+                onPressed: _savePdf,
+                icon: const Icon(Icons.save_outlined, size: 17),
+                label: const Text('Save PDF'),
+              ),
+            TextButton.icon(
+              onPressed: _printPdf,
+              icon: const Icon(Icons.print_outlined, size: 17),
+              label: const Text('Print'),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpace.s1),
         Text(
           _savedPdf == null
               ? 'Save or print the receipt below.'
@@ -674,9 +779,136 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
   String _methodLabel(String m) =>
       m == 'cash' ? 'Cash' : m == 'card' ? 'Card' : 'Mobile money';
 
+  /// Compact label for tight phone dialogs ("Mobile money" wraps/overflows).
+  String _shortMethodLabel(String m) =>
+      m == 'cash' ? 'Cash' : m == 'card' ? 'Card' : 'Mobile';
+
   IconData _methodIcon(String m) => m == 'cash'
       ? Icons.payments_outlined
       : m == 'card'
           ? Icons.credit_card_rounded
           : Icons.smartphone_rounded;
+}
+
+/// The cash-received display for the touch layout: shows the running entry
+/// big and bold, with a clear (X) affordance. Read-only by design — the
+/// digits come from [_PaymentKeypad], so the soft keyboard never opens.
+class _TenderedDisplay extends StatelessWidget {
+  final String value;
+  final String symbol;
+  final VoidCallback onClear;
+  const _TenderedDisplay(
+      {required this.value, required this.symbol, required this.onClear});
+
+  @override
+  Widget build(BuildContext context) {
+    final hasEntry = value.isNotEmpty;
+    return Container(
+      height: 62,
+      padding: const EdgeInsets.symmetric(horizontal: AppSpace.s4),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceTint,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(
+            color: hasEntry ? AppColors.primary : AppColors.borderSoft,
+            width: hasEntry ? 2 : 1),
+      ),
+      child: Row(
+        children: [
+          Text(symbol,
+              style: TextStyle(
+                  fontFamily: 'Carlito',
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                  color: hasEntry ? AppColors.primary : AppColors.faint)),
+          const SizedBox(width: AppSpace.s2),
+          Expanded(
+            child: Text(
+              hasEntry ? value : '0',
+              style: TextStyle(
+                  fontFamily: 'Carlito',
+                  fontSize: 26,
+                  fontWeight: FontWeight.w700,
+                  color: hasEntry ? AppColors.ink : AppColors.faint),
+            ),
+          ),
+          if (hasEntry)
+            IconButton(
+              tooltip: 'Clear',
+              icon: const Icon(Icons.backspace_outlined, size: 20),
+              color: AppColors.muted,
+              onPressed: onClear,
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A POS-style numeric keypad for the cash amount: 4 columns x 4 rows of
+/// 52dp-tall keys — thumb-friendly, no IME. Layout matches payment
+/// terminals (1-2-3 top row, backspace bottom-right).
+class _PaymentKeypad extends StatelessWidget {
+  final ValueChanged<String> onKey;
+  const _PaymentKeypad({required this.onKey});
+
+  static const _keys = [
+    ['1', '2', '3', 'C'],
+    ['4', '5', '6', '00'],
+    ['7', '8', '9', '.'],
+    ['0', '<'],
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final row in _keys)
+          Row(
+            children: [
+              for (final k in row)
+                if (k == '<')
+                  Expanded(
+                    flex: 2,
+                    child: _key(context, k, Icons.backspace_outlined, null),
+                  )
+                else
+                  Expanded(child: _key(context, k, null, k)),
+              // bottom row: 0 gets flex 2 to fill the 4th column
+              if (row.first == '0') const Spacer(flex: 1),
+            ],
+          ),
+      ],
+    );
+  }
+
+  Widget _key(BuildContext context, String code, IconData? icon, String? label) {
+    final isAction = code == 'C' || code == '<';
+    return Padding(
+      padding: const EdgeInsets.all(3),
+      child: Material(
+        color: isAction ? AppColors.surfaceTint : AppColors.primarySoft,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          onTap: () => onKey(code),
+          child: SizedBox(
+            height: 52,
+            child: Center(
+              child: icon != null
+                  ? Icon(icon, size: 21, color: AppColors.muted)
+                  : Text(label!,
+                      style: TextStyle(
+                          fontFamily: 'Carlito',
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.primaryDark)),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }

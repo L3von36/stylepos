@@ -712,9 +712,12 @@ void main() {
 
       await sync.run();
 
-      // The failure is VISIBLE (red pill)…
+      // The failure is VISIBLE (red pill) — and since v1.16.1 it is the
+      // decoded, human-readable message (step + plain-language cause),
+      // not the raw "PostgrestException(…)" text.
       expect(sync.phase, SyncPhase.error);
-      expect(sync.lastError, contains('row-level security'));
+      expect(sync.lastError, startsWith('push variants:'));
+      expect(sync.lastError, contains('blocked a change'));
       // …but the new sale still reached the cloud,
       final pushed =
           cloud.tables['sales']!.values.where((s) => s['receipt_no'] == sale.receiptNo);

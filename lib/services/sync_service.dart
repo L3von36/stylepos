@@ -390,6 +390,47 @@ class SyncService extends ChangeNotifier {
     _debounce = Timer(delay, () => run());
   }
 
+  /// Human-friendly one-liner for sync failures. Raw exception text
+  /// ("PostgrestException(message: …, code: 42501)") means nothing to a
+  /// shop owner — decode the common Supabase/Postgres failure families and
+  /// prefix the failing step so the Sync pill tooltip is actionable.
+  static String friendlySyncError(String step, Object error) {
+    final raw = error.toString();
+    final code = RegExp(r'code:\s*([0-9A-Z]+)').firstMatch(raw)?.group(1);
+    final lower = raw.toLowerCase();
+    if (code == '42501' || lower.contains('row-level security')) {
+      return '$step: the cloud blocked a change (permissions). Update the '
+          'app, run the latest Supabase patch, then tap the pill to retry.';
+    }
+    if (code == '23505' || lower.contains('duplicate key')) {
+      return '$step: an identical record already exists in the cloud — '
+          'it will merge on the next sync.';
+    }
+    if (code == '23503' || lower.contains('foreign key')) {
+      return '$step: waiting for a related record to upload — '
+          'the next sync finishes it.';
+    }
+    if (code == '42P01' ||
+        lower.contains('could not find the') ||
+        lower.contains('schema cache') ||
+        (code != null && code.startsWith('PGRST2'))) {
+      return '$step: this app is newer than the cloud database — run the '
+          'latest Supabase schema patch SQL, then retry.';
+    }
+    if (lower.contains('jwt') || lower.contains('unauthorized')) {
+      return '$step: your cloud session expired — sign in again.';
+    }
+    if (lower.contains('socket') ||
+        lower.contains('network') ||
+        lower.contains('host lookup') ||
+        lower.contains('connection') ||
+        lower.contains('timed out') ||
+        lower.contains('timeout')) {
+      return '$step: network hiccup — retrying automatically.';
+    }
+    return '$step: ${raw.split('\n').first}';
+  }
+
   /// Runs a full push+pull cycle now (no-op when signed out).
   ///
   /// Every step is isolated: one failing table (a row the cloud's RLS
@@ -408,11 +449,13 @@ class SyncService extends ChangeNotifier {
     lastError = null;
     notifyListeners();
     Object? firstError;
+    String? firstErrorStep;
     Future<void> step(String name, Future<void> Function() action) async {
       try {
         await action();
       } catch (e) {
         firstError ??= e;
+        firstErrorStep ??= name;
         debugPrint('sync step $name failed: $e');
       }
     }
@@ -479,9 +522,13 @@ class SyncService extends ChangeNotifier {
 
     // Red "Sync issue" only when at least one step actually failed;
     // failed rows stay dirty and are retried on the next cycle.
+    // lastError is the DECODED, human-readable line (step + plain-language
+    // cause) — the pill tooltip shows it verbatim, so a shop owner sees
+    // "push sales: the cloud blocked a change…" instead of
+    // "PostgrestException(message: …, code: 42501)".
     if (firstError != null) {
       phase = SyncPhase.error;
-      lastError = firstError.toString();
+      lastError = friendlySyncError(firstErrorStep ?? 'sync', firstError!);
     } else {
       phase = SyncPhase.idle;
       lastSyncAt = DateTime.now();

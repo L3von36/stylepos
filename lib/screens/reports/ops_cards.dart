@@ -74,17 +74,42 @@ class _MarginCardState extends State<MarginCard> {
       title: 'Profit & margins',
       subtitle: 'Revenue vs cost of goods in the selected period',
       children: [
-        Row(children: [
-          _figure(context, 'Revenue', money(revenue), AppColors.ink),
-          _figure(context, 'Cost of goods', money(cogs), AppColors.muted),
-          _figure(context, 'Gross profit', money(profit),
-              profit >= 0 ? AppColors.success : AppColors.danger),
-          _figure(
-              context,
-              'Margin',
-              '${pct.toStringAsFixed(pct.abs() >= 100 ? 0 : 1)}%',
-              AppColors.primary),
-        ]),
+        LayoutBuilder(builder: (context, lc) {
+          // 4-up fits wide screens; on phones the labels truncated
+          // ("COST OF GO…") — switch to a 2x2 grid below 420dp.
+          final cells = [
+            _figure(context, 'Revenue', money(revenue), AppColors.ink),
+            _figure(context, 'Cost of goods', money(cogs), AppColors.muted),
+            _figure(context, 'Gross profit', money(profit),
+                profit >= 0 ? AppColors.success : AppColors.danger),
+            _figure(
+                context,
+                'Margin',
+                '${pct.toStringAsFixed(pct.abs() >= 100 ? 0 : 1)}%',
+                AppColors.primary),
+          ];
+          if (lc.maxWidth < 420) {
+            return Wrap(
+              spacing: AppSpace.s3,
+              runSpacing: AppSpace.s3,
+              children: [
+                for (final cell in cells)
+                  SizedBox(width: (lc.maxWidth - AppSpace.s3) / 2, child: cell),
+              ],
+            );
+          }
+          return Row(
+            children: [
+              Expanded(child: cells[0]),
+              const SizedBox(width: AppSpace.s3),
+              Expanded(child: cells[1]),
+              const SizedBox(width: AppSpace.s3),
+              Expanded(child: cells[2]),
+              const SizedBox(width: AppSpace.s3),
+              Expanded(child: cells[3]),
+            ],
+          );
+        }),
         const SizedBox(height: AppSpace.s4),
         if (margins.isEmpty)
           const EmptyState(
@@ -111,28 +136,32 @@ class _MarginCardState extends State<MarginCard> {
   }
 
   Widget _figure(BuildContext context, String label, String value, Color color) {
-    return Expanded(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label.toUpperCase(),
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                  fontFamily: 'Carlito',
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.3,
-                  color: AppColors.muted)),
-          const SizedBox(height: 2),
-          Text(value,
-              overflow: TextOverflow.ellipsis,
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label.toUpperCase(),
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+                fontFamily: 'Carlito',
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.3,
+                color: AppColors.muted)),
+        const SizedBox(height: 2),
+        // FittedBox: full value stays readable (shrinks) instead of
+        // being cut to "KSh 1,…" in the 4-up strip on phones.
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text(value,
               style: TextStyle(
                   fontFamily: 'Carlito',
                   fontSize: 18,
                   fontWeight: FontWeight.w700,
                   color: color)),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -257,24 +286,112 @@ class _StaffPerformanceCardState extends State<StaffPerformanceCard> {
             message: 'Per-staff performance appears once sales are recorded.',
           )
         else ...[
+          // Responsive: the 5-column table only fits wide screens. On
+          // phones the headers wrapped and visually merged ("ORDERS ·
+          // ITEMS" became "S… ITEMS") — below 560dp each staff member
+          // gets a two-line card instead.
+          LayoutBuilder(builder: (context, lc) {
+            final wide = lc.maxWidth >= 560;
+            return Column(
+              children: [
+                if (wide)
+                  _wideTable(rows, header, money)
+                else
+                  for (final r in rows) ...[
+                    Container(
+                      width: double.infinity,
+                      margin: const EdgeInsets.only(bottom: AppSpace.s2),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: AppSpace.s3, vertical: AppSpace.s2),
+                      decoration: BoxDecoration(
+                        color: AppColors.surfaceTint,
+                        borderRadius: BorderRadius.circular(AppRadius.sm),
+                        border: Border.all(color: AppColors.borderSoft),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(r.name,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                        fontFamily: 'Carlito',
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w700,
+                                        color: AppColors.ink)),
+                              ),
+                              Text('${r.orders} · ${r.items}',
+                                  style: TextStyle(
+                                      fontFamily: 'Carlito',
+                                      fontSize: 12,
+                                      color: AppColors.muted)),
+                            ],
+                          ),
+                          const SizedBox(height: AppSpace.s1),
+                          // metrics line: FittedBox keeps long money
+                          // strings from clipping on the smallest phones
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              '${money(r.revenue)} revenue'
+                              '${r.discount > 0 ? ' · -${money(r.discount)} disc.' : ''}'
+                              ' · ${_pending?[r.userId] != null && _pending![r.userId]! > 0 ? '${money(_pending![r.userId]!)} pending' : ((_rates?[r.userId] ?? 0) > 0 ? 'nothing pending' : 'no commission')}',
+                              style: TextStyle(
+                                  fontFamily: 'Carlito',
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.primary),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                const SizedBox(height: AppSpace.s1),
+                Text(
+                  'Commission = pending payouts in the ledger. A dash means '
+                  'the staff member earns commission but nothing is pending.',
+                  style: TextStyle(
+                      fontFamily: 'Carlito', fontSize: 11, color: AppColors.faint),
+                ),
+              ],
+            );
+          }),
+        ],
+      ],
+    );
+  }
+
+  /// The full 5-column table — wide screens only (the phone variant above
+  /// stacks each staff member into its own card).
+  Widget _wideTable(
+      List<({int userId, String name, int orders, int items, double revenue, double discount})>
+          rows,
+      TextStyle header,
+      String Function(double) money) {
+    return Column(
+      children: [
+        Row(children: [
+          Expanded(flex: 4, child: Text('STAFF', style: header)),
+          Expanded(
+              flex: 2,
+              child: Text('ORDERS · ITEMS', textAlign: TextAlign.right, style: header)),
+          Expanded(
+              flex: 3,
+              child: Text('REVENUE', textAlign: TextAlign.right, style: header)),
+          Expanded(
+              flex: 3,
+              child: Text('DISCOUNTS', textAlign: TextAlign.right, style: header)),
+          Expanded(
+              flex: 3,
+              child: Text('COMMISSION', textAlign: TextAlign.right, style: header)),
+        ]),
+        const SizedBox(height: AppSpace.s2),
+        for (final r in rows) ...[
           Row(children: [
-            Expanded(flex: 4, child: Text('STAFF', style: header)),
-            Expanded(
-                flex: 2,
-                child: Text('ORDERS · ITEMS', textAlign: TextAlign.right, style: header)),
-            Expanded(
-                flex: 3,
-                child: Text('REVENUE', textAlign: TextAlign.right, style: header)),
-            Expanded(
-                flex: 3,
-                child: Text('DISCOUNTS', textAlign: TextAlign.right, style: header)),
-            Expanded(
-                flex: 3,
-                child: Text('COMMISSION', textAlign: TextAlign.right, style: header)),
-          ]),
-          const SizedBox(height: AppSpace.s2),
-          for (final r in rows) ...[
-            Row(children: [
               Expanded(
                 flex: 4,
                 child: Text(r.name,
@@ -328,14 +445,6 @@ class _StaffPerformanceCardState extends State<StaffPerformanceCard> {
             ]),
             const SizedBox(height: AppSpace.s2),
           ],
-          const SizedBox(height: AppSpace.s1),
-          Text(
-            'Commission = pending payouts in the ledger. A dash means the '
-            'staff member earns commission but nothing is pending.',
-            style: TextStyle(
-                fontFamily: 'Carlito', fontSize: 11, color: AppColors.faint),
-          ),
-        ],
       ],
     );
   }

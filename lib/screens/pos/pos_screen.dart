@@ -213,9 +213,15 @@ class _PosScreenState extends State<PosScreen> {
           ),
         );
       }
+      // Phones: the catalog needs the same screen-edge margin as every
+      // other tab — cards used to sit flush against the glass (clipped
+      // look). Same insets as the wide layout, bottom 0 (cart bar owns it).
       return Scaffold(
         backgroundColor: Colors.transparent,
-        body: grid,
+        body: Padding(
+          padding: const EdgeInsets.fromLTRB(AppSpace.s4, AppSpace.s4, AppSpace.s4, 0),
+          child: grid,
+        ),
         // Always-visible cart bar (commerce pattern): total + item count
         // stay reachable with one thumb while the cashier scrolls products.
         bottomNavigationBar: _MobileCartBar(onOpen: _openCartSheet),
@@ -441,27 +447,38 @@ class _MyTodayStripState extends State<_MyTodayStrip> {
             children: [
               Icon(Icons.badge_outlined, size: 16, color: AppColors.primary),
               const SizedBox(width: AppSpace.s2),
-              Text(
-                '${auth.user?.name ?? 'You'} · ${auth.user?.isAdmin == true ? 'Manager' : 'Sales'}',
-                style: TextStyle(
-                    fontFamily: 'Carlito', fontSize: 12, fontWeight: FontWeight.w700,
-                    color: AppColors.primaryDark),
-              ),
-              const Spacer(),
-              if (hasData) ...[
-                Text(
-                  'Today: ${s.orders} sale${s.orders == 1 ? '' : 's'} · '
-                  '${s.itemsSold} item${s.itemsSold == 1 ? '' : 's'} · '
-                  '${settings.money(s.revenue)}',
+              // Both texts flex + ellipsis: a long name / long hint used to
+              // hard-overflow the strip and clip the clock pill off-screen.
+              Flexible(
+                child: Text(
+                  '${auth.user?.name ?? 'You'} · ${auth.user?.isAdmin == true ? 'Manager' : 'Sales'}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                      fontFamily: 'Carlito', fontSize: 12, color: AppColors.body),
+                      fontFamily: 'Carlito', fontSize: 12, fontWeight: FontWeight.w700,
+                      color: AppColors.primaryDark),
                 ),
-              ] else
-                Text(
-                  'No sales yet today — scan a garment to start',
-                  style: TextStyle(fontFamily: 'Carlito', fontSize: 12, color: AppColors.muted),
-                ),
-              const SizedBox(width: AppSpace.s3),
+              ),
+              const SizedBox(width: AppSpace.s2),
+              Expanded(
+                child: hasData
+                    ? Text(
+                        'Today: ${s.orders} sale${s.orders == 1 ? '' : 's'} · '
+                        '${s.itemsSold} item${s.itemsSold == 1 ? '' : 's'} · '
+                        '${settings.money(s.revenue)}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            fontFamily: 'Carlito', fontSize: 12, color: AppColors.body),
+                      )
+                    : Text(
+                        'No sales yet today — scan a garment to start',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontFamily: 'Carlito', fontSize: 12, color: AppColors.muted),
+                      ),
+              ),
+              const SizedBox(width: AppSpace.s2),
               // Personal dashboard: clock in/out for the shift log. The
               // pill shows the running shift length while clocked in.
               FutureBuilder<Shift?>(

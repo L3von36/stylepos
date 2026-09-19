@@ -414,7 +414,9 @@ class _ManagerInsightsCard extends StatelessWidget {
           child: Row(
             children: [
               _profitCell('Revenue ($rangeDays d)', settings.money(revenue)),
+              const SizedBox(width: AppSpace.s3),
               _profitCell('Est. cost of goods', settings.money(cogs ?? 0)),
+              const SizedBox(width: AppSpace.s3),
               _profitCell(
                   'Est. profit', settings.money(profit),
                   trailing: '${margin.toStringAsFixed(0)}% margin'),
@@ -455,6 +457,8 @@ class _ManagerInsightsCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(label.toUpperCase(),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: TextStyle(
                   fontFamily: 'Carlito',
                   fontSize: 11,
@@ -462,12 +466,18 @@ class _ManagerInsightsCard extends StatelessWidget {
                   letterSpacing: 0.4,
                   color: Colors.white.withValues(alpha: 0.75))),
           const SizedBox(height: 2),
-          Text(value,
-              style: TextStyle(
-                  fontFamily: 'Carlito',
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  color: Colors.white)),
+          // FittedBox: long money strings shrink instead of butting into
+          // (or visually clipping against) the neighbouring cell on phones.
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(value,
+                style: TextStyle(
+                    fontFamily: 'Carlito',
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white)),
+          ),
           if (trailing != null)
             Text(trailing,
                 style: TextStyle(
@@ -1375,15 +1385,38 @@ class _TaxReportCard extends StatelessWidget {
               color: AppColors.primarySoft,
               borderRadius: BorderRadius.circular(AppRadius.sm),
             ),
-            child: Row(
-              children: [
+            child: LayoutBuilder(builder: (context, lc) {
+              // 4-up fits wide screens; on phones the labels truncated
+              // ("TAXABLE S…") — switch to a 2x2 grid below 420dp.
+              final cells = [
                 _taxCell('Taxable sales', settings.money(totalTaxable)),
                 _taxCell('Tax collected', settings.money(totalTax)),
                 _taxCell('Tax on refunds', '- ${settings.money(totalRefunded)}'),
                 _taxCell('Net tax due', settings.money(totalTax - totalRefunded),
                     bold: true),
-              ],
-            ),
+              ];
+              if (lc.maxWidth < 420) {
+                return Wrap(
+                  spacing: AppSpace.s3,
+                  runSpacing: AppSpace.s3,
+                  children: [
+                    for (final cell in cells)
+                      SizedBox(width: (lc.maxWidth - AppSpace.s3) / 2, child: cell),
+                  ],
+                );
+              }
+              return Row(
+                children: [
+                  Expanded(child: cells[0]),
+                  const SizedBox(width: AppSpace.s3),
+                  Expanded(child: cells[1]),
+                  const SizedBox(width: AppSpace.s3),
+                  Expanded(child: cells[2]),
+                  const SizedBox(width: AppSpace.s3),
+                  Expanded(child: cells[3]),
+                ],
+              );
+            }),
           ),
           const SizedBox(height: AppSpace.s3),
           for (final r in rows.reversed)
@@ -1446,25 +1479,32 @@ class _TaxReportCard extends StatelessWidget {
   }
 
   Widget _taxCell(String label, String value, {bool bold = false}) {
-    return Expanded(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
           Text(label.toUpperCase(),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: TextStyle(
                   fontFamily: 'Carlito',
                   fontSize: 10,
                   fontWeight: FontWeight.w700,
                   letterSpacing: 0.4,
                   color: AppColors.primaryDark.withValues(alpha: 0.7))),
-          Text(value,
-              style: TextStyle(
-                  fontFamily: 'Carlito',
-                  fontSize: bold ? 14 : 13,
-                  fontWeight: bold ? FontWeight.w800 : FontWeight.w700,
-                  color: AppColors.primaryDark)),
-        ],
-      ),
+          // FittedBox: the money value shrinks on phones instead of
+          // wrapping to two lines inside the cramped 4-up strip.
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(value,
+                style: TextStyle(
+                    fontFamily: 'Carlito',
+                    fontSize: bold ? 14 : 13,
+                    fontWeight: bold ? FontWeight.w800 : FontWeight.w700,
+                    color: AppColors.primaryDark)),
+        ),
+      ],
     );
   }
 }

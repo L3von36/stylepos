@@ -244,7 +244,19 @@ class _HomeShellState extends State<HomeShell> {
                     ),
                 ],
                 selectedIndex: index,
-                onSelect: (i) => nav.goTo(all[i].id),
+                onSelect: (i) {
+                  // Defer the unfocus + tab switch to after the current
+                  // pointer/gesture dispatch. Mutating focus or notifying
+                  // providers mid-tap fouls the input stream on web — the
+                  // next taps (including on the sidebar itself) land on a
+                  // stale hit-test and feel dead (same class of bug as the
+                  // checkout quick-cash chips).
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (!mounted) return;
+                    FocusManager.instance.primaryFocus?.unfocus();
+                    nav.goTo(all[i].id);
+                  });
+                },
                 user: user,
                 onSettings: user.isAdmin
                     ? () => Navigator.of(context).push(
@@ -301,7 +313,19 @@ class _HomeShellState extends State<HomeShell> {
         ),
         bottomNavigationBar: NavigationBar(
           selectedIndex: index,
-          onDestinationSelected: (i) => nav.goTo(all[i].id),
+          onDestinationSelected: (i) {
+            // Defer the unfocus + tab switch to after the current pointer
+            // dispatch (see the sidebar onSelect comment). Unfocusing or
+            // notifying during the tap is what made the bar feel dead:
+            // with the POS search keyboard open, the IME dismiss rebuilt
+            // the tree mid-gesture and the NEXT destination taps were
+            // swallowed until an unrelated relayout unstuck them.
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (!mounted) return;
+              FocusManager.instance.primaryFocus?.unfocus();
+              nav.goTo(all[i].id);
+            });
+          },
           height: 68,
           destinations: [
             for (var i = 0; i < all.length; i++)

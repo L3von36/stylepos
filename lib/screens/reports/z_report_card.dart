@@ -504,12 +504,18 @@ class _ZReportCardState extends State<ZReportCard> {
                                 fontWeight: FontWeight.w700,
                                 color: AppColors.muted)),
                         const SizedBox(height: 2),
-                        Text(t.$2,
-                            style: TextStyle(
-                                fontFamily: 'Carlito',
-                                fontSize: narrow ? 14 : 16,
-                                fontWeight: FontWeight.w700,
-                                color: t.$3)),
+                        // FittedBox: long takings shrink on phones instead
+                        // of colliding with the neighbouring tile.
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: Text(t.$2,
+                              style: TextStyle(
+                                  fontFamily: 'Carlito',
+                                  fontSize: narrow ? 14 : 16,
+                                  fontWeight: FontWeight.w700,
+                                  color: t.$3)),
+                        ),
                       ],
                     ),
                   ),
