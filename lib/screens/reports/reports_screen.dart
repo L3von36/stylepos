@@ -9,6 +9,7 @@ import '../../state/nav.dart';
 import '../../state/sales.dart';
 import '../../state/settings.dart';
 import '../../widgets/ui.dart';
+import 'manager_tools_card.dart';
 import 'ops_cards.dart';
 import 'z_report_card.dart';
 
@@ -353,6 +354,11 @@ class _ReportsScreenState extends State<ReportsScreen> {
 
               // commission ledger: pending payouts, mark paid, adjustments
               const CommissionsCard(),
+              const SizedBox(height: AppSpace.s4),
+
+              // manager tools: approval PIN + discount gate + audit trail
+              // (moved out of Settings — Reports is the manager workspace)
+              const ManagerToolsCard(),
               const SizedBox(height: 12),
             ],
           ),
@@ -1467,8 +1473,8 @@ class _TaxReportCard extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.only(top: AppSpace.s2),
               child: Text(
-                'Tax is off — set your rate in Settings → Currency & tax to '
-                'start collecting VAT on receipts.',
+                'Tax is off — set your rate in Settings to start '
+                'collecting VAT on receipts.',
                 style: TextStyle(
                     fontFamily: 'Carlito', fontSize: 11, color: AppColors.faint),
               ),

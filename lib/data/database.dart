@@ -559,8 +559,9 @@ class DB {
       'shop_address': '',
       'shop_phone': '',
       'receipt_footer': 'Thank you for shopping with us!',
-      'currency_code': 'KES',
-      'currency_symbol': 'KSh',
+      // Fixed to Ethiopian Birr — AppSettings.load() ignores stored values.
+      'currency_code': 'ETB',
+      'currency_symbol': 'Br',
       'tax_rate': '0',
       'low_stock_default': '5',
       'loyalty_step': '100',

@@ -54,17 +54,14 @@ void main() {
   });
 
   group('AppSettings money formatting', () {
-    test('formats with configured symbol and separators', () {
+    test('formats in Ethiopian Birr with separators', () {
       final s = AppSettings();
-      expect(s.money(1250), 'KSh 1,250.00');
+      expect(s.money(1250), 'Br 1,250.00');
     });
 
-    test('formats when currency is changed before load', () {
-      final s = AppSettings();
-      s.currencySymbol = '\$';
-      // internal formatter refresh happens on save(); direct formatting
-      // still uses defaults until then.
-      expect(s.money(1250), 'KSh 1,250.00');
+    test('currency is fixed to Birr — no per-device overrides', () {
+      expect(AppSettings.currencyCode, 'ETB');
+      expect(AppSettings.currencySymbol, 'Br');
     });
   });
 }

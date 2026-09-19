@@ -10,12 +10,16 @@ class AppSettings extends ChangeNotifier {
   /// exists means the real shop name never landed locally.
   static const defaultShopName = 'My Clothing Shop';
 
+  /// The one and only shop currency — Ethiopian Birr. Sami is built for
+  /// Ethiopian shops, so the currency is fixed (not configurable) and any
+  /// older stored value (e.g. KES) is ignored on load.
+  static const currencyCode = 'ETB';
+  static const currencySymbol = 'Br';
+
   String shopName = defaultShopName;
   String shopAddress = '';
   String shopPhone = '';
   String receiptFooter = 'Thank you for shopping with us!';
-  String currencyCode = 'KES';
-  String currencySymbol = 'KSh';
   double taxRate = 0; // percent, e.g. 16 means 16%
   int lowStockDefault = 5;
   int loyaltyStep = 100; // award 1 point per this many currency units spent; 0 = off
@@ -110,12 +114,12 @@ class AppSettings extends ChangeNotifier {
 
   void _rebuildFormatter() {
     _moneyFmt = NumberFormat.currency(
-      symbol: currencySymbol.isEmpty ? '$currencyCode ' : '$currencySymbol ',
+      symbol: '$currencySymbol ',
       decimalDigits: 2,
     );
   }
 
-  /// Formats an amount using the configured currency, e.g. "KSh 1,250.00".
+  /// Formats an amount in Birr, e.g. "Br 1,250.00".
   String money(double v) {
     final fmt = _moneyFmt;
     if (fmt == null) return v.toStringAsFixed(2);
@@ -132,7 +136,7 @@ class AppSettings extends ChangeNotifier {
 
   /// Price label for product cards / inventory rows: one formatted price
   /// when all variants share it, otherwise a compact min–max range with
-  /// the symbol only on the lower bound, e.g. "KSh 1,000.00 – 3,200.00".
+  /// the symbol only on the lower bound, e.g. "Br 1,000.00 – 3,200.00".
   String priceLabel(double min, double max) {
     if (min == max) return money(min);
     return '${money(min)} – ${moneyPlain(max)}';
@@ -148,8 +152,8 @@ class AppSettings extends ChangeNotifier {
     shopAddress = g('shop_address') ?? shopAddress;
     shopPhone = g('shop_phone') ?? shopPhone;
     receiptFooter = g('receipt_footer') ?? receiptFooter;
-    currencyCode = g('currency_code') ?? currencyCode;
-    currencySymbol = g('currency_symbol') ?? currencySymbol;
+    // Currency is FIXED to Ethiopian Birr — stored values from older
+    // builds (KES/KSh etc.) are deliberately ignored.
     taxRate = double.tryParse(g('tax_rate') ?? '') ?? taxRate;
     lowStockDefault = int.tryParse(g('low_stock_default') ?? '') ?? lowStockDefault;
     loyaltyStep = int.tryParse(g('loyalty_step') ?? '') ?? loyaltyStep;
@@ -181,8 +185,6 @@ class AppSettings extends ChangeNotifier {
     String? shopAddress,
     String? shopPhone,
     String? receiptFooter,
-    String? currencyCode,
-    String? currencySymbol,
     double? taxRate,
     int? lowStockDefault,
     int? loyaltyStep,
@@ -197,8 +199,6 @@ class AppSettings extends ChangeNotifier {
     if (shopAddress != null) this.shopAddress = shopAddress;
     if (shopPhone != null) this.shopPhone = shopPhone;
     if (receiptFooter != null) this.receiptFooter = receiptFooter;
-    if (currencyCode != null) this.currencyCode = currencyCode;
-    if (currencySymbol != null) this.currencySymbol = currencySymbol;
     if (taxRate != null) this.taxRate = taxRate;
     if (lowStockDefault != null) this.lowStockDefault = lowStockDefault;
     if (loyaltyStep != null) this.loyaltyStep = loyaltyStep;
@@ -217,8 +217,6 @@ class AppSettings extends ChangeNotifier {
       'shop_address': this.shopAddress,
       'shop_phone': this.shopPhone,
       'receipt_footer': this.receiptFooter,
-      'currency_code': this.currencyCode,
-      'currency_symbol': this.currencySymbol,
       'tax_rate': this.taxRate.toString(),
       'low_stock_default': this.lowStockDefault.toString(),
       'loyalty_step': this.loyaltyStep.toString(),

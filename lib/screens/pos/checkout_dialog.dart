@@ -465,7 +465,7 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
             // made the payment stage feel broken on small phones.
             _TenderedDisplay(
               value: _tendered.text,
-              symbol: settings.currencySymbol,
+              symbol: AppSettings.currencySymbol,
               onClear: () => _keypadApply('C'),
             ),
             const SizedBox(height: AppSpace.s3),
@@ -484,7 +484,7 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
               },
               style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
               decoration: InputDecoration(
-                labelText: 'Cash received (${settings.currencySymbol})',
+                labelText: 'Cash received (${AppSettings.currencySymbol})',
               ),
             ),
           const SizedBox(height: AppSpace.s3),

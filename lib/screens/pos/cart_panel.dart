@@ -231,7 +231,7 @@ class CartPanel extends StatelessWidget {
                 const SizedBox(height: AppSpace.s2),
                 Row(
                   children: [
-                    Text('Discount (${settings.currencySymbol})',
+                    Text('Discount (${AppSettings.currencySymbol})',
                         style: TextStyle(fontFamily: 'Carlito', fontSize: 13, color: AppColors.muted)),
                     const Spacer(),
                     const _DiscountField(),

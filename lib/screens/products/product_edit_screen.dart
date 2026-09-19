@@ -106,7 +106,6 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
   }
 
   Future<void> _editVariant(ProductVariant v) async {
-    final settings = context.read<AppSettings>();
     final catalog = context.read<CatalogProvider>();
     final isNew = v.id == null;
     final size = TextEditingController(text: v.size);
@@ -203,7 +202,7 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
                         keyboardType:
                             const TextInputType.numberWithOptions(decimal: true),
                         decoration: InputDecoration(
-                            labelText: 'Price (${settings.currencySymbol}) *'),
+                            labelText: 'Price (${AppSettings.currencySymbol}) *'),
                       ),
                     ),
                     const SizedBox(width: AppSpace.s3),
@@ -213,7 +212,7 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
                         keyboardType:
                             const TextInputType.numberWithOptions(decimal: true),
                         decoration: InputDecoration(
-                            labelText: 'Cost (${settings.currencySymbol})'),
+                            labelText: 'Cost (${AppSettings.currencySymbol})'),
                       ),
                     ),
                   ],

@@ -31,9 +31,20 @@ class _Dest {
   const _Dest(this.id, this.icon, this.activeIcon, this.label, this.page);
 }
 
+/// One slot in the phone bottom bar. [isMore] marks the trailing "More"
+/// entry — it opens the account sheet instead of switching pages and is
+/// never shown as selected.
+class _NavItem {
+  final IconData icon;
+  final IconData activeIcon;
+  final String label;
+  final bool isMore;
+  const _NavItem(this.icon, this.activeIcon, this.label, {this.isMore = false});
+}
+
 /// Adaptive app scaffold: NavigationRail on wide screens (desktop/tablet),
-/// and a Material 3 [NavigationBar] at the bottom on phones — the standard
-/// one-hand mobile pattern for POS apps.
+/// and a compact custom bottom bar on phones — icon + label cells plus a
+/// trailing "More" slot, small enough to stay out of the till's way.
 class HomeShell extends StatefulWidget {
   const HomeShell({super.key});
 
@@ -222,13 +233,14 @@ class _HomeShellState extends State<HomeShell> {
 
     return LayoutBuilder(builder: (context, constraints) {
       final wide = constraints.maxWidth >= 900;
-      final narrow = MediaQuery.sizeOf(context).width < 720;
-      final appBar = _buildAppBar(context, user: user, settings: settings, desktop: wide, narrow: narrow);
+      final appBar = _buildAppBar(context, user: user, settings: settings, desktop: wide);
 
       if (wide) {
         final extended = constraints.maxWidth >= 1240;
         // Desktop layout: full-height design-system sidebar + the app bar
         // spanning only the content area (standard desktop app anatomy).
+        // The backup nudge stays on the Sell tab only — an amber strip
+        // above every screen reads as an error, not a reminder.
         return Scaffold(
           body: Row(
             children: [
@@ -275,12 +287,13 @@ class _HomeShellState extends State<HomeShell> {
                   appBar: appBar,
                   body: Column(
                     children: [
-                      BackupReminderBanner.maybe(
-                        context,
-                        onBackup: () => Navigator.of(context).push(
-                            MaterialPageRoute(
-                                builder: (_) => const SettingsScreen())),
-                      ) ?? const SizedBox.shrink(),
+                      if (nav.id == NavId.pos)
+                        BackupReminderBanner.maybe(
+                          context,
+                          onBackup: () => Navigator.of(context).push(
+                              MaterialPageRoute(
+                                  builder: (_) => const SettingsScreen())),
+                        ) ?? const SizedBox.shrink(),
                       Expanded(
                         child: IndexedStack(
                             index: index,
@@ -295,25 +308,35 @@ class _HomeShellState extends State<HomeShell> {
         );
       }
 
-      // Phone layout: content + M3 bottom navigation bar.
+      // Phone layout: content + compact bottom bar. The trailing "More"
+      // slot opens the account sheet (settings, staff, password, sign out)
+      // so every manager tool stays one tap away without crowding the bar.
       return Scaffold(
         appBar: appBar,
         body: Column(
           children: [
-            BackupReminderBanner.maybe(
-              context,
-              onBackup: () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const SettingsScreen())),
-            ) ?? const SizedBox.shrink(),
+            if (nav.id == NavId.pos)
+              BackupReminderBanner.maybe(
+                context,
+                onBackup: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const SettingsScreen())),
+              ) ?? const SizedBox.shrink(),
             Expanded(
               child: IndexedStack(
                   index: index, children: [for (final d in all) d.page]),
             ),
           ],
         ),
-        bottomNavigationBar: NavigationBar(
+        bottomNavigationBar: _PhoneNavBar(
+          items: [
+            for (final d in all) _NavItem(d.icon, d.activeIcon, d.label),
+            const _NavItem(Icons.more_horiz_rounded, Icons.more_horiz_rounded,
+                'More', isMore: true),
+          ],
           selectedIndex: index,
-          onDestinationSelected: (i) {
+          lowStock: lowCount,
+          lowStockIndex: all.indexWhere((d) => d.id == NavId.products),
+          onSelect: (i) {
             // Defer the unfocus + tab switch to after the current pointer
             // dispatch (see the sidebar onSelect comment). Unfocusing or
             // notifying during the tap is what made the bar feel dead:
@@ -326,23 +349,7 @@ class _HomeShellState extends State<HomeShell> {
               nav.goTo(all[i].id);
             });
           },
-          height: 68,
-          destinations: [
-            for (var i = 0; i < all.length; i++)
-              NavigationDestination(
-                icon: productsBadge(i) != null
-                    ? Badge.count(
-                        count: lowCount,
-                        child: Icon(all[i].icon, size: 23))
-                    : Icon(all[i].icon, size: 23),
-                selectedIcon: productsBadge(i) != null
-                    ? Badge.count(
-                        count: lowCount,
-                        child: Icon(all[i].activeIcon, size: 23))
-                    : Icon(all[i].activeIcon, size: 23),
-                label: all[i].label,
-              ),
-          ],
+          onMore: () => _showAccountSheet(context, user),
         ),
       );
     });
@@ -350,13 +357,14 @@ class _HomeShellState extends State<HomeShell> {
 
   /// The app bar. On desktop it spans only the content column — identity,
   /// settings and sign-out live in the sidebar, so it stays minimal
-  /// (shop name + sync pill). Phones keep the full set of actions.
+  /// (shop name + sync pill). Phones keep it equally quiet: sync pill +
+  /// gear (managers) — everything else lives in the More tab's account
+  /// sheet, so the header never crowds the shop name.
   PreferredSizeWidget _buildAppBar(
     BuildContext context, {
     required AppUser user,
     required AppSettings settings,
     required bool desktop,
-    required bool narrow,
   }) {
     final appBar = AppBar(
       title: desktop
@@ -383,105 +391,13 @@ class _HomeShellState extends State<HomeShell> {
             ),
       actions: [
         const SyncStatusPill(),
-        if (!desktop) ...[
-          if (user.isAdmin)
-            IconButton(
-              tooltip: 'Settings',
-              icon: const Icon(Icons.settings_outlined, size: 21),
-              onPressed: () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const SettingsScreen())),
-            ),
-          // Phones cannot fit gear + password + name pill + logout next to the
-          // shop name — they collapse to gear (manager) + one avatar button
-          // that opens an account sheet.
-          if (narrow)
-            Padding(
-              padding: const EdgeInsets.only(right: AppSpace.s2),
-              child: InkWell(
-                borderRadius: BorderRadius.circular(AppRadius.pill),
-                onTap: () => _showAccountSheet(context, user),
-                child: Container(
-                  width: 36,
-                  height: 36,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: AppColors.primarySoft,
-                    borderRadius: BorderRadius.circular(AppRadius.pill),
-                    border: Border.all(color: AppColors.primary.withValues(alpha: 0.25)),
-                  ),
-                  child: Text(
-                    user.name.isEmpty ? '?' : user.name[0].toUpperCase(),
-                    style: TextStyle(
-                        fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.primaryDark),
-                  ),
-                ),
-              ),
-            )
-          else ...[
-            IconButton(
-              tooltip: 'Change password',
-              icon: const Icon(Icons.lock_reset_outlined, size: 21),
-              onPressed: () => _showChangePassword(context),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: AppSpace.s1 + 2),
-              child: InkWell(
-                borderRadius: BorderRadius.circular(AppRadius.pill),
-                onTap: () => _showChangePassword(context),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: AppSpace.s3, vertical: AppSpace.s1),
-                  decoration: BoxDecoration(
-                    color: AppColors.surfaceTint,
-                    borderRadius: BorderRadius.circular(AppRadius.pill),
-                    border: Border.all(color: AppColors.borderSoft),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 24,
-                        height: 24,
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: AppColors.primarySoft,
-                          borderRadius: BorderRadius.circular(AppRadius.sm),
-                        ),
-                        child: Text(
-                          user.name.isEmpty ? '?' : user.name[0].toUpperCase(),
-                          style: TextStyle(
-                              fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.primary),
-                        ),
-                      ),
-                      const SizedBox(width: AppSpace.s2),
-                      Text(user.name,
-                          style: TextStyle(
-                              fontFamily: 'Carlito', fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink)),
-                      const SizedBox(width: AppSpace.s2),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: AppSpace.s2, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: user.isAdmin ? AppColors.primarySoft : AppColors.infoSoft,
-                          borderRadius: BorderRadius.circular(AppRadius.pill),
-                        ),
-                        child: Text(
-                          user.isAdmin ? 'Manager' : 'Sales',
-                          style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              color: user.isAdmin ? AppColors.primaryDark : AppColors.info),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            IconButton(
-              tooltip: 'Sign out',
-              icon: const Icon(Icons.logout_rounded, size: 21),
-              onPressed: () => _confirmSignOut(context),
-            ),
-          ],
-        ],
+        if (!desktop && user.isAdmin)
+          IconButton(
+            tooltip: 'Settings',
+            icon: const Icon(Icons.settings_outlined, size: 21),
+            onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const SettingsScreen())),
+          ),
         const SizedBox(width: AppSpace.s1),
       ],
     );
@@ -531,14 +447,17 @@ class _HomeShellState extends State<HomeShell> {
               ),
             ),
             const Divider(),
-            ListTile(
-              leading: Icon(Icons.lock_reset_outlined, color: AppColors.muted),
-              title: const Text('Change password'),
-              onTap: () {
-                Navigator.pop(sheet);
-                _showChangePassword(context);
-              },
-            ),
+            if (user.isAdmin)
+              ListTile(
+                leading: Icon(Icons.settings_outlined, color: AppColors.muted),
+                title: const Text('Settings'),
+                subtitle: const Text('Shop profile, tax, receipt, backup'),
+                onTap: () {
+                  Navigator.pop(sheet);
+                  Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const SettingsScreen()));
+                },
+              ),
             if (user.isAdmin)
               ListTile(
                 leading: Icon(Icons.manage_accounts_outlined,
@@ -551,6 +470,14 @@ class _HomeShellState extends State<HomeShell> {
                       MaterialPageRoute(builder: (_) => const UsersScreen()));
                 },
               ),
+            ListTile(
+              leading: Icon(Icons.lock_reset_outlined, color: AppColors.muted),
+              title: const Text('Change password'),
+              onTap: () {
+                Navigator.pop(sheet);
+                _showChangePassword(context);
+              },
+            ),
             ListTile(
               leading: Icon(Icons.logout_rounded, color: AppColors.danger),
               title: Text('Sign out',
@@ -583,6 +510,7 @@ class _HomeShellState extends State<HomeShell> {
       await context.read<AuthProvider>().logout();
     }
   }
+
 
   void _showChangePassword(BuildContext context) {
     final oldC = TextEditingController();
@@ -654,6 +582,94 @@ class _HomeShellState extends State<HomeShell> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Compact phone bottom bar: 54dp of content over the safe area, 20dp
+/// icons and 10dp labels. Fits Sell/Products/Sales/Customers (+ Purchasing
+/// and Reports for managers) plus a "More" slot without the chunky M3
+/// indicator strip — active tabs get a small pill behind the icon instead.
+class _PhoneNavBar extends StatelessWidget {
+  final List<_NavItem> items;
+  final int selectedIndex;
+  final int lowStock;
+  final int lowStockIndex;
+  final ValueChanged<int> onSelect;
+  final VoidCallback onMore;
+
+  const _PhoneNavBar({
+    required this.items,
+    required this.selectedIndex,
+    required this.lowStock,
+    required this.lowStockIndex,
+    required this.onSelect,
+    required this.onMore,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      top: false,
+      child: Container(
+        height: 54,
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          border: Border(top: BorderSide(color: AppColors.borderSoft)),
+        ),
+        child: Row(
+          children: [
+            for (var i = 0; i < items.length; i++) Expanded(child: _cell(i)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _cell(int i) {
+    final item = items[i];
+    final selected = !item.isMore && i == selectedIndex;
+    final color = selected ? AppColors.primary : AppColors.muted;
+    final badge = (i == lowStockIndex && lowStock > 0) ? lowStock : null;
+
+    final icon = Icon(selected ? item.activeIcon : item.icon, size: 20, color: color);
+    final Widget iconArea = badge != null
+        ? Badge.count(
+            count: badge,
+            textStyle: const TextStyle(
+                fontSize: 8, fontWeight: FontWeight.w700, color: Colors.white),
+            child: icon)
+        : icon;
+
+    return InkWell(
+      onTap: item.isMore ? onMore : () => onSelect(i),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            curve: Curves.easeOut,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 3),
+            decoration: BoxDecoration(
+              color: selected ? AppColors.primarySoft : Colors.transparent,
+              borderRadius: BorderRadius.circular(AppRadius.pill),
+            ),
+            child: iconArea,
+          ),
+          const SizedBox(height: 2),
+          Text(
+            item.label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+              letterSpacing: 0.1,
+              color: color,
+            ),
+          ),
+        ],
       ),
     );
   }

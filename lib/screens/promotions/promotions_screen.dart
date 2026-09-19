@@ -37,7 +37,6 @@ class _PromotionsScreenState extends State<PromotionsScreen> {
   @override
   Widget build(BuildContext context) {
     final promos = context.watch<PromotionsProvider>();
-    final settings = context.watch<AppSettings>();
     final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
 
     final live = <Promotion>[];
@@ -147,7 +146,7 @@ class _PromotionsScreenState extends State<PromotionsScreen> {
                         ],
                       ],
                       Text(
-                        'Settings currency: ${settings.currencyCode}. Usage '
+                        'Prices are in Ethiopian Birr (ETB). Usage '
                         'counts update as sales sync in from every till.',
                         style: TextStyle(
                             fontFamily: 'Carlito',

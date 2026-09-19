@@ -202,9 +202,9 @@ class _ZReportCardState extends State<ZReportCard> {
                         decimal: true),
                     decoration: InputDecoration(
                       labelText:
-                          'Counted cash (${settings.currencySymbol}) — optional',
+                          'Counted cash (${AppSettings.currencySymbol}) — optional',
                       helperText: 'Skip to close without a cash count',
-                      prefixText: '${settings.currencySymbol} ',
+                      prefixText: '${AppSettings.currencySymbol} ',
                     ),
                     onChanged: (_) => setD(() {}),
                   ),

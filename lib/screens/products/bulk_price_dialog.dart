@@ -130,7 +130,7 @@ class _BulkPriceDialogState extends State<_BulkPriceDialog> {
                 decoration: InputDecoration(
                   labelText: modeLabel.contains('%')
                       ? modeLabel
-                      : '$modeLabel (${settings.currencySymbol})',
+                      : '$modeLabel (${AppSettings.currencySymbol})',
                   helperText: _mode == _BulkMode.setPrice
                       ? 'Every selected variant gets exactly this price'
                       : 'Applied per variant on top of its current price',

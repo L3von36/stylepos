@@ -77,7 +77,7 @@ class LabelService {
                     style: base.copyWith(fontSize: 7.5),
                     maxLines: 1,
                     overflow: pw.TextOverflow.clip),
-                pw.Text('${settings.currencySymbol} ${v.price.toStringAsFixed(0)}',
+                pw.Text('${AppSettings.currencySymbol} ${v.price.toStringAsFixed(0)}',
                     style: bold.copyWith(fontSize: 8.5)),
               ],
             ),
