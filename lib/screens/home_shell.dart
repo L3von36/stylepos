@@ -570,6 +570,7 @@ class _HomeShellState extends State<HomeShell> {
               leading: Icon(Icons.logout_rounded, color: AppColors.danger),
               title: Text('Sign out',
                   style: TextStyle(color: AppColors.danger)),
+              subtitle: const Text('Back to the login screen'),
               onTap: () {
                 Navigator.pop(sheet);
                 _confirmSignOut(context);

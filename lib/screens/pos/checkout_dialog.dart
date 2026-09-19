@@ -812,7 +812,7 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  const SaleSuccessArt(size: 64),
+                  const SaleSuccessArt(size: 80),
                   const SizedBox(width: AppSpace.s3),
                   Expanded(
                     child: Column(

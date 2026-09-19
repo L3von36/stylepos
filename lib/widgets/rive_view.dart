@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:lottie/lottie.dart' as lottie_pkg;
 import 'package:rive/rive.dart' as rive;
 
 import 'ui.dart';
@@ -109,28 +110,29 @@ class EmptyCartArt extends StatelessWidget {
   }
 }
 
-/// Checkout success: the liquid download filling to 100% and popping the
-/// green check — the sale went through. The artboard's own white background
-/// is presented as a deliberate white circle tile on the green panel.
+/// Checkout success: a one-shot Lottie — the green disc pops in, the ring
+/// and the white check draw themselves, confetti pops, everything settles.
+/// Plays once (never loops) so the done screen never reads as a still-spinning
+/// progress. If the asset fails to load the static check stays.
 class SaleSuccessArt extends StatelessWidget {
-  const SaleSuccessArt({super.key, this.size = 64});
+  const SaleSuccessArt({super.key, this.size = 80});
 
   final double size;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return SizedBox(
       width: size,
       height: size,
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        shape: BoxShape.circle,
-      ),
-      padding: const EdgeInsets.all(6),
-      child: RiveView(
-        asset: 'assets/rive/liquid_download.riv',
-        size: size,
-        fallback: Icon(Icons.check_rounded, size: 30, color: AppColors.success),
+      child: lottie_pkg.Lottie.asset(
+        'assets/lottie/sale_success.json',
+        width: size,
+        height: size,
+        fit: BoxFit.contain,
+        repeat: false,
+        animate: true,
+        errorBuilder: (context, error, stack) =>
+            Icon(Icons.check_circle_rounded, size: size, color: AppColors.success),
       ),
     );
   }
