@@ -20,7 +20,33 @@ import '../../widgets/ui.dart';
 
 enum _Stage { payment, processing, done }
 
-/// Payment dialog: choose method, enter tendered (cash), complete the sale,
+/// Presents checkout. On phones it opens as a modal bottom sheet — it
+/// slides up over the till, the keypad sits in the thumb zone and the
+/// confirm button is pinned to the bottom edge; tapping the barrier or
+/// dragging down dismisses it while the sale hasn't started yet. On wide
+/// screens it stays a centered dialog.
+Future<void> showCheckout(BuildContext context) {
+  final mobile = MediaQuery.sizeOf(context).width < 720;
+  if (mobile) {
+    return showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.xl)),
+      ),
+      builder: (_) => const CheckoutDialog(),
+    );
+  }
+  return showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (_) => const CheckoutDialog(),
+  );
+}
+
+/// Payment flow: choose method, enter tendered (cash), complete the sale,
 /// then show the receipt actions (save PDF / print / share).
 class CheckoutDialog extends StatefulWidget {
   const CheckoutDialog({super.key});
@@ -277,9 +303,13 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
     }
 
     // Phones get the touch-first layout: on-screen keypad (no IME eating
-    // half the dialog), compact header with a close button and one
-    // full-width thumb-zone confirm button. Desktop keeps the text field.
+    // half the flow), compact header with a close button and one
+    // full-width thumb-zone confirm button. Desktop keeps the text field
+    // and the classic centered dialog.
     final mobile = MediaQuery.sizeOf(context).width < 720;
+    if (mobile) {
+      return _buildSheetBody(context, settings, total);
+    }
 
     return PopScope(
       canPop: _stage != _Stage.processing && _stage != _Stage.done,
@@ -349,8 +379,6 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
         ),
         actions: _stage == _Stage.done
             ? [
-                // Full-width thumb-zone primary (mobile pattern); on wide
-                // screens it sits beside the receipt actions.
                 SizedBox(
                   width: mobile ? double.infinity : null,
                   child: FilledButton.icon(
@@ -372,6 +400,125 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
                   ),
                 ),
               ],
+      ),
+    );
+  }
+
+  /// Phone presentation: checkout slides up as a modal bottom sheet —
+  /// drag handle, compact header, scrollable stage content and the
+  /// primary action pinned to the bottom edge (thumb zone).
+  Widget _buildSheetBody(
+      BuildContext context, AppSettings settings, double total) {
+    return PopScope(
+      canPop: _stage != _Stage.processing && _stage != _Stage.done,
+      child: Padding(
+        // Defensive: the keypad path never opens an IME, but if one ever
+        // appears (web narrow window), keep the sheet above the keyboard.
+        padding:
+            EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  margin: const EdgeInsets.only(top: AppSpace.s2 + 2),
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.borderSoft,
+                    borderRadius: BorderRadius.circular(AppRadius.pill),
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, AppSpace.s2, 8, 0),
+                child: Row(
+                  children: [
+                    if (_stage == _Stage.done)
+                      Container(
+                        width: 34,
+                        height: 34,
+                        decoration: BoxDecoration(
+                            color: AppColors.successSoft, shape: BoxShape.circle),
+                        child: Icon(Icons.check_rounded,
+                            size: 21, color: AppColors.success),
+                      )
+                    else
+                      Container(
+                        width: 34,
+                        height: 34,
+                        decoration: BoxDecoration(
+                          color: AppColors.primarySoft,
+                          borderRadius: BorderRadius.circular(AppRadius.sm),
+                        ),
+                        child: Icon(Icons.payments_outlined,
+                            size: 19, color: AppColors.primary),
+                      ),
+                    const SizedBox(width: AppSpace.s3),
+                    Expanded(
+                      child: Text(_stage == _Stage.done
+                          ? 'Sale complete'
+                          : 'Take payment'),
+                    ),
+                    if (_stage == _Stage.payment)
+                      IconButton(
+                        tooltip: 'Cancel',
+                        icon: const Icon(Icons.close_rounded, size: 21),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                  ],
+                ),
+              ),
+              Flexible(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
+                  child: switch (_stage) {
+                    _Stage.done => _buildDone(context, settings),
+                    _Stage.processing => const Padding(
+                        padding: EdgeInsets.all(AppSpace.s10),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            CircularProgressIndicator(),
+                            SizedBox(height: AppSpace.s4),
+                            Text('Processing sale…'),
+                          ],
+                        ),
+                      ),
+                    _Stage.payment =>
+                      _buildPayment(context, settings, total, mobile: true),
+                  },
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 6, 16, AppSpace.s4),
+                child: _stage == _Stage.done
+                    ? SizedBox(
+                        height: 50,
+                        child: FilledButton.icon(
+                          onPressed: () => Navigator.pop(context),
+                          icon: const Icon(Icons.add_shopping_cart, size: 17),
+                          label: const Text('New sale'),
+                        ),
+                      )
+                    : SizedBox(
+                        height: 50,
+                        child: FilledButton(
+                          style:
+                              FilledButton.styleFrom(minimumSize: const Size(0, 50)),
+                          onPressed:
+                              _stage == _Stage.payment ? _completeSale : null,
+                          child: Text(
+                              'Complete sale · ${settings.money(total)}'),
+                        ),
+                      ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

@@ -6,9 +6,10 @@ import '../../services/sync_service.dart';
 import '../../widgets/ui.dart';
 import 'users_screen.dart';
 
-/// "Cloud sync" settings card: shop identity, status, manual sync,
-/// manager reset tools and sign-out. Account creation / sign-in lives
-/// on the landing screen's Manager tab.
+/// "Cloud sync" settings card: shop identity, status, manual sync and the
+/// staff-accounts shortcut. Sign-out lives in the account sheet (phone) and
+/// the sidebar (desktop); account creation / sign-in lives on the landing
+/// screen's Manager tab.
 class CloudSyncCard extends StatefulWidget {
   const CloudSyncCard({super.key});
 
@@ -17,7 +18,6 @@ class CloudSyncCard extends StatefulWidget {
 }
 
 class _CloudSyncCardState extends State<CloudSyncCard> {
-  bool _busy = false;
   String? _role;
   Map<String, String> _shop = const {};
 
@@ -66,93 +66,10 @@ class _CloudSyncCardState extends State<CloudSyncCard> {
     return '${d.inDays} d ago';
   }
 
-  Future<void> _confirmEraseDevice() async {
-    final sure = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Erase this device\'s data?'),
-        content: const SizedBox(
-          width: 380,
-          child: Text(
-            'Everything on THIS device is deleted, then your shop\'s '
-            'cloud data is pulled fresh. Other devices are not affected. '
-            'Use this if this phone/PC shows old or wrong data.',
-          ),
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancel')),
-          FilledButton(
-            style: FilledButton.styleFrom(
-                backgroundColor: AppColors.danger,
-                foregroundColor: AppColors.onError),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Erase & re-pull'),
-          ),
-        ],
-      ),
-    );
-    if (sure != true || !mounted) return;
-    setState(() => _busy = true);
-    try {
-      await CloudAuth.eraseLocalData();
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Device wiped — pulling your shop data…'),
-      ));
-      await SyncService.I.run();
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
-  Future<void> _confirmClearSales() async {
-    final sure = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Clear sales history everywhere?'),
-        content: const SizedBox(
-          width: 380,
-          child: Text(
-            'ALL sales, line items and stock movements are deleted from '
-            'the cloud AND from every device signed into this shop. '
-            'Products, customers and staff are kept. This cannot be undone.',
-          ),
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancel')),
-          FilledButton(
-            style: FilledButton.styleFrom(
-                backgroundColor: AppColors.danger,
-                foregroundColor: AppColors.onPrimary),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Clear sales history'),
-          ),
-        ],
-      ),
-    );
-    if (sure != true || !mounted) return;
-    setState(() => _busy = true);
-    try {
-      final err = await CloudAuth.clearSalesHistoryEverywhere();
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(err ?? 'Sales history cleared on all devices'),
-        backgroundColor: err == null ? null : AppColors.danger,
-      ));
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final sync = SyncService.I;
     final signedIn = sync.signedIn;
-    final isAdmin = _role == 'admin';
 
     return ListenableBuilder(
       listenable: sync,
@@ -262,39 +179,11 @@ class _CloudSyncCardState extends State<CloudSyncCard> {
               ],
             ),
             const SizedBox(height: AppSpace.s3),
-            Row(
-              children: [
-                Expanded(
-                  child: FilledButton.icon(
-                    style: FilledButton.styleFrom(
-                        minimumSize: const Size(0, 46)),
-                    onPressed: sync.isBusy ? null : () => SyncService.I.run(),
-                    icon: const Icon(Icons.sync_rounded, size: 18),
-                    label: const Text('Sync now'),
-                  ),
-                ),
-                const SizedBox(width: AppSpace.s3),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    style: OutlinedButton.styleFrom(
-                        minimumSize: const Size(0, 46)),
-                    onPressed: _busy
-                        ? null
-                        : () async {
-                            setState(() => _busy = true);
-                            await CloudAuth.signOut();
-                            if (mounted) {
-                              setState(() {
-                                _busy = false;
-                                _role = null;
-                              });
-                            }
-                          },
-                    icon: const Icon(Icons.logout, size: 18),
-                    label: const Text('Sign out'),
-                  ),
-                ),
-              ],
+            FilledButton.icon(
+              style: FilledButton.styleFrom(minimumSize: const Size(0, 46)),
+              onPressed: sync.isBusy ? null : () => SyncService.I.run(),
+              icon: const Icon(Icons.sync_rounded, size: 18),
+              label: const Text('Sync now'),
             ),
             const SizedBox(height: AppSpace.s3),
             OutlinedButton.icon(
@@ -304,47 +193,6 @@ class _CloudSyncCardState extends State<CloudSyncCard> {
               icon: const Icon(Icons.manage_accounts_outlined, size: 18),
               label: const Text('Staff accounts (add cashiers)'),
             ),
-            if (isAdmin) ...[
-              const SizedBox(height: AppSpace.s4),
-              Text(
-                'Manager tools',
-                style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.4,
-                    color: AppColors.faint),
-              ),
-              const SizedBox(height: AppSpace.s2),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      style: OutlinedButton.styleFrom(
-                        minimumSize: const Size(0, 46),
-                        foregroundColor: AppColors.danger,
-                      ),
-                      onPressed:
-                          _busy ? null : () => _confirmEraseDevice(),
-                      icon: const Icon(Icons.restart_alt_rounded, size: 18),
-                      label: const Text('Erase this device & re-pull'),
-                    ),
-                  ),
-                  const SizedBox(width: AppSpace.s3),
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      style: OutlinedButton.styleFrom(
-                        minimumSize: const Size(0, 46),
-                        foregroundColor: AppColors.danger,
-                      ),
-                      onPressed:
-                          _busy ? null : () => _confirmClearSales(),
-                      icon: const Icon(Icons.delete_sweep_outlined, size: 18),
-                      label: const Text('Clear sales history everywhere'),
-                    ),
-                  ),
-                ],
-              ),
-            ],
             if (sync.isBusy) ...[
               const SizedBox(height: AppSpace.s3),
               const LinearProgressIndicator(),

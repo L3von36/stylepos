@@ -813,7 +813,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                     color: AppColors.ink)),
                             const SizedBox(height: AppSpace.s1),
                             Text(
-                              'Offline point of sale for clothing shops\n'
+                              'Point of sale for clothing shops\n'
                               'Signed in as ${auth.user?.name ?? "-"} '
                               '(${(auth.user?.isAdmin ?? false) ? "Manager" : "Sales"})',
                               style: TextStyle(

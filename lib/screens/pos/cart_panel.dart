@@ -299,11 +299,7 @@ class CartPanel extends StatelessWidget {
             style: FilledButton.styleFrom(minimumSize: const Size(0, 48)), // M3 touch target
             onPressed: cart.isEmpty
                 ? null
-                : () => showDialog(
-                      context: context,
-                      barrierDismissible: false,
-                      builder: (_) => const CheckoutDialog(),
-                    ),
+                : () => showCheckout(context),
             icon: const Icon(Icons.payments_outlined, size: 20),
             label: Text(
               cart.isEmpty
