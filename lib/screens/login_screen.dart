@@ -218,7 +218,7 @@ class _BrandPane extends StatelessWidget {
                 'Sami',
                 style: TextStyle(
                   fontFamily: 'Carlito',
-                  fontSize: 20,
+                  fontSize: 18,
                   fontWeight: FontWeight.w700,
                   color: Colors.white,
                   letterSpacing: 0.3,
@@ -231,7 +231,7 @@ class _BrandPane extends StatelessWidget {
             'Run your shop\nlike a pro.',
             style: TextStyle(
               fontFamily: 'Carlito',
-              fontSize: 32, // M3 headlineLarge
+              fontSize: 28, // IG-scale hero (displayLarge)
               height: 1.15,
               fontWeight: FontWeight.w700,
               color: Colors.white,
@@ -242,7 +242,7 @@ class _BrandPane extends StatelessWidget {
             'Fast checkout, live stock levels and clear reports —\nyour shop in your pocket, synced to every device.',
             style: TextStyle(
               fontFamily: 'Carlito',
-              fontSize: 14.5,
+              fontSize: 14,
               height: 1.45,
               color: Colors.white.withValues(alpha: 0.82),
             ),
@@ -296,7 +296,7 @@ class _FeatureRow extends StatelessWidget {
               Text(subtitle,
                   style: TextStyle(
                       fontFamily: 'Carlito',
-                      fontSize: 12.5,
+                      fontSize: 12,
                       color: Colors.white.withValues(alpha: 0.75))),
             ],
           ),
@@ -363,7 +363,7 @@ class _LoginForm extends StatelessWidget {
               Text(
                 'Sign in to continue',
                 textAlign: TextAlign.center,
-                style: TextStyle(fontFamily: 'Carlito', fontSize: 13.5, color: AppColors.muted),
+                style: TextStyle(fontFamily: 'Carlito', fontSize: 13, color: AppColors.muted),
               ),
               const SizedBox(height: AppSpace.s5),
             ] else ...[

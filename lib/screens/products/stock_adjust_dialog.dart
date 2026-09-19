@@ -123,7 +123,7 @@ class _StockAdjustDialogState extends State<StockAdjustDialog> {
                     '$newStock pcs',
                     style: TextStyle(
                       fontFamily: 'Carlito',
-                      fontSize: 17,
+                      fontSize: 15,
                       fontWeight: FontWeight.w700,
                       color: _delta == 0
                           ? AppColors.ink

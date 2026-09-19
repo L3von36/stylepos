@@ -136,7 +136,7 @@ class _AuditLogScreenState extends State<AuditLogScreen> {
                                                       e.action,
                                                   style: TextStyle(
                                                       fontFamily: 'Carlito',
-                                                      fontSize: 13.5,
+                                                      fontSize: 13,
                                                       fontWeight:
                                                           FontWeight.w700,
                                                       color: AppColors.ink),
@@ -145,7 +145,7 @@ class _AuditLogScreenState extends State<AuditLogScreen> {
                                               Text(_when(e.createdAt),
                                                   style: TextStyle(
                                                       fontFamily: 'Carlito',
-                                                      fontSize: 11.5,
+                                                      fontSize: 11,
                                                       color: AppColors.faint)),
                                             ],
                                           ),
@@ -157,7 +157,7 @@ class _AuditLogScreenState extends State<AuditLogScreen> {
                                               child: Text(e.details!,
                                                   style: TextStyle(
                                                       fontFamily: 'Carlito',
-                                                      fontSize: 12.5,
+                                                      fontSize: 12,
                                                       color: AppColors.muted)),
                                             ),
                                           if (e.userName != null &&
@@ -169,7 +169,7 @@ class _AuditLogScreenState extends State<AuditLogScreen> {
                                                   'by ${e.userName}',
                                                   style: TextStyle(
                                                       fontFamily: 'Carlito',
-                                                      fontSize: 11.5,
+                                                      fontSize: 11,
                                                       fontWeight:
                                                           FontWeight.w700,
                                                       color: AppColors.faint)),
@@ -189,7 +189,7 @@ class _AuditLogScreenState extends State<AuditLogScreen> {
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
                                     fontFamily: 'Carlito',
-                                    fontSize: 11.5,
+                                    fontSize: 11,
                                     color: AppColors.faint),
                               ),
                             ),

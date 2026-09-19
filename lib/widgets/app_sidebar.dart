@@ -103,7 +103,7 @@ class _AppSidebarState extends State<AppSidebar> {
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                         fontFamily: 'Carlito',
-                        fontSize: 16,
+                        fontSize: 15,
                         height: 22 / 16,
                         fontWeight: FontWeight.w700,
                         color: AppColors.ink)),
@@ -111,7 +111,7 @@ class _AppSidebarState extends State<AppSidebar> {
                 Text('Point of sale',
                     maxLines: 1,
                     style: TextStyle(
-                        fontFamily: 'Carlito', fontSize: 11.5, height: 16 / 11.5, color: AppColors.muted)),
+                        fontFamily: 'Carlito', fontSize: 11, height: 15 / 11, color: AppColors.muted)),
               ],
             ),
           ),
@@ -299,7 +299,7 @@ class _AppSidebarState extends State<AppSidebar> {
                         child: Text(u.isAdmin ? 'Manager' : 'Sales',
                             style: TextStyle(
                                 fontFamily: 'Carlito',
-                                fontSize: 10.5,
+                                fontSize: 11,
                                 height: 14 / 10.5,
                                 fontWeight: FontWeight.w700,
                                 color: roleColor)),
@@ -352,7 +352,7 @@ class _AppSidebarState extends State<AppSidebar> {
                 Icon(Icons.lock_reset_outlined, size: 19, color: AppColors.muted),
                 SizedBox(width: AppSpace.s3),
                 Text('Change password',
-                    style: TextStyle(fontFamily: 'Carlito', fontSize: 13.5, color: AppColors.body)),
+                    style: TextStyle(fontFamily: 'Carlito', fontSize: 13, color: AppColors.body)),
               ]),
             ),
             PopupMenuItem<String>(
@@ -363,7 +363,7 @@ class _AppSidebarState extends State<AppSidebar> {
                 SizedBox(width: AppSpace.s3),
                 Text('Sign out',
                     style: TextStyle(
-                        fontFamily: 'Carlito', fontSize: 13.5, fontWeight: FontWeight.w700, color: AppColors.danger)),
+                        fontFamily: 'Carlito', fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.danger)),
               ]),
             ),
           ],

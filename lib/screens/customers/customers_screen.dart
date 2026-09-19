@@ -246,7 +246,7 @@ class _CustomerDetailState extends State<_CustomerDetail> {
                         style: Theme.of(context).textTheme.titleLarge),
                     Text(
                       [c.phone, c.email].whereType<String>().join(' · '),
-                      style: TextStyle(fontFamily: 'Carlito', fontSize: 12.5, color: AppColors.muted),
+                      style: TextStyle(fontFamily: 'Carlito', fontSize: 12, color: AppColors.muted),
                     ),
                   ],
                 ),
@@ -387,7 +387,7 @@ class _CustomerDetailState extends State<_CustomerDetail> {
                                       Text(s.receiptNo,
                                           style: TextStyle(
                                               fontFamily: 'Carlito',
-                                              fontSize: 13.5,
+                                              fontSize: 13,
                                               fontWeight: FontWeight.w700,
                                               color: AppColors.ink)),
                                       Text(

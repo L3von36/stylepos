@@ -117,7 +117,7 @@ class _ShiftLogsScreenState extends State<ShiftLogsScreen> {
                                           Text(l.userName,
                                               style: TextStyle(
                                                   fontFamily: 'Carlito',
-                                                  fontSize: 13.5,
+                                                  fontSize: 13,
                                                   fontWeight: FontWeight.w700,
                                                   color: AppColors.ink)),
                                           const SizedBox(height: 2),
@@ -127,7 +127,7 @@ class _ShiftLogsScreenState extends State<ShiftLogsScreen> {
                                             '${l.shift.clockOut == null ? 'still on duty' : _hm(l.shift.clockOut!)}',
                                             style: TextStyle(
                                                 fontFamily: 'Carlito',
-                                                fontSize: 12.5,
+                                                fontSize: 12,
                                                 color: AppColors.muted),
                                           ),
                                         ],
@@ -150,7 +150,7 @@ class _ShiftLogsScreenState extends State<ShiftLogsScreen> {
                                             : l.shift.durationLabel,
                                         style: TextStyle(
                                             fontFamily: 'Carlito',
-                                            fontSize: 11.5,
+                                            fontSize: 11,
                                             fontWeight: FontWeight.w700,
                                             color: l.shift.isOpen
                                                 ? AppColors.success
@@ -168,7 +168,7 @@ class _ShiftLogsScreenState extends State<ShiftLogsScreen> {
                               textAlign: TextAlign.center,
                               style: TextStyle(
                                   fontFamily: 'Carlito',
-                                  fontSize: 11.5,
+                                  fontSize: 11,
                                   color: AppColors.faint),
                             ),
                           ],

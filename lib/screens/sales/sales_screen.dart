@@ -311,7 +311,7 @@ class _SaleTile extends StatelessWidget {
                     Text(
                       '$when · ${sale.customerName ?? 'Walk-in'} · ${sale.cashierName ?? ''}',
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontFamily: 'Carlito', fontSize: 12.5, color: AppColors.muted),
+                      style: TextStyle(fontFamily: 'Carlito', fontSize: 12, color: AppColors.muted),
                     ),
                   ],
                 ),

@@ -243,7 +243,7 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
                         Expanded(
                           child: Text(err!,
                               style: TextStyle(
-                                  fontFamily: 'Carlito', fontSize: 12.5, color: AppColors.danger)),
+                                  fontFamily: 'Carlito', fontSize: 12, color: AppColors.danger)),
                         ),
                       ],
                     ),

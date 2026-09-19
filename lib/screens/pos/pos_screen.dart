@@ -263,7 +263,7 @@ class _PosScreenState extends State<PosScreen> {
           textInputAction: TextInputAction.search,
           onSubmitted: _onSearchSubmit,
           onChanged: (v) => setState(() => _query = v),
-          style: const TextStyle(fontSize: 14.5),
+          style: const TextStyle(fontSize: 14),
           decoration: InputDecoration(
             hintText: 'Scan barcode or search name / SKU…',
             prefixIcon: Container(
@@ -440,7 +440,7 @@ class _MyTodayStripState extends State<_MyTodayStrip> {
               Text(
                 '${auth.user?.name ?? 'You'} · ${auth.user?.isAdmin == true ? 'Manager' : 'Sales'}',
                 style: TextStyle(
-                    fontFamily: 'Carlito', fontSize: 12.5, fontWeight: FontWeight.w700,
+                    fontFamily: 'Carlito', fontSize: 12, fontWeight: FontWeight.w700,
                     color: AppColors.primaryDark),
               ),
               const Spacer(),
@@ -450,12 +450,12 @@ class _MyTodayStripState extends State<_MyTodayStrip> {
                   '${s.itemsSold} item${s.itemsSold == 1 ? '' : 's'} · '
                   '${settings.money(s.revenue)}',
                   style: TextStyle(
-                      fontFamily: 'Carlito', fontSize: 12.5, color: AppColors.body),
+                      fontFamily: 'Carlito', fontSize: 12, color: AppColors.body),
                 ),
               ] else
                 Text(
                   'No sales yet today — scan a garment to start',
-                  style: TextStyle(fontFamily: 'Carlito', fontSize: 12.5, color: AppColors.muted),
+                  style: TextStyle(fontFamily: 'Carlito', fontSize: 12, color: AppColors.muted),
                 ),
               const SizedBox(width: AppSpace.s3),
               // Personal dashboard: clock in/out for the shift log. The
@@ -503,7 +503,7 @@ class _MyTodayStripState extends State<_MyTodayStrip> {
                                   : 'Clock in',
                               style: TextStyle(
                                   fontFamily: 'Carlito',
-                                  fontSize: 11.5,
+                                  fontSize: 11,
                                   fontWeight: FontWeight.w700,
                                   color: onDuty
                                       ? AppColors.success
@@ -616,7 +616,7 @@ class _ProductCardState extends State<_ProductCard> {
                   style: TextStyle(
                       fontFamily: 'Carlito',
                       fontWeight: FontWeight.w700,
-                      fontSize: 13.5,
+                      fontSize: 13,
                       height: 1.2,
                       color: AppColors.ink),
                 ),
@@ -632,7 +632,7 @@ class _ProductCardState extends State<_ProductCard> {
                           fontFamily: 'Carlito',
                           color: AppColors.primary,
                           fontWeight: FontWeight.w700,
-                          fontSize: 13.5,
+                          fontSize: 13,
                         ),
                       ),
                     ),
@@ -760,7 +760,7 @@ class _MobileCartBar extends StatelessWidget {
                                   '${cart.itemCount}',
                                   style: TextStyle(
                                       fontFamily: 'Carlito',
-                                      fontSize: 10.5,
+                                      fontSize: 11,
                                       fontWeight: FontWeight.w700,
                                       color: AppColors.onPrimary),
                                 ),
@@ -781,7 +781,7 @@ class _MobileCartBar extends StatelessWidget {
                                 : '${cart.heldCount} sale${cart.heldCount == 1 ? '' : 's'} held',
                             style: TextStyle(
                                 fontFamily: 'Carlito',
-                                fontSize: 12.5,
+                                fontSize: 12,
                                 color: AppColors.muted),
                           ),
                           Text(
@@ -792,7 +792,7 @@ class _MobileCartBar extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                                 fontFamily: 'Carlito',
-                                fontSize: 15.5,
+                                fontSize: 15,
                                 fontWeight: FontWeight.w700,
                                 color: AppColors.primaryDark),
                           ),
@@ -811,7 +811,7 @@ class _MobileCartBar extends StatelessWidget {
                           Text('View cart',
                               style: TextStyle(
                                   fontFamily: 'Carlito',
-                                  fontSize: 13.5,
+                                  fontSize: 13,
                                   fontWeight: FontWeight.w700,
                                   color: AppColors.onPrimary)),
                           const SizedBox(width: AppSpace.s1),

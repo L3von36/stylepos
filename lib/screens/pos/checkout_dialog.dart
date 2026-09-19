@@ -309,7 +309,7 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
               Text('Amount due',
                   style: TextStyle(
                       fontFamily: 'Carlito',
-                      fontSize: 12.5,
+                      fontSize: 12,
                       fontWeight: FontWeight.w700,
                       letterSpacing: 0.4,
                       color: Colors.white.withValues(alpha: 0.8))),
@@ -318,7 +318,7 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
                 settings.money(total),
                 style: const TextStyle(
                     fontFamily: 'Carlito',
-                    fontSize: 28,
+                    fontSize: 24,
                     fontWeight: FontWeight.w700,
                     color: Colors.white),
               ),
@@ -328,7 +328,7 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
         const SizedBox(height: 16),
 
         Text('Payment method',
-            style: TextStyle(fontFamily: 'Carlito', fontSize: 12.5, fontWeight: FontWeight.w700, color: AppColors.muted)),
+            style: TextStyle(fontFamily: 'Carlito', fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.muted)),
         const SizedBox(height: 8),
         SegmentedButton<String>(
           showSelectedIcon: false,
@@ -358,7 +358,7 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
             onChanged: (_) {
               if (_error != null) setState(() => _error = null);
             },
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
             decoration: InputDecoration(
               labelText: 'Cash received (${settings.currencySymbol})',
             ),
@@ -377,7 +377,7 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
               ].where((q) => q >= total).toSet())
                 ActionChip(
                   label: Text(settings.money(quick)),
-                  labelStyle: const TextStyle(fontFamily: 'Carlito', fontSize: 12.5, fontWeight: FontWeight.w700),
+                  labelStyle: const TextStyle(fontFamily: 'Carlito', fontSize: 12, fontWeight: FontWeight.w700),
                   backgroundColor: AppColors.primarySoft,
                   side: BorderSide.none,
                   onPressed: () {
@@ -420,7 +420,7 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
                       _tenderedValue + 0.001 < total
                           ? 'Still owed'
                           : 'Change due',
-                      style: TextStyle(fontFamily: 'Carlito', fontSize: 13.5, color: AppColors.body)),
+                      style: TextStyle(fontFamily: 'Carlito', fontSize: 13, color: AppColors.body)),
                   const Spacer(),
                   Text(
                     settings.money(_tenderedValue + 0.001 < total
@@ -428,7 +428,7 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
                         : change),
                     style: TextStyle(
                         fontFamily: 'Carlito',
-                        fontSize: 16,
+                        fontSize: 15,
                         fontWeight: FontWeight.w700,
                         color: _tenderedValue + 0.001 < total
                             ? AppColors.danger
@@ -455,7 +455,7 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
                 Expanded(
                   child: Text(
                     '${cart.customer!.name} earns ${(total / settings.loyaltyStep).floor()} loyalty points',
-                    style: TextStyle(fontFamily: 'Carlito', fontSize: 12.5, color: AppColors.primaryDark),
+                    style: TextStyle(fontFamily: 'Carlito', fontSize: 12, color: AppColors.primaryDark),
                   ),
                 ),
               ],
@@ -477,7 +477,7 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
                 const SizedBox(width: AppSpace.s2),
                 Expanded(
                   child: Text(_error!,
-                      style: TextStyle(fontFamily: 'Carlito', fontSize: 12.5, color: AppColors.danger)),
+                      style: TextStyle(fontFamily: 'Carlito', fontSize: 12, color: AppColors.danger)),
                 ),
               ],
             ),
@@ -514,7 +514,7 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
                         Text(settings.money(sale.total),
                             style: TextStyle(
                                 fontFamily: 'Carlito',
-                                fontSize: 28,
+                                fontSize: 24,
                                 fontWeight: FontWeight.w700,
                                 color: AppColors.success)),
                         const SizedBox(height: 2),
@@ -539,7 +539,7 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
                       'Give change: ${settings.money(sale.changeDue)}',
                       style: TextStyle(
                           fontFamily: 'Carlito',
-                          fontSize: 13.5,
+                          fontSize: 13,
                           fontWeight: FontWeight.w700,
                           color: AppColors.success),
                     ),
@@ -549,7 +549,7 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
                   child: Text('+$_pointsEarned loyalty points',
-                      style: TextStyle(fontFamily: 'Carlito', fontSize: 12.5, color: AppColors.success)),
+                      style: TextStyle(fontFamily: 'Carlito', fontSize: 12, color: AppColors.success)),
                 ),
             ],
           ),
@@ -560,7 +560,7 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
               ? 'Save or print the receipt below.'
               : 'Receipt saved: ${_savedPdf!.path.split('/').last}',
           textAlign: TextAlign.center,
-          style: TextStyle(fontFamily: 'Carlito', fontSize: 12.5, color: AppColors.muted),
+          style: TextStyle(fontFamily: 'Carlito', fontSize: 12, color: AppColors.muted),
         ),
       ],
     );

@@ -221,7 +221,7 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
                                   Text('Receipt ${sale.receiptNo}',
                                       style: TextStyle(
                                           fontFamily: 'Carlito',
-                                          fontSize: 17,
+                                          fontSize: 15,
                                           fontWeight: FontWeight.w700,
                                           color: AppColors.ink)),
                                   if (sale.isRefunded) ...[
@@ -237,7 +237,7 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
                               Text('$when · Cashier: ${sale.cashierName ?? '-'}'
                                   ' · Customer: ${sale.customerName ?? 'Walk-in'}',
                                   style: TextStyle(
-                                      fontFamily: 'Carlito', fontSize: 12.5, color: AppColors.muted)),
+                                      fontFamily: 'Carlito', fontSize: 12, color: AppColors.muted)),
                             ],
                           ),
                         ),
@@ -259,7 +259,7 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
                             Text('Items',
                                 style: TextStyle(
                                     fontFamily: 'Carlito',
-                                    fontSize: 13.5,
+                                    fontSize: 13,
                                     fontWeight: FontWeight.w700,
                                     color: AppColors.ink)),
                             const Spacer(),
@@ -287,7 +287,7 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
                                     Text(
                                         '${it.variantDesc} · ${settings.money(it.unitPrice)} × ${it.qty}',
                                         style: TextStyle(
-                                            fontFamily: 'Carlito', fontSize: 12.5, color: AppColors.muted)),
+                                            fontFamily: 'Carlito', fontSize: 12, color: AppColors.muted)),
                                   ],
                                 ),
                               ),
@@ -324,7 +324,7 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
                             Text('TOTAL',
                                 style: TextStyle(
                                     fontFamily: 'Carlito',
-                                    fontSize: 13.5,
+                                    fontSize: 13,
                                     fontWeight: FontWeight.w700,
                                     letterSpacing: 0.4,
                                     color: AppColors.muted)),
@@ -332,7 +332,7 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
                             Text(settings.money(sale.total),
                                 style: TextStyle(
                                     fontFamily: 'Carlito',
-                                    fontSize: 22,
+                                    fontSize: 18,
                                     fontWeight: FontWeight.w700,
                                     color: AppColors.primaryDark)),
                           ],

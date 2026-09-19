@@ -231,7 +231,7 @@ class _LabelDialogBodyState extends State<_LabelDialogBody> {
                                 overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
                                     fontFamily: 'Carlito',
-                                    fontSize: 13.5,
+                                    fontSize: 13,
                                     fontWeight: FontWeight.w700),
                               ),
                               subtitle: Text(
@@ -283,7 +283,7 @@ class _LabelDialogBodyState extends State<_LabelDialogBody> {
                                         title: Text(g.variants[vi].descriptor,
                                             style: const TextStyle(
                                                 fontFamily: 'Carlito',
-                                                fontSize: 12.5)),
+                                                fontSize: 12)),
                                         subtitle: Text(
                                             g.variants[vi].barcode?.isEmpty ==
                                                     false
@@ -291,7 +291,7 @@ class _LabelDialogBodyState extends State<_LabelDialogBody> {
                                                 : g.variants[vi].sku,
                                             style: TextStyle(
                                                 fontFamily: 'Carlito',
-                                                fontSize: 11.5,
+                                                fontSize: 11,
                                                 color: AppColors.muted)),
                                         trailing: QtyStepper(
                                           qty: _copies[gi][vi],

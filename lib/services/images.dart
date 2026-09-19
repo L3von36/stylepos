@@ -55,14 +55,14 @@ class ProductImages {
                 const SizedBox(height: 20),
                 Text('Add product photo',
                     style: TextStyle(
-                        fontSize: 17,
+                        fontSize: 15,
                         fontWeight: FontWeight.w700,
                         color: AppColors.ink)),
                 const SizedBox(height: 4),
                 Text(
                     'Photos show on the sell screen so staff find items faster.',
                     style: TextStyle(
-                        fontSize: 12.5, color: AppColors.muted)),
+                        fontSize: 12, color: AppColors.muted)),
                 const SizedBox(height: 12),
                 ListTile(
                   leading: Icon(Icons.photo_camera_outlined,

@@ -132,13 +132,13 @@ class _ScanDialogState extends State<ScanDialog> {
                       : 'Scanned $_lastSeen',
                   textAlign: TextAlign.center,
                   style: const TextStyle(
-                      color: Colors.white, fontSize: 14.5, fontWeight: FontWeight.w600),
+                      color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600),
                 ),
                 const SizedBox(height: AppSpace.s1),
                 const Text(
                   'One scan adds one item. Scan again after a moment to repeat.',
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.white60, fontSize: 12.5),
+                  style: TextStyle(color: Colors.white60, fontSize: 12),
                 ),
               ],
             ),

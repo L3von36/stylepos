@@ -219,10 +219,10 @@ abstract final class AppTheme {
         centerTitle: false,
         titleTextStyle: TextStyle(
           fontFamily: 'Carlito',
-          fontSize: 20,
+          fontSize: 16,
           fontWeight: FontWeight.w700,
           color: AppColors.ink,
-          height: 28 / 20,
+          height: 22 / 16,
         ),
         shape: Border(bottom: BorderSide(color: AppColors.borderSoft)),
       ),
@@ -249,10 +249,10 @@ abstract final class AppTheme {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.xl)),
         titleTextStyle: TextStyle(
           fontFamily: 'Carlito',
-          fontSize: 20,
+          fontSize: 16,
           fontWeight: FontWeight.w700,
           color: AppColors.ink,
-          height: 28 / 20,
+          height: 22 / 16,
         ),
         contentTextStyle: TextStyle(
           fontFamily: 'Carlito',
@@ -318,7 +318,7 @@ abstract final class AppTheme {
           side: WidgetStatePropertyAll(BorderSide(color: AppColors.border)),
           minimumSize: const WidgetStatePropertyAll(Size(0, 40)),
           textStyle: const WidgetStatePropertyAll(
-            TextStyle(fontFamily: 'Carlito', fontSize: 13.5, fontWeight: FontWeight.w700),
+            TextStyle(fontFamily: 'Carlito', fontSize: 13, fontWeight: FontWeight.w700),
           ),
           shape: const WidgetStatePropertyAll(
             RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(AppRadius.pill))),
@@ -366,7 +366,7 @@ abstract final class AppTheme {
             )),
         labelTextStyle: WidgetStateProperty.resolveWith((states) => TextStyle(
               fontFamily: 'Carlito',
-              fontSize: 12,
+              fontSize: 11,
               fontWeight: states.contains(WidgetState.selected)
                   ? FontWeight.w700
                   : FontWeight.w400,
@@ -381,9 +381,9 @@ abstract final class AppTheme {
         iconColor: AppColors.muted,
         contentPadding: const EdgeInsets.symmetric(horizontal: AppSpace.s4),
         titleTextStyle: TextStyle(
-            fontFamily: 'Carlito', fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.ink),
+            fontFamily: 'Carlito', fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.ink),
         subtitleTextStyle: TextStyle(
-            fontFamily: 'Carlito', fontSize: 12.5, height: 17 / 12.5, color: AppColors.muted),
+            fontFamily: 'Carlito', fontSize: 12, height: 16 / 12, color: AppColors.muted),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
       ),
 
@@ -394,7 +394,7 @@ abstract final class AppTheme {
         elevation: 3,
         contentTextStyle: TextStyle(
             fontFamily: 'Carlito',
-            fontSize: 13.5,
+            fontSize: 13,
             color: dark ? const Color(0xFF10151F) : const Color(0xFFF8FAFC),
             letterSpacing: 0.2),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.sm)),
@@ -407,7 +407,7 @@ abstract final class AppTheme {
         elevation: 3,
         shadowColor: dark ? const Color(0x66000000) : const Color(0x240F172A),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
-        textStyle: TextStyle(fontFamily: 'Carlito', fontSize: 13.5, color: AppColors.body),
+        textStyle: TextStyle(fontFamily: 'Carlito', fontSize: 13, color: AppColors.body),
       ),
 
       dividerTheme: DividerThemeData(color: AppColors.borderSoft, thickness: 1, space: 1),
@@ -445,38 +445,55 @@ abstract final class AppTheme {
         borderSide: BorderSide(color: color, width: width),
       );
 
-  /// M3 type scale (2021) in Carlito. Sizes/line-heights follow the spec;
-  /// weights are reduced to the two registered cuts (400/700) to avoid
-  /// faux-bold synthesis, and display/headline get the spec's -0.25 tracking.
+  /// Instagram-flavored type scale in Carlito — compact, integer-only sizes
+  /// with emphasis carried by weight (700) rather than size, like IG.
+  /// Screen sizes stick to the IG ladder 11/12/13/14/15/16/18/20/22/24/28:
+  /// body 14, meta 12, tabs 11; titles sit just above body (14–16); page
+  /// headers 18–20; display sizes exist only for big report figures.
+  /// Weights are reduced to the two registered cuts (400/700) to avoid
+  /// faux-bold synthesis, and display/headline get negative tracking.
   static TextTheme _textTheme(TextTheme base) {
     const f = 'Carlito';
     return base.copyWith(
-      // Headline (largest on-screen text, section/page headers)
-      headlineMedium: TextStyle(
-          fontFamily: f, fontSize: 28, height: 36 / 28, letterSpacing: -0.25,
+      // Display (report hero figures — the only place IG goes big)
+      displayLarge: TextStyle(
+          fontFamily: f, fontSize: 32, height: 40 / 32, letterSpacing: -0.5,
           fontWeight: FontWeight.w700, color: AppColors.ink),
-      headlineSmall: TextStyle(
+      displayMedium: TextStyle(
+          fontFamily: f, fontSize: 28, height: 36 / 28, letterSpacing: -0.5,
+          fontWeight: FontWeight.w700, color: AppColors.ink),
+      displaySmall: TextStyle(
           fontFamily: f, fontSize: 24, height: 32 / 24, letterSpacing: -0.25,
           fontWeight: FontWeight.w700, color: AppColors.ink),
-      // Title (medium-emphasis headers of components)
+      // Headline (page / section headers)
+      headlineLarge: TextStyle(
+          fontFamily: f, fontSize: 22, height: 28 / 22, letterSpacing: -0.25,
+          fontWeight: FontWeight.w700, color: AppColors.ink),
+      headlineMedium: TextStyle(
+          fontFamily: f, fontSize: 20, height: 26 / 20, letterSpacing: -0.25,
+          fontWeight: FontWeight.w700, color: AppColors.ink),
+      headlineSmall: TextStyle(
+          fontFamily: f, fontSize: 18, height: 24 / 18, letterSpacing: -0.25,
+          fontWeight: FontWeight.w700, color: AppColors.ink),
+      // Title (medium-emphasis headers of components — IG cell/nav titles)
       titleLarge: TextStyle(
-          fontFamily: f, fontSize: 20, height: 28 / 20,
+          fontFamily: f, fontSize: 16, height: 22 / 16,
           fontWeight: FontWeight.w700, color: AppColors.ink),
       titleMedium: TextStyle(
-          fontFamily: f, fontSize: 16, height: 24 / 16, letterSpacing: 0.15,
-          fontWeight: FontWeight.w700, color: AppColors.ink),
-      titleSmall: TextStyle(
           fontFamily: f, fontSize: 14, height: 20 / 14, letterSpacing: 0.1,
           fontWeight: FontWeight.w700, color: AppColors.ink),
-      // Body (reading text)
+      titleSmall: TextStyle(
+          fontFamily: f, fontSize: 13, height: 18 / 13, letterSpacing: 0.1,
+          fontWeight: FontWeight.w700, color: AppColors.ink),
+      // Body (reading text — IG's 14px workhorse)
       bodyLarge: TextStyle(
-          fontFamily: f, fontSize: 15, height: 22 / 15, letterSpacing: 0.2,
+          fontFamily: f, fontSize: 14, height: 20 / 14, letterSpacing: 0.2,
           fontWeight: FontWeight.w400, color: AppColors.body),
       bodyMedium: TextStyle(
           fontFamily: f, fontSize: 14, height: 20 / 14, letterSpacing: 0.2,
           fontWeight: FontWeight.w400, color: AppColors.body),
       bodySmall: TextStyle(
-          fontFamily: f, fontSize: 12.5, height: 17 / 12.5, letterSpacing: 0.3,
+          fontFamily: f, fontSize: 12, height: 16 / 12, letterSpacing: 0.3,
           fontWeight: FontWeight.w400, color: AppColors.muted),
       // Label (buttons, pills, captions, overlines)
       labelLarge: TextStyle(
@@ -782,7 +799,7 @@ class _KpiCardState extends State<KpiCard> {
                   style: Theme.of(context)
                       .textTheme
                       .titleLarge
-                      ?.copyWith(fontSize: 22, color: valueColor),
+                      ?.copyWith(fontSize: 18, color: valueColor),
                 ),
               ],
             ),

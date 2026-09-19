@@ -332,7 +332,7 @@ class _ProductTile extends StatelessWidget {
                       '${product.variants.length} variant${product.variants.length == 1 ? '' : 's'}'
                       ' · ${product.variants.isEmpty ? '-' : settings.priceLabel(product.minPrice, product.maxPrice)}'
                       ' · ${_rowBarcode(product) ?? 'no barcode'}',
-                      style: TextStyle(fontFamily: 'Carlito', fontSize: 12.5, color: AppColors.muted),
+                      style: TextStyle(fontFamily: 'Carlito', fontSize: 12, color: AppColors.muted),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ],

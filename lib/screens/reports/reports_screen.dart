@@ -407,7 +407,7 @@ class _ManagerInsightsCard extends StatelessWidget {
           Text(label.toUpperCase(),
               style: TextStyle(
                   fontFamily: 'Carlito',
-                  fontSize: 10.5,
+                  fontSize: 11,
                   fontWeight: FontWeight.w700,
                   letterSpacing: 0.4,
                   color: Colors.white.withValues(alpha: 0.75))),
@@ -415,7 +415,7 @@ class _ManagerInsightsCard extends StatelessWidget {
           Text(value,
               style: TextStyle(
                   fontFamily: 'Carlito',
-                  fontSize: 18,
+                  fontSize: 16,
                   fontWeight: FontWeight.w700,
                   color: Colors.white)),
           if (trailing != null)
@@ -465,7 +465,7 @@ class _ManagerInsightsCard extends StatelessWidget {
                     child: Text(s.name,
                         style: TextStyle(
                             fontFamily: 'Carlito',
-                            fontSize: 13.5,
+                            fontSize: 13,
                             fontWeight: FontWeight.w700,
                             color: AppColors.ink)),
                   ),
@@ -476,7 +476,7 @@ class _ManagerInsightsCard extends StatelessWidget {
                   Text(settings.money(s.revenue),
                       style: TextStyle(
                           fontFamily: 'Carlito',
-                          fontSize: 13.5,
+                          fontSize: 13,
                           fontWeight: FontWeight.w700,
                           color: AppColors.primary)),
                 ],
@@ -526,7 +526,7 @@ class _ManagerInsightsCard extends StatelessWidget {
                         Text(_methodLabel(p.method),
                             style: TextStyle(
                                 fontFamily: 'Carlito',
-                                fontSize: 13.5,
+                                fontSize: 13,
                                 fontWeight: FontWeight.w700,
                                 color: AppColors.ink)),
                         Text(
@@ -534,7 +534,7 @@ class _ManagerInsightsCard extends StatelessWidget {
                             '${total > 0 ? (p.total / total * 100).toStringAsFixed(0) : 0}% of revenue',
                             style: TextStyle(
                                 fontFamily: 'Carlito',
-                                fontSize: 11.5,
+                                fontSize: 11,
                                 color: AppColors.muted)),
                       ],
                     ),
@@ -542,7 +542,7 @@ class _ManagerInsightsCard extends StatelessWidget {
                   Text(settings.money(p.total),
                       style: TextStyle(
                           fontFamily: 'Carlito',
-                          fontSize: 13.5,
+                          fontSize: 13,
                           fontWeight: FontWeight.w700,
                           color: AppColors.body)),
                 ],
@@ -644,7 +644,7 @@ class _StockHealthCard extends StatelessWidget {
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
                                       fontFamily: 'Carlito',
-                                      fontSize: 10.5,
+                                      fontSize: 11,
                                       letterSpacing: 0.4,
                                       fontWeight: FontWeight.w700,
                                       color: AppColors.muted)),
@@ -653,7 +653,7 @@ class _StockHealthCard extends StatelessWidget {
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
                                       fontFamily: 'Carlito',
-                                      fontSize: 16.5,
+                                      fontSize: 16,
                                       fontWeight: FontWeight.w700,
                                       color: AppColors.ink)),
                             ],
@@ -701,7 +701,7 @@ class _StockHealthCard extends StatelessWidget {
                   'Adjust thresholds per product in the product editor.',
                   style: TextStyle(
                       fontFamily: 'Carlito',
-                      fontSize: 12.5,
+                      fontSize: 12,
                       color: AppColors.muted,
                       height: 1.4),
                 ),
@@ -730,7 +730,7 @@ class _StockHealthCard extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                                 fontFamily: 'Carlito',
-                                fontSize: 13.5,
+                                fontSize: 13,
                                 fontWeight: FontWeight.w700,
                                 color: AppColors.ink)),
                         if (item.$2.descriptor.isNotEmpty)
@@ -739,7 +739,7 @@ class _StockHealthCard extends StatelessWidget {
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                   fontFamily: 'Carlito',
-                                  fontSize: 11.5,
+                                  fontSize: 11,
                                   color: AppColors.muted)),
                       ],
                     ),
@@ -832,7 +832,7 @@ class _RevenueLineChart extends StatelessWidget {
                   settings.money(s.y),
                   const TextStyle(
                       fontFamily: 'Carlito',
-                      fontSize: 12.5,
+                      fontSize: 12,
                       fontWeight: FontWeight.w700,
                       color: Colors.white),
                 ),
@@ -972,7 +972,7 @@ class _CategoryPie extends StatelessWidget {
                   ),
                   const SizedBox(width: AppSpace.s1),
                   Text(data[i].$1,
-                      style: TextStyle(fontFamily: 'Carlito', fontSize: 11.5, color: AppColors.body)),
+                      style: TextStyle(fontFamily: 'Carlito', fontSize: 11, color: AppColors.body)),
                 ],
               ),
           ],

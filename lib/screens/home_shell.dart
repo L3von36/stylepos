@@ -487,14 +487,14 @@ class _HomeShellState extends State<HomeShell> {
                       children: [
                         Text(user.name,
                             style: TextStyle(
-                                fontFamily: 'Carlito', fontSize: 16,
+                                fontFamily: 'Carlito', fontSize: 15,
                                 fontWeight: FontWeight.w700, color: AppColors.ink)),
                         Text(
                           '${user.isAdmin ? 'Manager' : 'Sales'} · ${user.email}',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                              fontFamily: 'Carlito', fontSize: 12.5, color: AppColors.muted),
+                              fontFamily: 'Carlito', fontSize: 12, color: AppColors.muted),
                         ),
                       ],
                     ),

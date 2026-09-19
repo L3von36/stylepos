@@ -65,7 +65,7 @@ class BackupReminderBanner extends StatelessWidget {
                   'Time for a backup',
                   style: TextStyle(
                       fontFamily: 'Carlito',
-                      fontSize: 13.5,
+                      fontSize: 13,
                       fontWeight: FontWeight.w700,
                       color: AppColors.ink),
                 ),
@@ -74,7 +74,7 @@ class BackupReminderBanner extends StatelessWidget {
                   detail,
                   style: TextStyle(
                       fontFamily: 'Carlito',
-                      fontSize: 12.5,
+                      fontSize: 12,
                       height: 1.35,
                       color: AppColors.body),
                 ),

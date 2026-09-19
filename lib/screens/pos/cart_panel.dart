@@ -146,7 +146,7 @@ class CartPanel extends StatelessWidget {
                     Text('Cart is empty',
                         style: TextStyle(
                             fontFamily: 'Carlito',
-                            fontSize: 16,
+                            fontSize: 15,
                             fontWeight: FontWeight.w700,
                             color: AppColors.ink)),
                     const SizedBox(height: 4),
@@ -157,8 +157,8 @@ class CartPanel extends StatelessWidget {
                         textAlign: TextAlign.center,
                         style: TextStyle(
                             fontFamily: 'Carlito',
-                            fontSize: 12.5,
-                            height: 17 / 12.5,
+                            fontSize: 12,
+                            height: 16 / 12,
                             color: AppColors.muted),
                       ),
                     ),
@@ -202,7 +202,7 @@ class CartPanel extends StatelessWidget {
                           'Manager approval needed to charge this discount',
                           style: TextStyle(
                               fontFamily: 'Carlito',
-                              fontSize: 11.5,
+                              fontSize: 11,
                               fontWeight: FontWeight.w700,
                               color: AppColors.warning),
                         ),
@@ -225,7 +225,7 @@ class CartPanel extends StatelessWidget {
                     Text('TOTAL',
                         style: TextStyle(
                             fontFamily: 'Carlito',
-                            fontSize: 13.5,
+                            fontSize: 13,
                             fontWeight: FontWeight.w700,
                             letterSpacing: 0.4,
                             color: AppColors.muted)),
@@ -233,7 +233,7 @@ class CartPanel extends StatelessWidget {
                     Text(
                       settings.money(cart.total(settings.taxRate)),
                       style: theme.textTheme.headlineSmall?.copyWith(
-                        fontSize: 22,
+                        fontSize: 18,
                         color: AppColors.primaryDark,
                       ),
                     ),
@@ -310,13 +310,13 @@ class CartPanel extends StatelessWidget {
                         child: Text('Held sales',
                             style: TextStyle(
                                 fontFamily: 'Carlito',
-                                fontSize: 17,
+                                fontSize: 15,
                                 fontWeight: FontWeight.w700,
                                 color: AppColors.ink)),
                       ),
                       Text('${held.length} parked',
                           style: TextStyle(
-                              fontFamily: 'Carlito', fontSize: 12.5, color: AppColors.muted)),
+                              fontFamily: 'Carlito', fontSize: 12, color: AppColors.muted)),
                     ],
                   ),
                 ),
@@ -363,7 +363,7 @@ class CartPanel extends StatelessWidget {
                                       overflow: TextOverflow.ellipsis,
                                       style: TextStyle(
                                           fontFamily: 'Carlito',
-                                          fontSize: 13.5,
+                                          fontSize: 13,
                                           fontWeight: FontWeight.w700,
                                           color: AppColors.ink),
                                     ),
@@ -532,7 +532,7 @@ class _CartTile extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                        fontFamily: 'Carlito', fontWeight: FontWeight.w700, fontSize: 13.5, color: AppColors.ink)),
+                        fontFamily: 'Carlito', fontWeight: FontWeight.w700, fontSize: 13, color: AppColors.ink)),
                 const SizedBox(height: 2),
                 Text(
                   '${item.variant.descriptor} · ${settings.money(item.variant.price)}',
@@ -556,7 +556,7 @@ class _CartTile extends StatelessWidget {
                 settings.money(item.lineTotal),
                 maxLines: 1,
                 style: TextStyle(
-                    fontFamily: 'Carlito', fontWeight: FontWeight.w700, fontSize: 13.5, color: AppColors.ink),
+                    fontFamily: 'Carlito', fontWeight: FontWeight.w700, fontSize: 13, color: AppColors.ink),
               ),
             ),
           ),
@@ -605,7 +605,7 @@ class _DiscountFieldState extends State<_DiscountField> {
         focusNode: _focus,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
         textAlign: TextAlign.right,
-        style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700),
+        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
         decoration: InputDecoration(
           isDense: true,
           filled: true,

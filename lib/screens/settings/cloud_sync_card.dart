@@ -168,7 +168,7 @@ class _CloudSyncCardState extends State<CloudSyncCard> {
             '${sync.realtimeLive ? ' Live updates are on: sales from other '
                 'devices appear here within seconds.' : ''}',
             style: TextStyle(
-                fontSize: 12.5, color: AppColors.muted, height: 1.45),
+                fontSize: 12, color: AppColors.muted, height: 1.45),
           ),
           const SizedBox(height: AppSpace.s3),
           if (!signedIn) ...[

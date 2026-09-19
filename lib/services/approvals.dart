@@ -296,7 +296,7 @@ class _ApprovalDialogState extends State<_ApprovalDialog> {
                     child: Text(_error!,
                         style: TextStyle(
                             fontFamily: 'Carlito',
-                            fontSize: 12.5,
+                            fontSize: 12,
                             color: AppColors.danger)),
                   ),
                 ]),

@@ -182,7 +182,7 @@ class _ZReportCardState extends State<ZReportCard> {
                         Text('Expected cash in drawer',
                             style: TextStyle(
                                 fontFamily: 'Carlito',
-                                fontSize: 12.5,
+                                fontSize: 12,
                                 color: AppColors.body)),
                         const Spacer(),
                         Text(settings.money(d.expectedCash),
@@ -244,7 +244,7 @@ class _ZReportCardState extends State<ZReportCard> {
                                     : 'Short by ${settings.money(-variance)}',
                             style: TextStyle(
                                 fontFamily: 'Carlito',
-                                fontSize: 12.5,
+                                fontSize: 12,
                                 fontWeight: FontWeight.w700,
                                 color: variance == 0
                                     ? AppColors.success
@@ -263,7 +263,7 @@ class _ZReportCardState extends State<ZReportCard> {
                     'mistakes.',
                     style: TextStyle(
                         fontFamily: 'Carlito',
-                        fontSize: 11.5,
+                        fontSize: 11,
                         color: AppColors.muted),
                   ),
                 ],
@@ -389,7 +389,7 @@ class _ZReportCardState extends State<ZReportCard> {
                   _dayLabel,
                   style: TextStyle(
                       fontFamily: 'Carlito',
-                      fontSize: 13.5,
+                      fontSize: 13,
                       fontWeight: FontWeight.w700,
                       color: AppColors.ink),
                 ),
@@ -444,7 +444,7 @@ class _ZReportCardState extends State<ZReportCard> {
                     '${_closed!.variance == null ? '' : ' · cash ${_closed!.variance! == 0 ? 'balanced' : _closed!.variance! > 0 ? 'over ${s.money(_closed!.variance!)}' : 'short ${s.money(-_closed!.variance!)}'}'}',
                     style: TextStyle(
                         fontFamily: 'Carlito',
-                        fontSize: 12.5,
+                        fontSize: 12,
                         fontWeight: FontWeight.w700,
                         color: AppColors.body),
                   ),
@@ -500,7 +500,7 @@ class _ZReportCardState extends State<ZReportCard> {
                         Text(t.$1,
                             style: TextStyle(
                                 fontFamily: 'Carlito',
-                                fontSize: 11.5,
+                                fontSize: 11,
                                 fontWeight: FontWeight.w700,
                                 color: AppColors.muted)),
                         const SizedBox(height: 2),
@@ -561,7 +561,7 @@ class _ZReportCardState extends State<ZReportCard> {
                     Text('${i + 1}.',
                         style: TextStyle(
                             fontFamily: 'Carlito',
-                            fontSize: 12.5,
+                            fontSize: 12,
                             fontWeight: FontWeight.w700,
                             color: AppColors.faint)),
                     const SizedBox(width: 6),
@@ -571,20 +571,20 @@ class _ZReportCardState extends State<ZReportCard> {
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                               fontFamily: 'Carlito',
-                              fontSize: 12.5,
+                              fontSize: 12,
                               color: AppColors.body)),
                     ),
                     Text('${d.topItems[i].units} pcs',
                         style: TextStyle(
                             fontFamily: 'Carlito',
-                            fontSize: 12.5,
+                            fontSize: 12,
                             fontWeight: FontWeight.w700,
                             color: AppColors.muted)),
                     const SizedBox(width: AppSpace.s3),
                     Text(s.money(d.topItems[i].revenue),
                         style: TextStyle(
                             fontFamily: 'Carlito',
-                            fontSize: 12.5,
+                            fontSize: 12,
                             color: AppColors.body)),
                   ],
                 ),
@@ -627,22 +627,22 @@ class _ZReportCardState extends State<ZReportCard> {
             Expanded(
                 child: Text(a,
                     style: TextStyle(
-                        fontFamily: 'Carlito', fontSize: 12.5, color: AppColors.muted))),
+                        fontFamily: 'Carlito', fontSize: 12, color: AppColors.muted))),
             Text(b,
                 style: TextStyle(
                     fontFamily: 'Carlito',
-                    fontSize: 12.5,
+                    fontSize: 12,
                     fontWeight: FontWeight.w700,
                     color: AppColors.body)),
             const SizedBox(width: AppSpace.s4),
             Expanded(
                 child: Text(c,
                     style: TextStyle(
-                        fontFamily: 'Carlito', fontSize: 12.5, color: AppColors.muted))),
+                        fontFamily: 'Carlito', fontSize: 12, color: AppColors.muted))),
             Text(e,
                 style: TextStyle(
                     fontFamily: 'Carlito',
-                    fontSize: 12.5,
+                    fontSize: 12,
                     fontWeight: FontWeight.w700,
                     color: AppColors.body)),
           ],
@@ -662,13 +662,13 @@ class _ZReportCardState extends State<ZReportCard> {
             Text(label,
                 style: TextStyle(
                     fontFamily: 'Carlito',
-                    fontSize: 12.5,
+                    fontSize: 12,
                     fontWeight: FontWeight.w700,
                     color: AppColors.info)),
             const SizedBox(width: 6),
             Text(sub,
                 style: TextStyle(
-                    fontFamily: 'Carlito', fontSize: 11.5, color: AppColors.muted)),
+                    fontFamily: 'Carlito', fontSize: 11, color: AppColors.muted)),
           ],
         ),
       );

@@ -122,7 +122,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 Text(
                   'Cashiers type this PIN to approve refunds and manual '
                   'discounts. Keep it manager-only.',
-                  style: TextStyle(fontSize: 12.5, color: AppColors.muted,
+                  style: TextStyle(fontSize: 12, color: AppColors.muted,
                       height: 1.4),
                 ),
                 const SizedBox(height: AppSpace.s3),
@@ -149,7 +149,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     padding: const EdgeInsets.only(top: AppSpace.s2),
                     child: Text(error!,
                         style: TextStyle(
-                            color: AppColors.danger, fontSize: 12.5)),
+                            color: AppColors.danger, fontSize: 12)),
                   ),
               ],
             ),
@@ -523,7 +523,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           'for the 80mm roll and synced to every device that '
                           'prints your receipts.',
                           style: TextStyle(
-                              fontSize: 12.5,
+                              fontSize: 12,
                               color: AppColors.muted,
                               height: 1.45),
                         ),
@@ -664,7 +664,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                       'account email and password',
                               style: TextStyle(
                                   fontFamily: 'Carlito',
-                                  fontSize: 12.5,
+                                  fontSize: 12,
                                   color: AppColors.body),
                             ),
                           ),
@@ -702,7 +702,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     'apply the threshold.',
                     style: TextStyle(
                         fontFamily: 'Carlito',
-                        fontSize: 11.5,
+                        fontSize: 11,
                         color: AppColors.faint),
                   ),
                 ],
@@ -779,7 +779,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       'If this phone is ever lost or replaced, Restore puts '
                       'everything back. Make a fresh backup at least weekly.',
                       style: TextStyle(
-                          fontSize: 12.5,
+                          fontSize: 12,
                           color: AppColors.muted,
                           height: 1.45),
                     ),
@@ -796,7 +796,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           'Last backup: ${_lastBackupLabel(s)}',
                           style: TextStyle(
                               fontFamily: 'Carlito',
-                              fontSize: 12.5,
+                              fontSize: 12,
                               fontWeight: FontWeight.w700,
                               color: s.backupReminderDue
                                   ? AppColors.warning
@@ -906,7 +906,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               'Signed in as ${auth.user?.name ?? "-"} '
                               '(${(auth.user?.isAdmin ?? false) ? "Manager" : "Sales"})',
                               style: TextStyle(
-                                  fontFamily: 'Carlito', fontSize: 12.5, color: AppColors.muted, height: 1.4),
+                                  fontFamily: 'Carlito', fontSize: 12, color: AppColors.muted, height: 1.4),
                             ),
                           ],
                         ),

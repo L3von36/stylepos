@@ -425,7 +425,7 @@ class _UsersScreenState extends State<UsersScreen> {
         subtitle: Text(
             '${u.email.isEmpty ? "no email" : u.email} · '
             '${u.isManager ? "Manager" : "Sales"}',
-            style: const TextStyle(fontFamily: 'Carlito', fontSize: 12.5)),
+            style: const TextStyle(fontFamily: 'Carlito', fontSize: 12)),
         trailing: PopupMenuButton<String>(
           icon: Icon(Icons.more_vert_rounded, size: 20, color: AppColors.muted),
           onSelected: (v) async {
@@ -476,7 +476,7 @@ class _SectionHeader extends StatelessWidget {
                 Text(title,
                     style: TextStyle(
                         fontFamily: 'Carlito',
-                        fontSize: 12.5,
+                        fontSize: 12,
                         fontWeight: FontWeight.w700,
                         letterSpacing: 0.4,
                         color: AppColors.muted)),
@@ -484,7 +484,7 @@ class _SectionHeader extends StatelessWidget {
                 Text(subtitle,
                     style: TextStyle(
                         fontFamily: 'Carlito',
-                        fontSize: 11.5,
+                        fontSize: 11,
                         height: 1.35,
                         color: AppColors.faint)),
               ],
@@ -514,7 +514,7 @@ class _EmptyCloudCard extends StatelessWidget {
                 'Your staff signs in with that email and password on any '
                 'device, and every sale is attributed to them.',
                 style: TextStyle(
-                    fontFamily: 'Carlito', fontSize: 12.5, height: 1.4,
+                    fontFamily: 'Carlito', fontSize: 12, height: 1.4,
                     color: AppColors.muted),
               ),
             ),
@@ -541,7 +541,7 @@ class _BannerCard extends StatelessWidget {
         leading: Icon(Icons.error_outline_rounded, size: 18, color: AppColors.danger),
         title: Text(text,
             style: TextStyle(
-                fontFamily: 'Carlito', fontSize: 12.5, color: AppColors.danger)),
+                fontFamily: 'Carlito', fontSize: 12, color: AppColors.danger)),
         trailing: IconButton(
           icon: Icon(Icons.close_rounded, size: 16, color: AppColors.danger),
           onPressed: onClose,
@@ -706,7 +706,7 @@ class _UserEditDialogState extends State<_UserEditDialog> {
                           'Cloud account — works on every device. Staff signs '
                           'in with this email and password.',
                           style: TextStyle(
-                              fontFamily: 'Carlito', fontSize: 11.5,
+                              fontFamily: 'Carlito', fontSize: 11,
                               height: 1.35, color: AppColors.primaryDark),
                         ),
                       ),
@@ -769,7 +769,7 @@ class _UserEditDialogState extends State<_UserEditDialog> {
                     Expanded(
                       child: Text(_error!,
                           style: TextStyle(
-                              fontFamily: 'Carlito', fontSize: 12.5, color: AppColors.danger)),
+                              fontFamily: 'Carlito', fontSize: 12, color: AppColors.danger)),
                     ),
                   ],
                 ),
