@@ -16,6 +16,7 @@ import 'state/customers.dart';
 import 'state/nav.dart';
 import 'state/commissions.dart';
 import 'state/purchasing.dart';
+import 'state/promotions.dart';
 import 'state/sales.dart';
 import 'state/settings.dart';
 import 'widgets/ui.dart';
@@ -33,6 +34,7 @@ Future<void> main() async {
   final attendance = AttendanceProvider();
   final purchasing = PurchasingProvider();
   final commissions = CommissionsProvider();
+  final promotions = PromotionsProvider();
 
   // Load persisted settings + session before showing UI.
   await Future.wait([settings.load(), auth.init(), ProductImages.init()]);
@@ -54,6 +56,7 @@ Future<void> main() async {
       await customers.reload();
       await purchasing.reloadAll(); // suppliers + POs arrive from the cloud
       await commissions.reload();
+      await promotions.reload(); // coupons/campaigns from other devices
       sales.bump(); // reports + POS strip refresh with cloud sales
       attendance.bump(); // shift logs refresh when remote punches arrive
     };
@@ -73,6 +76,7 @@ Future<void> main() async {
     attendance: attendance,
     purchasing: purchasing,
     commissions: commissions,
+    promotions: promotions,
   ));
 }
 
@@ -87,6 +91,7 @@ class StylePosApp extends StatelessWidget {
   final AttendanceProvider attendance;
   final PurchasingProvider purchasing;
   final CommissionsProvider commissions;
+  final PromotionsProvider promotions;
 
   const StylePosApp({
     super.key,
@@ -100,6 +105,7 @@ class StylePosApp extends StatelessWidget {
     required this.attendance,
     required this.purchasing,
     required this.commissions,
+    required this.promotions,
   });
 
   @override
@@ -116,6 +122,7 @@ class StylePosApp extends StatelessWidget {
         ChangeNotifierProvider<AttendanceProvider>.value(value: attendance),
         ChangeNotifierProvider<PurchasingProvider>.value(value: purchasing),
         ChangeNotifierProvider<CommissionsProvider>.value(value: commissions),
+        ChangeNotifierProvider<PromotionsProvider>.value(value: promotions),
       ],
       child: Builder(builder: (context) {
         // Watch settings so a System/Light/Dark switch rebuilds MaterialApp.

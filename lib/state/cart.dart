@@ -6,6 +6,7 @@ import 'package:sqflite/sqflite.dart' show ConflictAlgorithm;
 import '../data/database.dart';
 import '../models/customer.dart';
 import '../models/product.dart';
+import '../models/promotion.dart';
 import 'settings.dart';
 
 /// One line in the shopping cart.
@@ -30,6 +31,10 @@ class HeldSale {
   final int? customerId;
   final String? customerName;
   final double discount;
+
+  /// Promo code applied when the sale was parked (revalidated on resume —
+  /// it may have expired while the customer was browsing).
+  final String? promoCode;
   final List<({int variantId, int qty})> lines;
 
   const HeldSale({
@@ -38,6 +43,7 @@ class HeldSale {
     this.customerId,
     this.customerName,
     this.discount = 0,
+    this.promoCode,
     required this.lines,
   });
 
@@ -49,6 +55,7 @@ class HeldSale {
         'customerId': customerId,
         'customerName': customerName,
         'discount': discount,
+        'promoCode': promoCode,
         'lines': [
           for (final l in lines) {'v': l.variantId, 'q': l.qty},
         ],
@@ -60,6 +67,7 @@ class HeldSale {
         customerId: m['customerId'] as int?,
         customerName: m['customerName'] as String?,
         discount: (m['discount'] as num?)?.toDouble() ?? 0,
+        promoCode: m['promoCode'] as String?,
         lines: [
           for (final l in (m['lines'] as List? ?? []))
             (
@@ -76,7 +84,12 @@ class HeldSale {
 class CartProvider extends ChangeNotifier {
   final Map<String, CartItem> _items = {};
   Customer? customer;
-  double orderDiscount = 0; // flat amount off the subtotal
+  double orderDiscount = 0; // flat manual amount off the subtotal
+
+  /// Promotion applied by code at the till. Manager-created promos do
+  /// NOT go through the manual-discount approval gate — approval happened
+  /// when the manager created the promotion.
+  Promotion? promo;
 
   /// Set when this cart was started from an exchange flow (shows a banner
   /// in the cart panel reminding the cashier which receipt was returned).
@@ -136,10 +149,23 @@ class CartProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Applies a promotion (already validated by the caller) and drops the
+  /// manual discount below its minimum-subtotal floor if needed.
+  void setPromo(Promotion? p) {
+    promo = p;
+    if (p != null &&
+        p.minSubtotal > 0 &&
+        orderDiscount > subtotal - p.minSubtotal) {
+      orderDiscount = (subtotal - p.minSubtotal).clamp(0.0, double.maxFinite);
+    }
+    notifyListeners();
+  }
+
   void clear() {
     _items.clear();
     customer = null;
     orderDiscount = 0;
+    promo = null;
     exchangeNote = null;
     notifyListeners();
   }
@@ -149,6 +175,7 @@ class CartProvider extends ChangeNotifier {
   List<CartItem>? _undoSnapshot;
   Customer? _undoCustomer;
   double _undoDiscount = 0;
+  Promotion? _undoPromo;
   String? _undoExchangeNote;
 
   /// Captures the current cart so the next [clear] can be reversed with
@@ -159,6 +186,7 @@ class CartProvider extends ChangeNotifier {
     _undoSnapshot = items;
     _undoCustomer = customer;
     _undoDiscount = orderDiscount;
+    _undoPromo = promo;
     _undoExchangeNote = exchangeNote;
   }
 
@@ -173,6 +201,7 @@ class CartProvider extends ChangeNotifier {
       ..addEntries([for (final i in snap) MapEntry(i.key, i)]);
     customer = _undoCustomer;
     orderDiscount = _undoDiscount;
+    promo = _undoPromo;
     exchangeNote = _undoExchangeNote;
     _undoExchangeNote = null;
     notifyListeners();
@@ -225,6 +254,7 @@ class CartProvider extends ChangeNotifier {
       customerId: customer?.id,
       customerName: customer?.name,
       discount: orderDiscount,
+      promoCode: promo?.code,
       lines: [
         for (final i in _items.values)
           (variantId: i.variant.id!, qty: i.qty),
@@ -234,6 +264,7 @@ class CartProvider extends ChangeNotifier {
     _items.clear();
     customer = null;
     orderDiscount = 0;
+    promo = null;
     notifyListeners();
     await _persistHeld();
     return h;
@@ -241,15 +272,19 @@ class CartProvider extends ChangeNotifier {
 
   /// Restores a parked sale into the cart.
   /// [lookup] resolves variant ids against the live catalog; lines whose
-  /// variant no longer exists are skipped. Returns false if nothing was
-  /// restorable (the held sale is removed in that case).
+  /// variant no longer exists are skipped. [promoLookup] revalidates the
+  /// parked promo code against the live promotion list (expired/paused
+  /// codes silently drop rather than blocking the sale). Returns false if
+  /// nothing was restorable (the held sale is removed in that case).
   Future<bool> resumeHeld(
     HeldSale h,
-    ({Product product, ProductVariant variant})? Function(int variantId) lookup,
-  ) async {
+    ({Product product, ProductVariant variant})? Function(int variantId) lookup, {
+    Promotion? Function(String code)? promoLookup,
+  }) async {
     _items.clear();
     customer = null;
     orderDiscount = 0;
+    promo = null;
     var restored = 0;
     for (final line in h.lines) {
       final match = lookup(line.variantId);
@@ -270,6 +305,12 @@ class CartProvider extends ChangeNotifier {
     _held.remove(h);
     if (restored > 0) {
       orderDiscount = h.discount;
+      if (h.promoCode != null && promoLookup != null) {
+        final p = promoLookup(h.promoCode!);
+        if (p != null && p.blockedReason(subtotal: subtotal) == null) {
+          promo = p;
+        }
+      }
       if (h.customerId != null) {
         customer = Customer(
           id: h.customerId,
@@ -296,6 +337,7 @@ class CartProvider extends ChangeNotifier {
     _items.clear();
     customer = null;
     orderDiscount = 0;
+    promo = null;
     exchangeNote = 'Exchange for $fromReceiptNo';
     notifyListeners();
   }
@@ -306,8 +348,20 @@ class CartProvider extends ChangeNotifier {
   }
 
   double get subtotal => _items.values.fold(0, (s, i) => s + i.lineTotal);
+
+  /// MANUAL discount entered by the cashier — the only part that goes
+  /// through the manager-approval gate at checkout.
   double get discount => orderDiscount.clamp(0, subtotal);
-  double get taxable => subtotal - discount;
+
+  /// Promotion discount (manager-created, no approval gate) applied to
+  /// whatever is left of the subtotal after the manual discount.
+  double get promoDiscount =>
+      promo == null ? 0 : promo!.discountFor(subtotal - discount);
+
+  /// Everything taken off the subtotal (manual + promotion).
+  double get totalDiscount => (orderDiscount + promoDiscount).clamp(0, subtotal);
+
+  double get taxable => subtotal - totalDiscount;
   double tax(double taxRatePercent) => taxable * taxRatePercent / 100;
   double total(double taxRatePercent) => taxable + tax(taxRatePercent);
 }
@@ -319,7 +373,7 @@ extension CartTotals on CartProvider {
     final t = total(settings.taxRate);
     return (
       subtotal: subtotal,
-      discount: discount,
+      discount: totalDiscount,
       tax: tax(settings.taxRate),
       total: t,
     );

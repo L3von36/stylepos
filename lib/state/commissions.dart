@@ -90,4 +90,26 @@ class CommissionsProvider extends ChangeNotifier {
         (r['user_id'] as int? ?? 0): (r['pending'] as num? ?? 0).toDouble()
     };
   }
+
+  /// Own commission progress for [period] (YYYY-MM): pending vs paid —
+  /// powers the salesperson's personal dashboard (they only ever see
+  /// their own rows here).
+  Future<({double pending, double paid})> myProgress(
+      int userId, String period) async {
+    final db = await DB.instance();
+    final res = await db.rawQuery('''
+      SELECT status, SUM(amount) AS total FROM commissions
+      WHERE user_id = ? AND period = ? GROUP BY status
+    ''', [userId, period]);
+    var pending = 0.0;
+    var paid = 0.0;
+    for (final r in res) {
+      if (r['status'] == 'paid') {
+        paid = (r['total'] as num? ?? 0).toDouble();
+      } else {
+        pending = (r['total'] as num? ?? 0).toDouble();
+      }
+    }
+    return (pending: pending, paid: paid);
+  }
 }

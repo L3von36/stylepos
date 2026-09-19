@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/product.dart';
+import '../../services/csv_util.dart';
 import '../../state/catalog.dart';
 import '../../state/nav.dart';
 import '../../state/sales.dart';
@@ -28,6 +29,10 @@ class _ReportsScreenState extends State<ReportsScreen> {
   List<({String name, int orders, double revenue})>? _staff;
   List<({String method, int orders, double total})>? _payments;
   double? _cogs;
+  List<({String name, int units, double revenue, double cost})>? _catMargins;
+  List<({String name, String variantDesc, int stock, int unitsSold})>? _slow;
+  List<(DateTime, double)>? _months;
+  List<({DateTime month, double taxable, double taxCollected, double refundedTax})>? _tax;
   int _lastRevision = 0;
 
   @override
@@ -39,10 +44,13 @@ class _ReportsScreenState extends State<ReportsScreen> {
 
   Future<void> _load() async {
     final sales = context.read<SalesProvider>();
+    final now = DateTime.now();
+    final weekStart = DateTime(now.year, now.month, now.day - now.weekday + 1);
+    final monthStart = DateTime(now.year, now.month, 1);
     final results = await Future.wait([
       sales.summary(0), // today
-      sales.summary(1), // yesterday-ish window (unused, keep simple)
-      sales.summary(7),
+      sales.summarySince(weekStart.millisecondsSinceEpoch ~/ 1000),
+      sales.summarySince(monthStart.millisecondsSinceEpoch ~/ 1000),
       sales.summary(30),
       sales.revenueByDay(_range),
       sales.topProducts(_range, limit: 5),
@@ -50,12 +58,17 @@ class _ReportsScreenState extends State<ReportsScreen> {
       sales.staffPerformance(_range),
       sales.cogs(_range),
       sales.paymentBreakdown(_range),
+      sales.categoryMargins(_range, limit: 6),
+      sales.slowMovers(_range, limit: 6),
+      sales.revenueByMonth(12),
+      sales.taxByMonth(6),
     ]);
     if (!mounted) return;
     setState(() {
       _summaries = {
         'today': results[0] as ({double revenue, int orders, int itemsSold}),
-        '7d': results[2] as ({double revenue, int orders, int itemsSold}),
+        'week': results[1] as ({double revenue, int orders, int itemsSold}),
+        'month': results[2] as ({double revenue, int orders, int itemsSold}),
         '30d': results[3] as ({double revenue, int orders, int itemsSold}),
       };
       _revenue = results[4] as List<(DateTime, double)>;
@@ -66,6 +79,13 @@ class _ReportsScreenState extends State<ReportsScreen> {
       _cogs = results[8] as double;
       _payments = results[9]
           as List<({String method, int orders, double total})>;
+      _catMargins = results[10]
+          as List<({String name, int units, double revenue, double cost})>;
+      _slow = results[11]
+          as List<({String name, String variantDesc, int stock, int unitsSold})>;
+      _months = results[12] as List<(DateTime, double)>;
+      _tax = results[13]
+          as List<({DateTime month, double taxable, double taxCollected, double refundedTax})>;
     });
   }
 
@@ -84,7 +104,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
       });
     }
     final today = _summaries?['today'];
-    final d7 = _summaries?['7d'];
+    final week = _summaries?['week'];
+    final month = _summaries?['month'];
     final d30 = _summaries?['30d'];
 
     return SingleChildScrollView(
@@ -137,8 +158,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
                     SizedBox(
                       width: w,
                       child: KpiCard(
-                        label: 'Revenue 7 days',
-                        value: settings.money(d7?.revenue ?? 0),
+                        label: 'Revenue this week',
+                        value: settings.money(week?.revenue ?? 0),
                         icon: Icons.date_range_rounded,
                         color: AppColors.success,
                         soft: AppColors.successSoft,
@@ -147,8 +168,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
                     SizedBox(
                       width: w,
                       child: KpiCard(
-                        label: 'Revenue 30 days',
-                        value: settings.money(d30?.revenue ?? 0),
+                        label: 'Revenue this month',
+                        value: settings.money(month?.revenue ?? 0),
                         icon: Icons.calendar_month_rounded,
                         color: AppColors.isDark ? const Color(0xFFA78BFA) : const Color(0xFF7C3AED),
                         soft: AppColors.isDark ? const Color(0xFF3B2A6E) : const Color(0xFFEDE9FE),
@@ -308,6 +329,22 @@ class _ReportsScreenState extends State<ReportsScreen> {
 
               // profit & margins: revenue vs cost of goods + top earners
               MarginCard(days: _range),
+              const SizedBox(height: AppSpace.s4),
+
+              // margin per category: which product families actually pay
+              _CategoryMarginCard(data: _catMargins),
+              const SizedBox(height: AppSpace.s4),
+
+              // slow-moving stock: capital sitting on the shelf
+              _SlowMoversCard(data: _slow),
+              const SizedBox(height: AppSpace.s4),
+
+              // seasonal trends: revenue by month, last 12 months
+              _SeasonalCard(data: _months),
+              const SizedBox(height: AppSpace.s4),
+
+              // tax / VAT report: monthly taxable base + tax collected
+              _TaxReportCard(data: _tax),
               const SizedBox(height: AppSpace.s4),
 
               // who sold what, how much, what they earned
@@ -991,6 +1028,443 @@ class _CategoryPie extends StatelessWidget {
           ],
         ),
       ],
+    );
+  }
+}
+
+// ---------- category margin ----------
+
+/// Margin per product family: revenue vs cost of goods per category, so
+/// the manager sees which lines actually pay (and which just move units).
+class _CategoryMarginCard extends StatelessWidget {
+  final List<({String name, int units, double revenue, double cost})>? data;
+  const _CategoryMarginCard({required this.data});
+
+  @override
+  Widget build(BuildContext context) {
+    final settings = context.watch<AppSettings>();
+    return SectionCard(
+      icon: Icons.donut_small_rounded,
+      title: 'Margin by category',
+      subtitle: 'Revenue vs cost of goods per product family',
+      children: [
+        if (data == null)
+          const Center(child: CircularProgressIndicator())
+        else if (data!.isEmpty)
+          const EmptyState(
+            icon: Icons.donut_small_outlined,
+            title: 'No sales in this period',
+            message: 'Category margins will appear here.',
+          )
+        else
+          Column(
+            children: [
+              for (final row in data!)
+                Container(
+                  margin: const EdgeInsets.only(bottom: AppSpace.s2),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpace.s3, vertical: AppSpace.s2),
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceTint,
+                    borderRadius: BorderRadius.circular(AppRadius.sm),
+                    border: Border.all(color: AppColors.borderSoft),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(row.name,
+                                style: TextStyle(
+                                    fontFamily: 'Carlito',
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.ink)),
+                            Text(
+                                '${row.units} sold · cost ${settings.money(row.cost)}',
+                                style: TextStyle(
+                                    fontFamily: 'Carlito',
+                                    fontSize: 11,
+                                    color: AppColors.muted)),
+                          ],
+                        ),
+                      ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(settings.money(row.revenue - row.cost),
+                              style: TextStyle(
+                                  fontFamily: 'Carlito',
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                  color: row.revenue - row.cost >= 0
+                                      ? AppColors.success
+                                      : AppColors.danger)),
+                          Text(
+                              '${row.revenue > 0 ? ((row.revenue - row.cost) / row.revenue * 100).toStringAsFixed(0) : 0}% margin',
+                              style: TextStyle(
+                                  fontFamily: 'Carlito',
+                                  fontSize: 11,
+                                  color: AppColors.muted)),
+                        ],
+                      ),
+                      const SizedBox(width: AppSpace.s3),
+                      SizedBox(
+                        width: 90,
+                        child: Text(settings.money(row.revenue),
+                            textAlign: TextAlign.right,
+                            style: TextStyle(
+                                fontFamily: 'Carlito',
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.primary)),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+      ],
+    );
+  }
+}
+
+// ---------- slow-moving stock ----------
+
+/// Capital sitting on the shelf: items with stock that barely (or never)
+/// sold in the period. The manager's markdown/reorder signal.
+class _SlowMoversCard extends StatelessWidget {
+  final List<({String name, String variantDesc, int stock, int unitsSold})>? data;
+  const _SlowMoversCard({required this.data});
+
+  @override
+  Widget build(BuildContext context) {
+    return SectionCard(
+      icon: Icons.hourglass_bottom_rounded,
+      title: 'Slow-moving stock',
+      subtitle: 'Shelf stock that barely sold — consider a promotion',
+      children: [
+        if (data == null)
+          const Center(child: CircularProgressIndicator())
+        else if (data!.isEmpty)
+          const EmptyState(
+            icon: Icons.hourglass_empty_rounded,
+            title: 'Nothing on the shelf',
+            message: 'Slow movers will appear when stock sits unsold.',
+          )
+        else
+          Column(
+            children: [
+              for (final row in data!)
+                Container(
+                  margin: const EdgeInsets.only(bottom: AppSpace.s2),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpace.s3, vertical: AppSpace.s2),
+                  decoration: BoxDecoration(
+                    color: row.unitsSold == 0
+                        ? AppColors.warningSoft
+                        : AppColors.surfaceTint,
+                    borderRadius: BorderRadius.circular(AppRadius.sm),
+                    border: Border.all(
+                        color: row.unitsSold == 0
+                            ? AppColors.warning.withValues(alpha: 0.3)
+                            : AppColors.borderSoft),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        row.unitsSold == 0
+                            ? Icons.priority_high_rounded
+                            : Icons.hourglass_bottom_rounded,
+                        size: 16,
+                        color: row.unitsSold == 0
+                            ? AppColors.warning
+                            : AppColors.muted,
+                      ),
+                      const SizedBox(width: AppSpace.s2),
+                      Expanded(
+                        child: Text(
+                          row.variantDesc.isEmpty
+                              ? row.name
+                              : '${row.name} · ${row.variantDesc}',
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                              fontFamily: 'Carlito',
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.ink),
+                        ),
+                      ),
+                      Text('${row.stock} in stock',
+                          style: TextStyle(
+                              fontFamily: 'Carlito',
+                              fontSize: 12,
+                              color: AppColors.muted)),
+                      const SizedBox(width: AppSpace.s3),
+                      Text(
+                          '${row.unitsSold} sold',
+                          style: TextStyle(
+                              fontFamily: 'Carlito',
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: row.unitsSold == 0
+                                  ? AppColors.warning
+                                  : AppColors.body)),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+      ],
+    );
+  }
+}
+
+// ---------- seasonal trends ----------
+
+/// Revenue by month for the last 12 months — the seasonal pattern
+/// (December spikes, back-to-school, holidays) at one glance.
+class _SeasonalCard extends StatelessWidget {
+  final List<(DateTime, double)>? data;
+  const _SeasonalCard({required this.data});
+
+  @override
+  Widget build(BuildContext context) {
+    final settings = context.watch<AppSettings>();
+    return SectionCard(
+      icon: Icons.wb_sunny_outlined,
+      title: 'Seasonal trends',
+      subtitle: 'Revenue by month — last 12 months',
+      children: [
+        SizedBox(
+          height: 220,
+          child: data == null
+              ? const Center(child: CircularProgressIndicator())
+              : data!.every((m) => m.$2 == 0)
+                  ? const EmptyState(
+                      icon: Icons.wb_sunny_outlined,
+                      title: 'No sales yet',
+                      message: 'Monthly revenue will appear here.',
+                    )
+                  : _MonthBarChart(data: data!, settings: settings),
+        ),
+      ],
+    );
+  }
+}
+
+class _MonthBarChart extends StatelessWidget {
+  final List<(DateTime, double)> data;
+  final AppSettings settings;
+  const _MonthBarChart({required this.data, required this.settings});
+
+  static const _monthLabels = [
+    'J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final maxV = data.fold(0.0, (s, d) => d.$2 > s ? d.$2 : s);
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        for (final (i, m) in data.indexed)
+          Expanded(
+            child: Tooltip(
+              message:
+                  '${m.$1.year}-${m.$1.month.toString().padLeft(2, '0')} · ${settings.money(m.$2)}',
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 3),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    Container(
+                      height: maxV > 0 ? 150 * (m.$2 / maxV) : 2,
+                      decoration: BoxDecoration(
+                        color: m.$2 > 0
+                            ? AppColors.chart[i % AppColors.chart.length]
+                            : AppColors.borderSoft,
+                        borderRadius: const BorderRadius.vertical(
+                            top: Radius.circular(4)),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(_monthLabels[m.$1.month - 1],
+                        style: TextStyle(
+                            fontFamily: 'Carlito',
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.muted)),
+                  ],
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+// ---------- tax / VAT report ----------
+
+/// Tax/VAT report: taxable base and tax collected per month, with a CSV
+/// export for the accountant. Refunds reduce what was effectively collected.
+class _TaxReportCard extends StatelessWidget {
+  final List<
+          ({
+            DateTime month,
+            double taxable,
+            double taxCollected,
+            double refundedTax,
+          })>? data;
+  const _TaxReportCard({required this.data});
+
+  Future<void> _exportCsv(BuildContext context) async {
+    final rows = data;
+    if (rows == null) return;
+    final b = StringBuffer()
+      ..writeln('month,taxable_sales,tax_collected,tax_on_refunds,net_tax');
+    for (final r in rows) {
+      b.writeln([
+        '${r.month.year}-${r.month.month.toString().padLeft(2, '0')}',
+        (r.taxable).toStringAsFixed(2),
+        (r.taxCollected).toStringAsFixed(2),
+        (r.refundedTax).toStringAsFixed(2),
+        (r.taxCollected - r.refundedTax).toStringAsFixed(2),
+      ].map(CsvUtil.escape).join(','));
+    }
+    final result = await CsvUtil.saveFile(
+      name: 'tax-report-${DateTime.now().toIso8601String().substring(0, 10)}.csv',
+      data: CsvUtil.encodeUtf8(b.toString()),
+    );
+    if (context.mounted && result != null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Tax report CSV $result'),
+        behavior: SnackBarBehavior.floating,
+      ));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final settings = context.watch<AppSettings>();
+    final rows = data;
+    final totalTaxable =
+        rows?.fold(0.0, (s, r) => s + r.taxable) ?? 0;
+    final totalTax = rows?.fold(0.0, (s, r) => s + r.taxCollected) ?? 0;
+    final totalRefunded = rows?.fold(0.0, (s, r) => s + r.refundedTax) ?? 0;
+
+    return SectionCard(
+      icon: Icons.receipt_long_outlined,
+      title: 'Tax / VAT report',
+      subtitle:
+          'Tax rate ${settings.taxRate.toStringAsFixed(0)}% — collected per month (last 6)',
+      action: IconButton(
+        tooltip: 'Export CSV',
+        icon: const Icon(Icons.file_download_outlined, size: 20),
+        onPressed: rows == null || rows.isEmpty ? null : () => _exportCsv(context),
+      ),
+      children: [
+        if (rows == null)
+          const Center(child: CircularProgressIndicator())
+        else ...[
+          Container(
+            padding: const EdgeInsets.all(AppSpace.s3),
+            decoration: BoxDecoration(
+              color: AppColors.primarySoft,
+              borderRadius: BorderRadius.circular(AppRadius.sm),
+            ),
+            child: Row(
+              children: [
+                _taxCell('Taxable sales', settings.money(totalTaxable)),
+                _taxCell('Tax collected', settings.money(totalTax)),
+                _taxCell('Tax on refunds', '- ${settings.money(totalRefunded)}'),
+                _taxCell('Net tax due', settings.money(totalTax - totalRefunded),
+                    bold: true),
+              ],
+            ),
+          ),
+          const SizedBox(height: AppSpace.s3),
+          for (final r in rows.reversed)
+            Padding(
+              padding: const EdgeInsets.only(bottom: AppSpace.s1),
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 92,
+                    child: Text(
+                        '${r.month.year}-${r.month.month.toString().padLeft(2, '0')}',
+                        style: TextStyle(
+                            fontFamily: 'Carlito',
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.body)),
+                  ),
+                  Expanded(
+                    child: Text(settings.money(r.taxable),
+                        style: TextStyle(
+                            fontFamily: 'Carlito',
+                            fontSize: 12,
+                            color: AppColors.muted)),
+                  ),
+                  Text(settings.money(r.taxCollected),
+                      style: TextStyle(
+                          fontFamily: 'Carlito',
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.ink)),
+                  const SizedBox(width: AppSpace.s2),
+                  SizedBox(
+                    width: 64,
+                    child: Text(
+                        r.refundedTax > 0
+                            ? '-${settings.moneyPlain(r.refundedTax)}'
+                            : '—',
+                        textAlign: TextAlign.right,
+                        style: TextStyle(
+                            fontFamily: 'Carlito',
+                            fontSize: 12,
+                            color: AppColors.danger)),
+                  ),
+                ],
+              ),
+            ),
+          if (settings.taxRate <= 0)
+            Padding(
+              padding: const EdgeInsets.only(top: AppSpace.s2),
+              child: Text(
+                'Tax is off — set your rate in Settings → Currency & tax to '
+                'start collecting VAT on receipts.',
+                style: TextStyle(
+                    fontFamily: 'Carlito', fontSize: 11, color: AppColors.faint),
+              ),
+            ),
+        ],
+      ],
+    );
+  }
+
+  Widget _taxCell(String label, String value, {bool bold = false}) {
+    return Expanded(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label.toUpperCase(),
+              style: TextStyle(
+                  fontFamily: 'Carlito',
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.4,
+                  color: AppColors.primaryDark.withValues(alpha: 0.7))),
+          Text(value,
+              style: TextStyle(
+                  fontFamily: 'Carlito',
+                  fontSize: bold ? 14 : 13,
+                  fontWeight: bold ? FontWeight.w800 : FontWeight.w700,
+                  color: AppColors.primaryDark)),
+        ],
+      ),
     );
   }
 }

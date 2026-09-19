@@ -72,11 +72,22 @@ class SalesProvider extends ChangeNotifier {
         'amount_paid': amountPaid,
         'change_due': change,
         'status': 'completed',
+        'promo_code': cart.promo?.code,
+        'promo_discount': cart.promoDiscount,
         'created_at': now,
         'cloud_id': null,
         'dirty': 1,
         'updated_at': now,
       });
+
+      // Promotion usage: bump the counter atomically inside the same
+      // transaction so limits hold even when two tills race.
+      if (cart.promo != null) {
+        await txn.rawUpdate(
+            'UPDATE promotions SET used_count = used_count + 1, dirty = 1, '
+            'updated_at = ? WHERE UPPER(code) = ? AND deleted = 0',
+            [now, cart.promo!.code.toUpperCase()]);
+      }
 
       for (final item in cart.items) {
         await txn.insert('sale_items', {
@@ -166,6 +177,8 @@ class SalesProvider extends ChangeNotifier {
         amountPaid: amountPaid,
         changeDue: change,
         createdAt: now,
+        promoCode: cart.promo?.code,
+        promoDiscount: cart.promoDiscount,
       );
     });
 
@@ -360,6 +373,30 @@ class SalesProvider extends ChangeNotifier {
     );
   }
 
+  /// Aggregates sales since an absolute epoch (lets callers ask for
+  /// calendar windows — this week, this month — not just trailing days).
+  Future<({double revenue, int orders, int itemsSold})> summarySince(
+      int startEpoch) async {
+    final db = await DB.instance();
+    final rows = await db.rawQuery('''
+      SELECT COUNT(*) AS orders,
+             COALESCE(SUM(total), 0) AS revenue
+      FROM sales
+      WHERE status = 'completed' AND created_at >= ?
+    ''', [startEpoch]);
+    final itemRows = await db.rawQuery('''
+      SELECT COALESCE(SUM(si.qty), 0) AS items
+      FROM sale_items si
+      JOIN sales s ON s.id = si.sale_id
+      WHERE s.status = 'completed' AND s.created_at >= ?
+    ''', [startEpoch]);
+    return (
+      revenue: (rows.first['revenue'] as num?)?.toDouble() ?? 0,
+      orders: rows.first['orders'] as int? ?? 0,
+      itemsSold: itemRows.first['items'] as int? ?? 0,
+    );
+  }
+
   /// Daily revenue for the last `days` days, local-time grouped.
   Future<List<(DateTime, double)>> revenueByDay(int days) async {
     final db = await DB.instance();
@@ -444,22 +481,31 @@ class SalesProvider extends ChangeNotifier {
   /// sold by one staff member since local midnight.
   Future<({int orders, double revenue, int itemsSold})> todaySummaryForUser(
       int userId) async {
-    final db = await DB.instance();
+    return summarySinceForUser(userId, _midnightEpoch());
+  }
+
+  static int _midnightEpoch() {
     final now = DateTime.now();
-    final midnight = DateTime(now.year, now.month, now.day)
-        .millisecondsSinceEpoch ~/
-        1000;
+    return DateTime(now.year, now.month, now.day).millisecondsSinceEpoch ~/ 1000;
+  }
+
+  /// Same as [todaySummaryForUser] but from an absolute epoch — lets the
+  /// personal dashboard show this week / this month for the signed-in
+  /// salesperson without exposing anyone else's numbers.
+  Future<({int orders, double revenue, int itemsSold})> summarySinceForUser(
+      int userId, int startEpoch) async {
+    final db = await DB.instance();
     final rows = await db.rawQuery('''
       SELECT COUNT(*) AS orders, COALESCE(SUM(total), 0) AS revenue
       FROM sales
       WHERE status = 'completed' AND user_id = ? AND created_at >= ?
-    ''', [userId, midnight]);
+    ''', [userId, startEpoch]);
     final itemRows = await db.rawQuery('''
       SELECT COALESCE(SUM(si.qty), 0) AS items
       FROM sale_items si
       JOIN sales s ON s.id = si.sale_id
       WHERE s.status = 'completed' AND s.user_id = ? AND s.created_at >= ?
-    ''', [userId, midnight]);
+    ''', [userId, startEpoch]);
     return (
       orders: rows.first['orders'] as int? ?? 0,
       revenue: (rows.first['revenue'] as num?)?.toDouble() ?? 0,
@@ -595,6 +641,177 @@ class SalesProvider extends ChangeNotifier {
       WHERE s.status = 'completed' AND s.created_at >= ?
     ''', [cutoff]);
     return (rows.first['cost'] as num?)?.toDouble() ?? 0;
+  }
+
+  /// Margin per CATEGORY for the window: revenue vs cost of goods per
+  /// product family, so the manager sees which lines actually pay.
+  Future<List<
+          ({
+            String name,
+            int units,
+            double revenue,
+            double cost,
+          })>> categoryMargins(int days, {int limit = 8}) async {
+    final db = await DB.instance();
+    final cutoff = days > 0
+        ? DateTime.now()
+                .subtract(Duration(days: days))
+                .millisecondsSinceEpoch ~/
+            1000
+        : 0;
+    final rows = await db.rawQuery('''
+      SELECT IFNULL(cat.name, 'Uncategorized') AS name,
+             SUM(si.qty) AS units,
+             SUM(si.line_total) AS revenue,
+             SUM(si.qty * CASE WHEN si.unit_cost > 0 THEN si.unit_cost
+                               ELSE COALESCE(v.cost, 0) END) AS cost
+      FROM sale_items si
+      JOIN sales s ON s.id = si.sale_id
+      LEFT JOIN variants v ON v.id = si.variant_id
+      LEFT JOIN products p ON p.id = v.product_id
+      LEFT JOIN categories cat ON cat.id = p.category_id
+      WHERE s.status = 'completed' AND s.created_at >= ?
+      GROUP BY IFNULL(cat.name, 'Uncategorized')
+      ORDER BY revenue DESC
+      LIMIT ?
+    ''', [cutoff, limit]);
+    return rows
+        .map((r) => (
+              name: r['name'] as String? ?? 'Uncategorized',
+              units: r['units'] as int? ?? 0,
+              revenue: (r['revenue'] as num?)?.toDouble() ?? 0,
+              cost: (r['cost'] as num?)?.toDouble() ?? 0,
+            ))
+        .toList();
+  }
+
+  /// SLOW-MOVING stock: items with shelf stock that barely sold in the
+  /// window (units sold ascending; never-sold first). Capital sitting on
+  /// the shelf — the manager's restock/pricing signal.
+  Future<List<
+          ({
+            String name,
+            String variantDesc,
+            int stock,
+            int unitsSold,
+          })>> slowMovers(int days, {int limit = 8}) async {
+    final db = await DB.instance();
+    final cutoff = days > 0
+        ? DateTime.now()
+                .subtract(Duration(days: days))
+                .millisecondsSinceEpoch ~/
+            1000
+        : 0;
+    final rows = await db.rawQuery('''
+      SELECT p.name AS name, v.size || CASE WHEN v.color != '' THEN ' · ' || v.color ELSE '' END AS variant_desc,
+             v.stock AS stock,
+             IFNULL((SELECT SUM(si.qty) FROM sale_items si
+                     JOIN sales s2 ON s2.id = si.sale_id
+                     WHERE si.variant_id = v.id AND s2.status = 'completed'
+                       AND s2.created_at >= ?), 0) AS units_sold
+      FROM variants v
+      JOIN products p ON p.id = v.product_id
+      WHERE p.archived = 0 AND v.archived = 0 AND v.deleted = 0 AND v.stock > 0
+      ORDER BY units_sold ASC, v.stock DESC
+      LIMIT ?
+    ''', [cutoff, limit]);
+    return rows
+        .map((r) => (
+              name: r['name'] as String? ?? '',
+              variantDesc: r['variant_desc'] as String? ?? '',
+              stock: r['stock'] as int? ?? 0,
+              unitsSold: r['units_sold'] as int? ?? 0,
+            ))
+        .toList();
+  }
+
+  /// Revenue grouped by month for the last [months] months (seasonal
+  /// trends: Dec spikes, back-to-school, etc.). Missing months are zero.
+  Future<List<(DateTime, double)>> revenueByMonth(int months) async {
+    final db = await DB.instance();
+    final rows = await db.rawQuery('''
+      SELECT strftime('%Y-%m', created_at, 'unixepoch', 'localtime') AS m,
+             SUM(total) AS revenue
+      FROM sales
+      WHERE status = 'completed'
+      GROUP BY m
+      ORDER BY m
+    ''');
+    final byMonth = <String, double>{
+      for (final r in rows) r['m'] as String: (r['revenue'] as num).toDouble(),
+    };
+    final out = <(DateTime, double)>[];
+    final now = DateTime.now();
+    for (var i = months - 1; i >= 0; i--) {
+      final d = DateTime(now.year, now.month - i, 1);
+      final key =
+          '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}';
+      out.add((d, byMonth[key] ?? 0));
+    }
+    return out;
+  }
+
+  /// Tax collected per month for the last [months] months (VAT report):
+  /// taxable base (subtotal − discounts) and the tax actually collected.
+  Future<List<
+          ({
+            DateTime month,
+            double taxable,
+            double taxCollected,
+            double refundedTax,
+          })>> taxByMonth(int months) async {
+    final db = await DB.instance();
+    final rows = await db.rawQuery('''
+      SELECT strftime('%Y-%m', created_at, 'unixepoch', 'localtime') AS m,
+             SUM(subtotal - discount) AS taxable,
+             SUM(tax) AS tax_collected
+      FROM sales
+      WHERE status = 'completed'
+      GROUP BY m
+      ORDER BY m
+    ''');
+    final refundRows = await db.rawQuery('''
+      SELECT strftime('%Y-%m', created_at, 'unixepoch', 'localtime') AS m,
+             SUM(tax) AS refunded_tax
+      FROM sales
+      WHERE status = 'refunded' AND tax > 0
+      GROUP BY m
+      ORDER BY m
+    ''');
+    final byMonth = <String,
+        ({double taxable, double taxCollected, double refundedTax})>{};
+    for (final r in rows) {
+      byMonth[r['m'] as String] = (
+        taxable: (r['taxable'] as num?)?.toDouble() ?? 0,
+        taxCollected: (r['tax_collected'] as num?)?.toDouble() ?? 0,
+        refundedTax: 0,
+      );
+    }
+    for (final r in refundRows) {
+      final m = r['m'] as String;
+      final cur = byMonth[m] ??
+          (taxable: 0.0, taxCollected: 0.0, refundedTax: 0.0);
+      byMonth[m] = (
+        taxable: cur.taxable,
+        taxCollected: cur.taxCollected,
+        refundedTax: (r['refunded_tax'] as num?)?.toDouble() ?? 0,
+      );
+    }
+    final out = <({DateTime month, double taxable, double taxCollected, double refundedTax})>[];
+    final now = DateTime.now();
+    for (var i = months - 1; i >= 0; i--) {
+      final d = DateTime(now.year, now.month - i, 1);
+      final key =
+          '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}';
+      final v = byMonth[key];
+      out.add((
+        month: d,
+        taxable: v?.taxable ?? 0,
+        taxCollected: v?.taxCollected ?? 0,
+        refundedTax: v?.refundedTax ?? 0,
+      ));
+    }
+    return out;
   }
 
   /// Totals per payment method in the window (manager feature).

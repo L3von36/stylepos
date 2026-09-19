@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/customer.dart';
+import '../../models/promotion.dart';
 import '../../services/approvals.dart';
 import '../../state/auth.dart';
 import '../../state/cart.dart';
 import '../../state/catalog.dart';
 import '../../state/customers.dart';
 import '../../state/nav.dart';
+import '../../state/promotions.dart';
 import '../../state/settings.dart';
 import '../../widgets/rive_view.dart';
 import '../../widgets/ui.dart';
@@ -223,6 +225,10 @@ class CartPanel extends StatelessWidget {
             ),
             child: Column(
               children: [
+                // Promotion code: apply / applied state. Promo discounts
+                // are manager-approved by design — no PIN gate here.
+                _PromoRow(),
+                const SizedBox(height: AppSpace.s2),
                 Row(
                   children: [
                     Text('Discount (${settings.currencySymbol})',
@@ -253,7 +259,11 @@ class CartPanel extends StatelessWidget {
                 const SizedBox(height: AppSpace.s2),
                 _totalRow(context, 'Subtotal', settings.money(cart.subtotal)),
                 if (cart.discount > 0)
-                  _totalRow(context, 'Discount', '- ${settings.money(cart.discount)}',
+                  _totalRow(context, 'Manual discount', '- ${settings.money(cart.discount)}',
+                      color: AppColors.danger),
+                if (cart.promoDiscount > 0)
+                  _totalRow(context, 'Promo ${cart.promo!.code}',
+                      '- ${settings.money(cart.promoDiscount)}',
                       color: AppColors.danger),
                 if (settings.taxRate > 0)
                   _totalRow(
@@ -410,7 +420,8 @@ class CartPanel extends StatelessWidget {
                                     Text(
                                       '${h.itemCount} item${h.itemCount == 1 ? '' : 's'} · '
                                       '${two(when.hour)}:${two(when.minute)}'
-                                      '${h.discount > 0 ? ' · disc ${settings.money(h.discount)}' : ''}',
+                                      '${h.discount > 0 ? ' · disc ${settings.money(h.discount)}' : ''}'
+                                      '${h.promoCode != null ? ' · ${h.promoCode}' : ''}',
                                       style: TextStyle(
                                           fontFamily: 'Carlito', fontSize: 12, color: AppColors.muted),
                                     ),
@@ -469,8 +480,10 @@ class CartPanel extends StatelessWidget {
                                     if (go != true) return;
                                   }
                                   if (!sheetContext.mounted) return;
+                                  final promos = sheetContext.read<PromotionsProvider>();
                                   final ok = await cart.resumeHeld(
-                                      h, catalog.findVariantById);
+                                      h, catalog.findVariantById,
+                                      promoLookup: promos.findByCode);
                                   if (sheetContext.mounted && !ok) {
                                     Navigator.pop(sheetContext);
                                     ScaffoldMessenger.of(context).showSnackBar(
@@ -534,6 +547,164 @@ class CartPanel extends StatelessWidget {
     }
     cart.setCustomer(selected.id == 0 ? null : selected);
     customers.reload();
+  }
+}
+
+class _PromoRow extends StatelessWidget {
+  const _PromoRow();
+
+  @override
+  Widget build(BuildContext context) {
+    final cart = context.watch<CartProvider>();
+    final settings = context.watch<AppSettings>();
+
+    if (cart.promo != null) {
+      final p = cart.promo!;
+      return Container(
+        padding: const EdgeInsets.symmetric(
+            horizontal: AppSpace.s3, vertical: AppSpace.s2),
+        decoration: BoxDecoration(
+          color: AppColors.successSoft,
+          borderRadius: BorderRadius.circular(AppRadius.sm),
+          border: Border.all(color: AppColors.success.withValues(alpha: 0.3)),
+        ),
+        child: Row(children: [
+          Icon(Icons.sell_rounded, size: 16, color: AppColors.success),
+          const SizedBox(width: AppSpace.s2),
+          Expanded(
+            child: Text(
+              '${p.code} · ${p.isPercent ? '${Promotion.trimPublic(p.value)}% off' : '${settings.money(p.value)} off'}'
+              '  (−${settings.money(cart.promoDiscount)})',
+              style: TextStyle(
+                  fontFamily: 'Carlito',
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.success),
+            ),
+          ),
+          InkWell(
+            borderRadius: BorderRadius.circular(AppRadius.pill),
+            onTap: () => context.read<CartProvider>().setPromo(null),
+            child: Padding(
+              padding: const EdgeInsets.all(2),
+              child: Icon(Icons.close_rounded,
+                  size: 14, color: AppColors.success),
+            ),
+          ),
+        ]),
+      );
+    }
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(AppRadius.sm),
+      onTap: () => _applyPromoCode(context),
+      child: Container(
+        padding: const EdgeInsets.symmetric(
+            horizontal: AppSpace.s3, vertical: AppSpace.s2),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(AppRadius.sm),
+          border: Border.all(
+              color: AppColors.border,
+              strokeAlign: BorderSide.strokeAlignInside),
+        ),
+        child: Row(children: [
+          Icon(Icons.local_offer_outlined, size: 15, color: AppColors.info),
+          const SizedBox(width: AppSpace.s2),
+          Text('Apply promo code',
+              style: TextStyle(
+                  fontFamily: 'Carlito',
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.info)),
+          const Spacer(),
+          Icon(Icons.chevron_right_rounded, size: 15, color: AppColors.faint),
+        ]),
+      ),
+    );
+  }
+
+  Future<void> _applyPromoCode(BuildContext context) async {
+    final promos = context.read<PromotionsProvider>();
+    final cart = context.read<CartProvider>();
+    final settings = context.read<AppSettings>();
+
+    final code = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) {
+        final c = TextEditingController();
+        String? err;
+        return StatefulBuilder(
+          builder: (dialogContext, setD) => AlertDialog(
+            titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
+            contentPadding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+            actionsPadding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+            title: Row(children: [
+              Icon(Icons.local_offer_outlined, size: 21, color: AppColors.info),
+              const SizedBox(width: AppSpace.s2),
+              const Text('Promo code'),
+            ]),
+            content: SizedBox(
+              width: 340,
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                TextField(
+                  controller: c,
+                  autofocus: true,
+                  textCapitalization: TextCapitalization.characters,
+                  decoration: const InputDecoration(
+                    labelText: 'Code (e.g. SUMMER25)',
+                  ),
+                  onSubmitted: (v) =>
+                      Navigator.pop(dialogContext, v.trim().toUpperCase()),
+                ),
+                if (err != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: AppSpace.s2),
+                    child: Text(err!,
+                        style: TextStyle(
+                            fontFamily: 'Carlito',
+                            fontSize: 12,
+                            color: AppColors.danger)),
+                  ),
+              ]),
+            ),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: const Text('Cancel')),
+              FilledButton(
+                onPressed: () {
+                  final p = promos.findByCode(c.text);
+                  final reason = p?.blockedReason(subtotal: cart.subtotal);
+                  if (p == null) {
+                    setD(() => err = 'Unknown code — check with your manager.');
+                    return;
+                  }
+                  if (reason != null) {
+                    setD(() => err = reason);
+                    return;
+                  }
+                  Navigator.pop(dialogContext, c.text.trim().toUpperCase());
+                },
+                child: const Text('Apply'),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+
+    if (code == null || code.isEmpty || !context.mounted) return;
+    final p = promos.findByCode(code);
+    if (p == null || p.blockedReason(subtotal: cart.subtotal) != null) return;
+    cart.setPromo(p);
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(
+            '${p.code} applied — ${p.isPercent ? '${Promotion.trimPublic(p.value)}% off' : '${settings.money(p.value)} off'}'),
+        behavior: SnackBarBehavior.floating,
+      ));
+    }
   }
 }
 

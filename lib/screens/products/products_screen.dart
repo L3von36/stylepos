@@ -6,6 +6,8 @@ import '../../state/auth.dart';
 import '../../state/catalog.dart';
 import '../../state/settings.dart';
 import '../../widgets/ui.dart';
+import '../promotions/promotions_screen.dart';
+import 'bulk_price_dialog.dart';
 import 'label_print_dialog.dart';
 import 'product_csv.dart';
 import 'product_edit_screen.dart';
@@ -108,31 +110,52 @@ class _ProductsScreenState extends State<ProductsScreen> {
             actions: [
               if (canManage)
                 OutlinedButton.icon(
-                  onPressed: () => showLabelPrintDialog(
-                    context,
-                    groups: [
-                      for (final p in products)
-                        if (p.variants.isNotEmpty) LabelGroup(p, p.variants),
-                    ],
-                  ),
-                  icon: const Icon(Icons.style_outlined, size: 17),
-                  label: const Text('Print labels'),
-                ),
-              if (canManage)
-                OutlinedButton.icon(
                   onPressed: () => _manageCategories(context),
                   icon: const Icon(Icons.category_outlined, size: 17),
                   label: const Text('Categories'),
                 ),
               if (canManage)
+                OutlinedButton.icon(
+                  onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const PromotionsScreen())),
+                  icon: const Icon(Icons.sell_outlined, size: 17),
+                  label: const Text('Promotions'),
+                ),
+              if (canManage)
                 PopupMenuButton<String>(
-                  tooltip: 'Bulk catalog CSV',
-                  icon: const Icon(Icons.import_export_rounded, size: 21),
+                  tooltip: 'More tools',
+                  icon: const Icon(Icons.more_horiz_rounded, size: 21),
                   onSelected: (v) {
+                    if (v == 'labels') {
+                      showLabelPrintDialog(
+                        context,
+                        groups: [
+                          for (final p in products)
+                            if (p.variants.isNotEmpty) LabelGroup(p, p.variants),
+                        ],
+                      );
+                    }
+                    if (v == 'bulkprice') showBulkPriceDialog(context);
                     if (v == 'export') ProductCsv.export(context);
                     if (v == 'import') ProductCsv.import(context);
                   },
                   itemBuilder: (_) => const [
+                    PopupMenuItem(
+                      value: 'labels',
+                      child: ListTile(
+                        leading: Icon(Icons.style_outlined, size: 19),
+                        title: Text('Print shelf labels'),
+                        dense: true,
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: 'bulkprice',
+                      child: ListTile(
+                        leading: Icon(Icons.price_change_outlined, size: 19),
+                        title: Text('Bulk price update'),
+                        dense: true,
+                      ),
+                    ),
                     PopupMenuItem(
                       value: 'export',
                       child: ListTile(

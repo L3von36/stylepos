@@ -48,7 +48,7 @@ class DB {
 
     _instance = await openDatabase(
       dbPath,
-      version: 7,
+      version: 8,
       onConfigure: (db) => db.execute('PRAGMA foreign_keys = ON'),
       onUpgrade: (db, oldVersion, newVersion) async {
         // v2: product photos (relative filename inside the app images dir).
@@ -159,6 +159,19 @@ class DB {
           await db.execute(
               'UPDATE attendance SET updated_at = clock_in WHERE updated_at = 0');
         }
+        // v8: pricing & promotions (coupons + seasonal campaigns applied
+        // by code at the till) and the promo reference on sales so receipts
+        // and reports can show which promotion a sale used.
+        if (oldVersion < 8) {
+          await _createPromoTables(db);
+          try {
+            await db.execute('ALTER TABLE sales ADD COLUMN promo_code TEXT');
+          } catch (_) {}
+          try {
+            await db.execute(
+                'ALTER TABLE sales ADD COLUMN promo_discount REAL NOT NULL DEFAULT 0');
+          } catch (_) {}
+        }
       },
       onCreate: (db, version) async {
         await db.execute('''
@@ -254,6 +267,8 @@ class DB {
             amount_paid REAL NOT NULL DEFAULT 0,
             change_due REAL NOT NULL DEFAULT 0,
             status TEXT NOT NULL DEFAULT 'completed',
+            promo_code TEXT,
+            promo_discount REAL NOT NULL DEFAULT 0,
             created_at INTEGER NOT NULL,
             cloud_id TEXT,
             dirty INTEGER NOT NULL DEFAULT 0,
@@ -303,6 +318,7 @@ class DB {
 
         await _createAccountabilityTables(db);
         await _createOpsTables(db);
+        await _createPromoTables(db);
 
         await _seed(db);
       },
@@ -388,6 +404,36 @@ class DB {
     ''');
     await db.execute(
         'CREATE INDEX IF NOT EXISTS idx_commissions_user ON commissions(user_id)');
+  }
+
+  /// Promotions (coupons + seasonal campaigns). Kept in a helper so both
+  /// fresh installs (onCreate) and upgrades (< v8) build it once. Carries
+  /// the standard sync bookkeeping — promotions are manager-created on any
+  /// device and must reach every till.
+  static Future<void> _createPromoTables(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS promotions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        code TEXT NOT NULL,
+        kind TEXT NOT NULL DEFAULT 'coupon',
+        type TEXT NOT NULL DEFAULT 'percent',
+        value REAL NOT NULL DEFAULT 0,
+        min_subtotal REAL NOT NULL DEFAULT 0,
+        starts_at INTEGER,
+        ends_at INTEGER,
+        usage_limit INTEGER NOT NULL DEFAULT 0,
+        used_count INTEGER NOT NULL DEFAULT 0,
+        active INTEGER NOT NULL DEFAULT 1,
+        created_at INTEGER NOT NULL,
+        cloud_id TEXT,
+        dirty INTEGER NOT NULL DEFAULT 0,
+        deleted INTEGER NOT NULL DEFAULT 0,
+        updated_at INTEGER NOT NULL DEFAULT 0
+      )
+    ''');
+    await db.execute(
+        'CREATE INDEX IF NOT EXISTS idx_promotions_code ON promotions(code)');
   }
 
   /// Shift logs (clock in/out) and the audit trail. Kept in a helper so
@@ -491,6 +537,7 @@ class DB {
         'purchase_orders',
         'purchase_order_items',
         'commissions',
+        'promotions',
       ]) {
         await txn.execute('DELETE FROM $t');
       }
@@ -518,6 +565,7 @@ class DB {
       'low_stock_default': '5',
       'loyalty_step': '100',
       'receipt_seq': '0',
+      'payment_methods': 'cash,card,mobile',
     };
     for (final e in defaults.entries) {
       await db.insert('settings', {'key': e.key, 'value': e.value});

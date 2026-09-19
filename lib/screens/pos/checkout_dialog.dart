@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../models/sale.dart';
 import '../../services/approvals.dart';
@@ -37,6 +38,11 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
   int _pointsEarned = 0;
   File? _savedPdf;
 
+  /// Contact captured before the cart clears — the done stage offers to
+  /// email/SMS the receipt to the attached customer.
+  String? _customerEmail;
+  String? _customerPhone;
+
   @override
   void dispose() {
     _tendered.dispose();
@@ -60,6 +66,10 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
     final catalog = context.read<CatalogProvider>();
     final customers = context.read<CustomersProvider>();
     final actor = auth.user!;
+
+    // Capture who the receipt goes to (cart is cleared after checkout).
+    _customerEmail = cart.customer?.email;
+    _customerPhone = cart.customer?.phone;
 
     // ---- manager approval for manual discounts (salesperson gate) -------
     // A discount at or above the configured threshold needs a manager PIN
@@ -192,11 +202,79 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
     if (_savedPdf != null) await ReceiptService.sharePdf(_savedPdf!);
   }
 
+  String _receiptText(Sale sale, AppSettings settings) {
+    final b = StringBuffer()
+      ..writeln(settings.shopName)
+      ..writeln('Receipt ${sale.receiptNo}')
+      ..writeln('Date: ${DateTime.fromMillisecondsSinceEpoch(sale.createdAt * 1000)}')
+      ..writeln('--------------------------------')
+      ..writeln('Total: ${settings.money(sale.total)}')
+      ..writeln('Paid by: ${_methodLabel(sale.paymentMethod)}');
+    if (sale.changeDue > 0) b.writeln('Change: ${settings.money(sale.changeDue)}');
+    b
+      ..writeln('--------------------------------')
+      ..writeln(settings.receiptFooter);
+    return b.toString();
+  }
+
+  /// Email: share sheet with the PDF attached (Gmail/Outlook pick it up);
+  /// falls back to a plain-text share on platforms without file sharing.
+  Future<void> _emailReceipt() async {
+    final sale = _sale!;
+    final settings = context.read<AppSettings>();
+    final text = _receiptText(sale, settings);
+    try {
+      if (!kIsWeb && _savedPdf != null) {
+        await SharePlus.instance.share(ShareParams(
+          files: [XFile(_savedPdf!.path, mimeType: 'application/pdf')],
+          subject: 'Receipt ${sale.receiptNo} — ${settings.shopName}',
+          text: text,
+        ));
+      } else {
+        await SharePlus.instance.share(ShareParams(
+          text: text,
+          subject: 'Receipt ${sale.receiptNo} — ${settings.shopName}',
+        ));
+      }
+      await Audit.add('receipt_emailed',
+          '${sale.receiptNo} to ${_customerEmail ?? 'customer'}');
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Could not share receipt: $e')));
+      }
+    }
+  }
+
+  /// SMS: plain-text receipt through the phone's share/SMS sheet.
+  Future<void> _smsReceipt() async {
+    final sale = _sale!;
+    final settings = context.read<AppSettings>();
+    try {
+      await SharePlus.instance.share(ShareParams(
+        text: _receiptText(sale, settings),
+        subject: 'Receipt ${sale.receiptNo}',
+      ));
+      await Audit.add(
+          'receipt_sms', '${sale.receiptNo} to ${_customerPhone ?? 'customer'}');
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Could not share receipt: $e')));
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final settings = context.watch<AppSettings>();
     final cart = context.watch<CartProvider>();
     final total = _sale?.total ?? cart.total(settings.taxRate);
+    // Keep the chosen method valid when the manager disables it later.
+    if (!settings.paymentMethods.contains(_method) &&
+        settings.paymentMethods.isNotEmpty) {
+      _method = settings.paymentMethods.first;
+    }
 
     return PopScope(
       canPop: _stage != _Stage.processing && _stage != _Stage.done,
@@ -337,11 +415,13 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
           style: const ButtonStyle(
             visualDensity: VisualDensity(vertical: 1.6),
           ),
-          segments: const [
-            ButtonSegment(value: 'cash', icon: Icon(Icons.payments_outlined, size: 18), label: Text('Cash')),
-            ButtonSegment(value: 'card', icon: Icon(Icons.credit_card_rounded, size: 18), label: Text('Card')),
-            ButtonSegment(
-                value: 'mobile', icon: Icon(Icons.smartphone_rounded, size: 18), label: Text('Mobile')),
+          segments: [
+            for (final m in settings.paymentMethods)
+              ButtonSegment(
+                value: m,
+                icon: Icon(_methodIcon(m), size: 18),
+                label: Text(_methodLabel(m)),
+              ),
           ],
           selected: {_method},
           onSelectionChanged: (s) => setState(() => _method = s.first),
@@ -491,6 +571,8 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
 
   Widget _buildDone(BuildContext context, AppSettings settings) {
     final sale = _sale!;
+    final canEmail = (_customerEmail ?? '').trim().isNotEmpty;
+    final canSms = (_customerPhone ?? '').trim().isNotEmpty;
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -557,6 +639,27 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
           ),
         ),
         const SizedBox(height: 12),
+        if (canEmail || canSms) ...[
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              if (canEmail)
+                OutlinedButton.icon(
+                  onPressed: _emailReceipt,
+                  icon: const Icon(Icons.mail_outline_rounded, size: 17),
+                  label: const Text('Email receipt'),
+                ),
+              if (canEmail && canSms) const SizedBox(width: AppSpace.s2),
+              if (canSms)
+                OutlinedButton.icon(
+                  onPressed: _smsReceipt,
+                  icon: const Icon(Icons.sms_outlined, size: 17),
+                  label: const Text('SMS receipt'),
+                ),
+            ],
+          ),
+          const SizedBox(height: AppSpace.s2),
+        ],
         Text(
           _savedPdf == null
               ? 'Save or print the receipt below.'
@@ -570,4 +673,10 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
 
   String _methodLabel(String m) =>
       m == 'cash' ? 'Cash' : m == 'card' ? 'Card' : 'Mobile money';
+
+  IconData _methodIcon(String m) => m == 'cash'
+      ? Icons.payments_outlined
+      : m == 'card'
+          ? Icons.credit_card_rounded
+          : Icons.smartphone_rounded;
 }

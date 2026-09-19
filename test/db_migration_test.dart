@@ -156,7 +156,7 @@ void main() {
     final colNames = cols.map((c) => c['name']).toSet();
 
     // -- assert --
-    expect(version, 7);
+    expect(version, 8);
     expect(colNames, containsAll(['image', 'cloud_id', 'dirty', 'deleted']));
     // v4: sales tables gained their sync bookkeeping too
     final saleCols = (await db.rawQuery('PRAGMA table_info(sales)'))
@@ -264,7 +264,7 @@ void main() {
 
     // -- act: open through the app (triggers onUpgrade 4 -> 7) --
     final db = await DB.instance();
-    expect(await db.getVersion(), 7);
+    expect(await db.getVersion(), 8);
 
     // -- assert: catalog + history wiped, cursors forgotten --
     for (final t in [

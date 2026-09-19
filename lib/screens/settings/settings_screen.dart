@@ -12,9 +12,11 @@ import 'package:path/path.dart' as p;
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../../data/database.dart';
 import '../../services/approvals.dart';
 import '../../services/audit.dart';
 import '../../services/backup_service.dart';
+import '../../services/branches.dart';
 import '../../state/auth.dart';
 import '../../state/settings.dart';
 import '../../widgets/ui.dart';
@@ -541,6 +543,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     onChanged: (v) =>
                         context.read<AppSettings>().save(receiptShowLogo: v),
                   ),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    dense: true,
+                    controlAffinity: ListTileControlAffinity.leading,
+                    activeThumbColor: AppColors.primary,
+                    title: const Text('Show cashier name on receipts'),
+                    value: s.receiptShowCashier,
+                    onChanged: (v) =>
+                        context.read<AppSettings>().save(receiptShowCashier: v),
+                  ),
                   Row(
                     children: [
                       OutlinedButton.icon(
@@ -707,6 +719,57 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                 ],
               ),
+
+              const SizedBox(height: AppSpace.s4),
+
+              // --- payment methods (checkout picker follows this) ---
+              SectionCard(
+                icon: Icons.account_balance_wallet_outlined,
+                title: 'Payment methods',
+                subtitle: 'What the till offers at checkout — applies instantly',
+                children: [
+                  for (final entry in const [
+                    ('cash', 'Cash', Icons.payments_outlined),
+                    ('card', 'Card', Icons.credit_card_rounded),
+                    ('mobile', 'Mobile money', Icons.smartphone_rounded),
+                  ])
+                    CheckboxListTile(
+                      contentPadding: EdgeInsets.zero,
+                      dense: true,
+                      controlAffinity: ListTileControlAffinity.leading,
+                      activeColor: AppColors.primary,
+                      title: Row(children: [
+                        Icon(entry.$3, size: 18, color: AppColors.primary),
+                        const SizedBox(width: AppSpace.s2),
+                        Text(entry.$2),
+                      ]),
+                      value: s.paymentMethods.contains(entry.$1),
+                      onChanged: (on) {
+                        final next = [...s.paymentMethods];
+                        if (on == true) {
+                          if (!next.contains(entry.$1)) next.add(entry.$1);
+                        } else {
+                          next.remove(entry.$1);
+                        }
+                        // Never leave the till with zero methods.
+                        if (next.isEmpty) return;
+                        context.read<AppSettings>().save(paymentMethods: next);
+                      },
+                    ),
+                  Text(
+                    'Cashiers can only charge the methods you tick here.',
+                    style: TextStyle(
+                        fontFamily: 'Carlito',
+                        fontSize: 11,
+                        color: AppColors.faint),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: AppSpace.s4),
+
+              // --- branches (multi-shop) ---
+              const _BranchesCard(),
 
               const SizedBox(height: AppSpace.s4),
 
@@ -921,6 +984,269 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
       ),
       ),
+    );
+  }
+}
+
+// ---------- branches (multi-shop) ----------
+
+/// Multi-branch management: every shop the manager owns (their root shop +
+/// its branches), create a new branch, or switch this device to another
+/// branch. Switching wipes the local mirror and re-pulls the target
+/// branch's data — each branch is a fully separate workspace.
+class _BranchesCard extends StatefulWidget {
+  const _BranchesCard();
+
+  @override
+  State<_BranchesCard> createState() => _BranchesCardState();
+}
+
+class _BranchesCardState extends State<_BranchesCard> {
+  List<BranchShop>? _shops;
+  bool _busy = false;
+  String _currentId = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _reload();
+  }
+
+  Future<void> _reload() async {
+    final shops = await Branches.list();
+    // Which branch does THIS device mirror right now? The remembered
+    // cloud_shop_id is kept in step by sign-in / branch switching.
+    String current = '';
+    try {
+      final db = await DB.instance();
+      final rows = await db.query('settings',
+          where: 'key = ?', whereArgs: ['cloud_shop_id']);
+      current = rows.isEmpty ? '' : (rows.first['value'] as String? ?? '');
+    } catch (_) {}
+    if (mounted) {
+      setState(() {
+        _shops = shops;
+        _currentId = current;
+      });
+    }
+  }
+
+  Future<void> _createBranch() async {
+    final auth = context.read<AuthProvider>();
+    final name = TextEditingController();
+    final error = <String>[];
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (c) => StatefulBuilder(
+        builder: (c, setD) => AlertDialog(
+          titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
+          contentPadding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+          actionsPadding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+          title: Row(children: [
+            Icon(Icons.add_business_outlined, size: 22, color: AppColors.primary),
+            const SizedBox(width: AppSpace.s2),
+            const Text('New branch'),
+          ]),
+          content: SizedBox(
+            width: 380,
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              TextField(
+                controller: name,
+                autofocus: true,
+                decoration: const InputDecoration(
+                  labelText: 'Branch name (e.g. Westlands branch)',
+                  helperText: 'A separate workspace with its own stock, '
+                      'staff and sales — you keep full control',
+                ),
+              ),
+              if (error.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: AppSpace.s2),
+                  child: Text(error.first,
+                      style: TextStyle(
+                          fontFamily: 'Carlito',
+                          fontSize: 12,
+                          color: AppColors.danger)),
+                ),
+            ]),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(c, false),
+                child: const Text('Cancel')),
+            FilledButton(
+              onPressed: () {
+                if (name.text.trim().isEmpty) {
+                  setD(() {
+                    error
+                      ..clear()
+                      ..add('Give the branch a name.');
+                  });
+                  return;
+                }
+                Navigator.pop(c, true);
+              },
+              child: const Text('Create branch'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (ok != true) return;
+    setState(() => _busy = true);
+    final (id, err) = await Branches.create(name.text,
+        actorUserId: auth.user?.id, actorName: auth.user?.name);
+    if (!mounted) return;
+    setState(() => _busy = false);
+    if (err != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(err), behavior: SnackBarBehavior.floating));
+      return;
+    }
+    await _reload();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Branch created — use "Switch" to move this device '
+            'to it (or keep running the current shop here)'),
+        behavior: SnackBarBehavior.floating,
+      ));
+    }
+  }
+
+  Future<void> _switch(BranchShop target) async {
+    final auth = context.read<AuthProvider>();
+    final sure = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: Text('Switch to ${target.name}?'),
+        content: SizedBox(
+          width: 400,
+          child: Text(
+            'This device will show ${target.name}\'s catalog, staff, sales '
+            'and reports instead of the current shop. Your other branch '
+            'data stays safe in the cloud — switch back any time.\n\n'
+            'The switch wipes and re-pulls this device\'s local data, so '
+            'stay online until it finishes.',
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(c, false),
+              child: const Text('Cancel')),
+          FilledButton(
+              onPressed: () => Navigator.pop(c, true),
+              child: const Text('Switch branch')),
+        ],
+      ),
+    );
+    if (sure != true || !mounted) return;
+    setState(() => _busy = true);
+    final err = await Branches.switchTo(target,
+        actorUserId: auth.user?.id, actorName: auth.user?.name);
+    if (!mounted) return;
+    setState(() => _busy = false);
+    if (err != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(err), behavior: SnackBarBehavior.floating));
+      return;
+    }
+    await context.read<AppSettings>().load();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Now running ${target.name}'),
+        behavior: SnackBarBehavior.floating,
+      ));
+      Navigator.of(context).popUntil((r) => r.isFirst);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SectionCard(
+      icon: Icons.account_tree_outlined,
+      title: 'Branches',
+      subtitle: 'Run more than one shop from this account',
+      children: [
+        if (_shops == null)
+          const Padding(
+            padding: EdgeInsets.all(AppSpace.s3),
+            child: Center(child: CircularProgressIndicator()),
+          )
+        else if (_shops!.length <= 1) ...[
+          Text(
+            'Multi-branch lets you run several shops (locations) from one '
+            'account. Every branch has its own catalog, staff, stock, sales '
+            'and reports — and you hop between them from here.',
+            style: TextStyle(
+                fontFamily: 'Carlito', fontSize: 12, color: AppColors.body),
+          ),
+          const SizedBox(height: AppSpace.s3),
+          OutlinedButton.icon(
+            onPressed: _busy ? null : _createBranch,
+            icon: const Icon(Icons.add_business_outlined, size: 18),
+            label: const Text('Create first branch'),
+          ),
+        ] else ...[
+          for (final shop in _shops!)
+            Container(
+              margin: const EdgeInsets.only(bottom: AppSpace.s2),
+              padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpace.s3, vertical: AppSpace.s2),
+              decoration: BoxDecoration(
+                color: shop.id == _currentId
+                    ? AppColors.primarySoft
+                    : AppColors.surfaceTint,
+                borderRadius: BorderRadius.circular(AppRadius.sm),
+                border: Border.all(color: AppColors.borderSoft),
+              ),
+              child: Row(children: [
+                Icon(
+                  shop.isBranch
+                      ? Icons.store_mall_directory_outlined
+                      : Icons.storefront_rounded,
+                  size: 19,
+                  color: AppColors.primary,
+                ),
+                const SizedBox(width: AppSpace.s2),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(shop.name,
+                          style: TextStyle(
+                              fontFamily: 'Carlito',
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.ink)),
+                      Text(
+                          '${shop.id == _currentId ? 'This device · ' : ''}'
+                          '${shop.isBranch ? 'Branch' : 'Main shop'} · code ${shop.code}',
+                          style: TextStyle(
+                              fontFamily: 'Carlito',
+                              fontSize: 11,
+                              color: AppColors.muted)),
+                    ],
+                  ),
+                ),
+                TextButton(
+                  onPressed: _busy ? null : () => _switch(shop),
+                  child: const Text('Switch'),
+                ),
+              ]),
+            ),
+          const SizedBox(height: AppSpace.s2),
+          OutlinedButton.icon(
+            onPressed: _busy ? null : _createBranch,
+            icon: const Icon(Icons.add_business_outlined, size: 18),
+            label: const Text('Add branch'),
+          ),
+        ],
+        if (_busy)
+          const Padding(
+            padding: EdgeInsets.only(top: AppSpace.s2),
+            child: LinearProgressIndicator(),
+          ),
+      ],
     );
   }
 }

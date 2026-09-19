@@ -39,6 +39,13 @@ class AppSettings extends ChangeNotifier {
   /// Whether receipts render the configured logo (default on).
   bool receiptShowLogo = true;
 
+  /// Whether receipts print the cashier's name (default on).
+  bool receiptShowCashier = true;
+
+  /// Checkout payment methods the shop accepts, in display order.
+  /// Managers configure this; the POS builds its method picker from it.
+  List<String> paymentMethods = ['cash', 'card', 'mobile'];
+
   /// Last successful backup on this device (epoch seconds), null = never.
   /// Device-local on purpose: backups are per-device files, and the local
   /// settings kv is not mirrored to the cloud.
@@ -151,6 +158,16 @@ class AppSettings extends ChangeNotifier {
     themeModeName = g('theme_mode') ?? themeModeName;
     receiptLogoB64 = g('receipt_logo_b64');
     receiptShowLogo = (g('receipt_show_logo') ?? '1') != '0';
+    receiptShowCashier = (g('receipt_show_cashier') ?? '1') != '0';
+    final pmRaw = g('payment_methods') ?? '';
+    if (pmRaw.trim().isNotEmpty) {
+      final list = pmRaw
+          .split(',')
+          .map((e) => e.trim())
+          .where((e) => ['cash', 'card', 'mobile'].contains(e))
+          .toList();
+      if (list.isNotEmpty) paymentMethods = list;
+    }
     lastBackupAt = int.tryParse(g('last_backup_at') ?? '');
     backupSnoozeUntil = int.tryParse(g('backup_snooze_until') ?? '');
     _rebuildFormatter();
@@ -173,6 +190,8 @@ class AppSettings extends ChangeNotifier {
     String? themeMode,
     String? receiptLogo,
     bool? receiptShowLogo,
+    bool? receiptShowCashier,
+    List<String>? paymentMethods,
   }) async {
     if (shopName != null) this.shopName = shopName;
     if (shopAddress != null) this.shopAddress = shopAddress;
@@ -187,6 +206,10 @@ class AppSettings extends ChangeNotifier {
     if (themeMode != null) themeModeName = themeMode;
     if (receiptLogo != null) receiptLogoB64 = receiptLogo.isEmpty ? null : receiptLogo;
     if (receiptShowLogo != null) this.receiptShowLogo = receiptShowLogo;
+    if (receiptShowCashier != null) this.receiptShowCashier = receiptShowCashier;
+    if (paymentMethods != null && paymentMethods.isNotEmpty) {
+      this.paymentMethods = paymentMethods;
+    }
 
     final db = await DB.instance();
     final map = <String, String>{
@@ -202,6 +225,8 @@ class AppSettings extends ChangeNotifier {
       'discount_pin_threshold': this.discountPinThreshold.toString(),
       'theme_mode': themeModeName,
       'receipt_show_logo': this.receiptShowLogo ? '1' : '0',
+      'receipt_show_cashier': this.receiptShowCashier ? '1' : '0',
+      'payment_methods': this.paymentMethods.join(','),
       'receipt_logo_b64': ?receiptLogoB64,
     };
     final batch = db.batch();

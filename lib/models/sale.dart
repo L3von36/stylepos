@@ -16,6 +16,12 @@ class Sale {
   final String status; // 'completed' | 'refunded'
   final int createdAt; // epoch seconds (UTC)
 
+  /// Promotion code applied at checkout (null = none), and how much it
+  /// took off the subtotal — kept next to the manual [discount] so
+  /// promotions reports can separate campaign impact from haggling.
+  final String? promoCode;
+  final double promoDiscount;
+
   const Sale({
     this.id,
     required this.receiptNo,
@@ -32,6 +38,8 @@ class Sale {
     this.changeDue = 0,
     this.status = 'completed',
     required this.createdAt,
+    this.promoCode,
+    this.promoDiscount = 0,
   });
 
   bool get isRefunded => status == 'refunded';
@@ -70,6 +78,8 @@ class Sale {
         changeDue: (m['change_due'] as num?)?.toDouble() ?? 0,
         status: m['status'] as String? ?? 'completed',
         createdAt: m['created_at'] as int? ?? 0,
+        promoCode: m['promo_code'] as String?,
+        promoDiscount: (m['promo_discount'] as num?)?.toDouble() ?? 0,
       );
 }
 

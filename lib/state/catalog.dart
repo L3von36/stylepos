@@ -171,6 +171,43 @@ class CatalogProvider extends ChangeNotifier {
     SyncService.I.scheduleSync();
   }
 
+  /// Bulk repricing: applies [transform] to every non-deleted variant
+  /// (optionally only [categoryId]'s products). Only variants whose price
+  /// actually changes are written. Returns how many prices moved.
+  Future<int> bulkPriceUpdate({
+    int? categoryId,
+    required double? Function(double oldPrice) transform,
+  }) async {
+    final db = await DB.instance();
+    final now = _now();
+    var changed = 0;
+    await db.transaction((txn) async {
+      final rows = await txn.rawQuery('''
+        SELECT v.id AS vid, v.price AS price
+        FROM variants v
+        JOIN products p ON p.id = v.product_id
+        WHERE v.deleted = 0 AND v.archived = 0 AND p.deleted = 0 AND p.archived = 0
+          ${categoryId != null ? 'AND p.category_id = ?' : ''}
+      ''', categoryId != null ? [categoryId] : null);
+      for (final r in rows) {
+        final old = (r['price'] as num? ?? 0).toDouble();
+        final neu = transform(old);
+        if (neu == null || (neu - old).abs() < 0.005) continue;
+        await txn.update(
+            'variants',
+            {'price': neu, 'dirty': 1, 'updated_at': now},
+            where: 'id = ?',
+            whereArgs: [r['vid']]);
+        changed++;
+      }
+    });
+    if (changed > 0) {
+      await reload();
+      SyncService.I.scheduleSync();
+    }
+    return changed;
+  }
+
   /// Applies a signed stock delta to a variant and records the movement.
   Future<void> adjustStock(
       ProductVariant variant, int delta, String reason, String? note, int? userId) async {

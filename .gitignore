@@ -50,3 +50,4 @@ app.*.map.json
 # local test/build artifacts (not part of the app)
 _serve/
 ui-review/
+supabase_query.py

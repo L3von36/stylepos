@@ -239,11 +239,26 @@ class CloudAuth {
   /// their own shop). Null when not signed in / offline / no shop yet.
   static Future<Map<String, String>?> fetchMyShop() async {
     try {
-      final row = await _c
+      final uid = _c.auth.currentSession?.user.id;
+      if (uid == null) return null;
+      // Membership first (app_users row for self is always visible), then
+      // the shop row. Going shop-row-first would break once multi-branch
+      // RLS makes several shops visible at once — maybeSingle() throws on
+      // more than one row.
+      final mine = await _c
+          .from('app_users')
+          .select('shop_id')
+          .eq('id', uid)
+          .maybeSingle();
+      final shopId = mine?['shop_id'] as String?;
+      if (shopId == null || shopId.isEmpty) return null;
+      final rows = await _c
           .from('shops')
           .select('id,code,name')
-          .maybeSingle();
-      if (row == null) return null;
+          .eq('id', shopId)
+          .limit(1);
+      if (rows.isEmpty) return null;
+      final row = rows.first;
       return {
         'id': row['id'] as String,
         'code': (row['code'] as String?) ?? '',

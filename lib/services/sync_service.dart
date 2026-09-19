@@ -30,6 +30,10 @@ const kOpsTables = [
 /// Staff attendance table mirrored to the cloud (Phase 3).
 const kAttendanceTables = ['attendance'];
 
+/// Promotions (coupons + seasonal campaigns) — manager-created on any
+/// device, applied at every till (Task 29). Tombstones like suppliers.
+const kPromoTables = ['promotions'];
+
 /// How the sync engine talks to the cloud. The real implementation uses
 /// Supabase (PostgREST + Storage); tests plug in an in-memory fake.
 abstract class CloudGateway {
@@ -278,6 +282,7 @@ class SyncService extends ChangeNotifier {
         ...kSalesTables,
         ...kOpsTables,
         ...kAttendanceTables,
+        ...kPromoTables,
         'settings',
         'app_users'
       ]) {
@@ -426,6 +431,7 @@ class SyncService extends ChangeNotifier {
     await step('push purchase orders', _pushPOs);
     await step('push PO items', _pushPOItems);
     await step('push commissions', _pushCommissions);
+    await step('push promotions', _pushPromotions);
     await step('push attendance', _pushAttendance);
     // Pull order likewise: parents first so ids resolve.
     await step('pull categories', _pullCategories);
@@ -439,6 +445,7 @@ class SyncService extends ChangeNotifier {
     await step('pull purchase orders', _pullPOs);
     await step('pull PO items', _pullPOItems);
     await step('pull commissions', _pullCommissions);
+    await step('pull promotions', _pullPromotions);
     await step('pull attendance', _pullAttendance);
 
     // Rows that never matched anything in the cloud (created before this
@@ -450,7 +457,8 @@ class SyncService extends ChangeNotifier {
         ...kSyncTables,
         ...kSalesTables,
         ...kOpsTables,
-        ...kAttendanceTables
+        ...kAttendanceTables,
+        ...kPromoTables,
       ]) {
         await db.execute('UPDATE $t SET dirty = 1 WHERE cloud_id IS NULL');
       }
@@ -466,6 +474,7 @@ class SyncService extends ChangeNotifier {
     await step('push purchase orders 2', _pushPOs);
     await step('push PO items 2', _pushPOItems);
     await step('push commissions 2', _pushCommissions);
+    await step('push promotions 2', _pushPromotions);
     await step('push attendance 2', _pushAttendance);
 
     // Red "Sync issue" only when at least one step actually failed;
@@ -774,6 +783,8 @@ class SyncService extends ChangeNotifier {
         'amount_paid': (r['amount_paid'] as num? ?? 0).toDouble(),
         'change_due': (r['change_due'] as num? ?? 0).toDouble(),
         'status': r['status'],
+        'promo_code': r['promo_code'],
+        'promo_discount': (r['promo_discount'] as num? ?? 0).toDouble(),
         'created_at': _iso(r['created_at'] as int? ?? 0),
         'updated_at': _iso(r['updated_at'] as int? ?? 0),
       });
@@ -1026,6 +1037,41 @@ class SyncService extends ChangeNotifier {
     }
   }
 
+  /// Promotions: manager-created, applied on every till.
+  Future<void> _pushPromotions() async {
+    final db = await _db;
+    final rows = await db.query('promotions', where: 'dirty = 1');
+    if (rows.isEmpty) return;
+    final payload = <Map<String, dynamic>>[];
+    final ids = <int, String>{};
+    for (final r in rows) {
+      final cloudId = (r['cloud_id'] as String?) ?? _uuid.v4();
+      ids[r['id'] as int] = cloudId;
+      payload.add({
+        'id': cloudId,
+        'name': r['name'],
+        'code': r['code'],
+        'kind': r['kind'],
+        'type': r['type'],
+        'value': (r['value'] as num? ?? 0).toDouble(),
+        'min_subtotal': (r['min_subtotal'] as num? ?? 0).toDouble(),
+        'starts_at': _isoOrNull(r['starts_at'] as int?),
+        'ends_at': _isoOrNull(r['ends_at'] as int?),
+        'usage_limit': r['usage_limit'],
+        'used_count': r['used_count'],
+        'active': (r['active'] as int? ?? 1) == 1,
+        'created_at': _iso(r['created_at'] as int? ?? 0),
+        'deleted': (r['deleted'] as int? ?? 0) == 1,
+        'updated_at': _iso(r['updated_at'] as int? ?? 0),
+      });
+    }
+    await _gateway.upsertRows('promotions', payload);
+    for (final e in ids.entries) {
+      await db.update('promotions', {'dirty': 0, 'cloud_id': e.value},
+          where: 'id = ?', whereArgs: [e.key]);
+    }
+  }
+
   Future<void> _pushAttendance() async {
     final db = await _db;
     final rows = await db.query('attendance', where: 'dirty = 1');
@@ -1127,6 +1173,10 @@ class SyncService extends ChangeNotifier {
 
   Future<void> _pullCommissions() async {
     await _pullTable('commissions', (r, ts) => _mergeCommission(r, ts));
+  }
+
+  Future<void> _pullPromotions() async {
+    await _pullTable('promotions', (r, ts) => _mergePromotion(r, ts));
   }
 
   Future<void> _pullAttendance() async {
@@ -1423,6 +1473,8 @@ class SyncService extends ChangeNotifier {
           'amount_paid': (r['amount_paid'] as num? ?? 0).toDouble(),
           'change_due': (r['change_due'] as num? ?? 0).toDouble(),
           'status': r['status'] ?? 'completed',
+          'promo_code': r['promo_code'],
+          'promo_discount': (r['promo_discount'] as num? ?? 0).toDouble(),
           'created_at': _epoch(r['created_at']),
           'cloud_id': r['id'],
           'dirty': 0,
@@ -1731,6 +1783,71 @@ class SyncService extends ChangeNotifier {
       'dirty': 0,
       'updated_at': cloudTs,
     });
+  }
+
+  // -------------------------------------------------- promo merges (Task 29)
+
+  Future<void> _mergePromotion(Map<String, dynamic> r, int cloudTs) async {
+    final db = await _db;
+    var rows = await _byCloudId('promotions', r['id']);
+    if (rows.isEmpty) {
+      // Natural-key adoption: same code created independently on two
+      // devices (the manager may edit promotions from any till).
+      final code = (r['code'] as String? ?? '').toUpperCase();
+      if (code.isNotEmpty) {
+        rows = await db.query('promotions',
+            where: 'UPPER(code) = ? AND cloud_id IS NULL AND deleted = 0',
+            whereArgs: [code],
+            limit: 1);
+        if (rows.isNotEmpty) {
+          await db.update('promotions', {'cloud_id': r['id']},
+              where: 'id = ?', whereArgs: [rows.first['id']]);
+        }
+      }
+    }
+    if (rows.isEmpty) {
+      if (_b(r['deleted'])) return; // tombstone for an unknown row
+      await db.insert('promotions', {
+        'name': r['name'] ?? '',
+        'code': (r['code'] as String? ?? '').toUpperCase(),
+        'kind': r['kind'] ?? 'coupon',
+        'type': r['type'] ?? 'percent',
+        'value': (r['value'] as num? ?? 0).toDouble(),
+        'min_subtotal': (r['min_subtotal'] as num? ?? 0).toDouble(),
+        'starts_at': _epochOrNull(r['starts_at']),
+        'ends_at': _epochOrNull(r['ends_at']),
+        'usage_limit': r['usage_limit'] as int? ?? 0,
+        'used_count': r['used_count'] as int? ?? 0,
+        'active': _b(r['active']) || r['active'] == null ? 1 : 0,
+        'created_at': _epoch(r['created_at']),
+        'cloud_id': r['id'],
+        'dirty': 0,
+        'deleted': _b(r['deleted']) ? 1 : 0,
+        'updated_at': cloudTs,
+      });
+      return;
+    }
+    final local = rows.first;
+    final localTs = local['updated_at'] as int? ?? 0;
+    if ((local['dirty'] as int? ?? 0) == 1 && localTs >= cloudTs) {
+      return; // local edit is newer; it will be pushed
+    }
+    await db.update('promotions', {
+      'name': r['name'] ?? local['name'],
+      'code': (r['code'] as String? ?? local['code']).toString().toUpperCase(),
+      'kind': r['kind'] ?? local['kind'],
+      'type': r['type'] ?? local['type'],
+      'value': (r['value'] as num? ?? 0).toDouble(),
+      'min_subtotal': (r['min_subtotal'] as num? ?? 0).toDouble(),
+      'starts_at': _epochOrNull(r['starts_at']),
+      'ends_at': _epochOrNull(r['ends_at']),
+      'usage_limit': r['usage_limit'] as int? ?? 0,
+      'used_count': r['used_count'] as int? ?? local['used_count'],
+      'active': _b(r['active']) ? 1 : 0,
+      'deleted': _b(r['deleted']) ? 1 : 0,
+      'updated_at': cloudTs,
+      'dirty': 0,
+    }, where: 'id = ?', whereArgs: [local['id']]);
   }
 
   // ------------------------------------------------------------ photos

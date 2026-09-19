@@ -93,7 +93,10 @@ class ReceiptService {
             children: [
               _row('Receipt', sale.receiptNo, boldValue: true),
               _row('Date', dateStr),
-              _row('Served by', sale.cashierName ?? '-'),
+              // Receipt template option (Settings): shops that rotate
+              // cashiers print the name, single-operator shops hide it.
+              if (settings.receiptShowCashier)
+                _row('Served by', sale.cashierName ?? '-'),
               if (sale.customerName != null && sale.customerName!.isNotEmpty)
                 _row('Customer', sale.customerName!),
               pw.SizedBox(height: 4),

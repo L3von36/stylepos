@@ -30,6 +30,8 @@ class AuditEntry {
   /// Human-readable action label + icon key (kept in the UI layer).
   static const actionLabels = {
     'refund': 'Sale refunded',
+    'partial_refund': 'Items refunded',
+    'exchange_return': 'Exchange return',
     'discount_approved': 'Discount approved',
     'stock_adjust': 'Stock adjusted',
     'day_close': 'Day closed (Z-report)',
@@ -42,6 +44,14 @@ class AuditEntry {
     'restore': 'Backup restored',
     'sales_cleared': 'Sales history cleared',
     'csv_import': 'Products imported (CSV)',
+    'promo_created': 'Promotion created',
+    'promo_updated': 'Promotion updated',
+    'promo_deleted': 'Promotion deleted',
+    'bulk_price_update': 'Bulk price update',
+    'branch_created': 'Branch created',
+    'branch_switched': 'Switched branch',
+    'receipt_emailed': 'Receipt emailed',
+    'receipt_sms': 'Receipt sent by SMS',
   };
 }
 
