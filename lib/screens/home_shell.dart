@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'customers/customers_screen.dart';
 import 'pos/pos_screen.dart';
 import 'products/products_screen.dart';
+import 'purchasing/purchasing_screen.dart';
 import 'reports/reports_screen.dart';
 import 'sales/sales_screen.dart';
 import 'settings/settings_screen.dart';
@@ -203,6 +204,9 @@ class _HomeShellState extends State<HomeShell> {
           const SalesScreen()),
       _Dest(NavId.customers, Icons.people_outline, Icons.people_alt_rounded, 'Customers',
           const CustomersScreen()),
+      if (user.isAdmin)
+        _Dest(NavId.purchasing, Icons.local_shipping_outlined,
+            Icons.local_shipping_rounded, 'Purchasing', const PurchasingScreen()),
       if (user.isAdmin)
         _Dest(NavId.reports, Icons.insights_outlined, Icons.insights_rounded, 'Reports',
             const ReportsScreen()),

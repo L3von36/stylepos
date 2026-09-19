@@ -28,7 +28,9 @@ class CartPanel extends StatelessWidget {
     final needsApproval = discountNeedsApproval(
         isAdmin: user?.isAdmin ?? false,
         discount: cart.discount,
-        threshold: settings.discountPinThreshold);
+        threshold: settings.discountPinThreshold,
+        canDiscount: user?.canDiscount ?? false,
+        discountCap: user?.discountCap ?? 0);
 
     final content = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,

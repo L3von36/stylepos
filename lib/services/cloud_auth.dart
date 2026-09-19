@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:sqflite/sqflite.dart' show ConflictAlgorithm;
 
@@ -203,13 +204,25 @@ class CloudAuth {
     }
   }
 
-  /// Edits a cloud staff member's name / role. Returns null on success.
+  /// Edits a cloud staff member's name / role / permissions / commission
+  /// rate. Returns null on success. [permissionsJson] is the JSON-encoded
+  /// permissions object (stored in the app_users.permissions jsonb column).
   static Future<String?> updateStaff(String cloudId,
-      {String? name, String? role}) async {
+      {String? name, String? role, String? permissionsJson, double? commissionRate}) async {
     try {
+      Object? perms;
+      if (permissionsJson != null) {
+        try {
+          perms = jsonDecode(permissionsJson);
+        } catch (_) {
+          perms = null;
+        }
+      }
       final data = <String, Object?>{
         'name': ?(name != null && name.trim().isNotEmpty ? name.trim() : null),
         'role': ?role,
+        'permissions': ?perms,
+        'commission_rate': ?commissionRate,
       };
       if (data.isEmpty) return null;
       await _c.from('app_users').update(data).eq('id', cloudId);

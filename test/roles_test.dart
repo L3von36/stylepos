@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:stylepos/data/database.dart';
+import 'package:stylepos/models/user.dart';
 import 'package:stylepos/services/approvals.dart';
 import 'package:stylepos/services/audit.dart';
 import 'package:stylepos/services/csv_util.dart';
@@ -103,6 +104,83 @@ void main() {
         discountNeedsApproval(isAdmin: false, discount: 499.99, threshold: 500),
         isFalse,
       );
+    });
+
+    test('granted discount permission bypasses the PIN up to the cap', () {
+      // canDiscount without a cap (0) = never gated for any discount.
+      expect(
+        discountNeedsApproval(
+            isAdmin: false,
+            discount: 999,
+            threshold: 0,
+            canDiscount: true,
+            discountCap: 0),
+        isFalse,
+      );
+      // Within the cap = not gated, even above the manager threshold.
+      expect(
+        discountNeedsApproval(
+            isAdmin: false,
+            discount: 300,
+            threshold: 200,
+            canDiscount: true,
+            discountCap: 500),
+        isFalse,
+      );
+      // Above the cap (and at/above threshold) = gated again.
+      expect(
+        discountNeedsApproval(
+            isAdmin: false,
+            discount: 501,
+            threshold: 500,
+            canDiscount: true,
+            discountCap: 500),
+        isTrue,
+      );
+      // Without the grant nothing changes.
+      expect(
+        discountNeedsApproval(
+            isAdmin: false,
+            discount: 300,
+            threshold: 200,
+            canDiscount: false,
+            discountCap: 500),
+        isTrue,
+      );
+    });
+
+    test('AppUser permission parsing (discount cap / refund / commission)', () {
+      final u = AppUser(
+        name: 'Jane',
+        email: 'jane@shop.test',
+        role: 'cashier',
+        createdAt: 0,
+        permissions: AppUser.encodePermissions(
+          canDiscount: true,
+          discountCap: 250,
+          canRefund: true,
+        ),
+        commissionRate: 5,
+      );
+      expect(u.canDiscount, isTrue);
+      expect(u.discountCap, 250);
+      expect(u.canRefund, isTrue);
+      expect(u.earnsCommission, isTrue);
+
+      // No permissions stored: defaults are locked down for cashiers.
+      final plain = AppUser(
+          name: 'Bob', email: 'bob@shop.test', role: 'cashier', createdAt: 0);
+      expect(plain.canDiscount, isFalse);
+      expect(plain.discountCap, 0);
+      expect(plain.canRefund, isFalse);
+      expect(plain.earnsCommission, isFalse);
+
+      // Managers bypass everything.
+      final boss = AppUser(
+          name: 'Boss', email: 'boss@shop.test', role: 'admin', createdAt: 0);
+      expect(boss.canDiscount, isTrue);
+      expect(boss.canRefund, isTrue);
+      expect(boss.discountCap, double.infinity);
     });
   });
 

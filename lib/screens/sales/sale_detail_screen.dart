@@ -58,10 +58,11 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
     final settings = context.read<AppSettings>();
     final sale = _sale!;
 
-    // Salespeople can process a return, but a manager must approve it
-    // (PIN, or a manager account password when no PIN is configured).
+    // Salespeople can process a return, but unless they were granted the
+    // refund permission a manager must approve it (PIN, or a manager
+    // account password when no PIN is configured).
     Approval? approval;
-    if (!actor.isAdmin) {
+    if (!actor.canRefund) {
       approval = await Approvals.request(
         context,
         title: 'Refund needs approval',

@@ -8,6 +8,7 @@ import '../../state/nav.dart';
 import '../../state/sales.dart';
 import '../../state/settings.dart';
 import '../../widgets/ui.dart';
+import 'ops_cards.dart';
 import 'z_report_card.dart';
 
 /// Reports: KPI cards + revenue line chart + top products + category share.
@@ -303,6 +304,18 @@ class _ReportsScreenState extends State<ReportsScreen> {
 
               // stock health: value of goods on hand + low-stock alerts
               const _StockHealthCard(),
+              const SizedBox(height: AppSpace.s4),
+
+              // profit & margins: revenue vs cost of goods + top earners
+              MarginCard(days: _range),
+              const SizedBox(height: AppSpace.s4),
+
+              // who sold what, how much, what they earned
+              StaffPerformanceCard(days: _range),
+              const SizedBox(height: AppSpace.s4),
+
+              // commission ledger: pending payouts, mark paid, adjustments
+              const CommissionsCard(),
               const SizedBox(height: 12),
             ],
           ),

@@ -18,6 +18,15 @@ const kSyncTables = ['categories', 'products', 'variants', 'customers'];
 /// refunds are a status change, so no tombstone column is needed.
 const kSalesTables = ['sales', 'sale_items', 'stock_movements'];
 
+/// Purchasing + commissions tables (Task 28). POs have tombstones;
+/// PO items and commissions are append-or-status rows like sales.
+const kOpsTables = [
+  'suppliers',
+  'purchase_orders',
+  'purchase_order_items',
+  'commissions'
+];
+
 /// How the sync engine talks to the cloud. The real implementation uses
 /// Supabase (PostgREST + Storage); tests plug in an in-memory fake.
 abstract class CloudGateway {
@@ -261,8 +270,13 @@ class SyncService extends ChangeNotifier {
     try {
       final client = Supabase.instance.client;
       final ch = client.channel('stylepos-live');
-      for (final table
-          in [...kSyncTables, ...kSalesTables, 'settings', 'app_users']) {
+      for (final table in [
+        ...kSyncTables,
+        ...kSalesTables,
+        ...kOpsTables,
+        'settings',
+        'app_users'
+      ]) {
         ch.onPostgresChanges(
           event: PostgresChangeEvent.all,
           schema: 'public',
@@ -405,6 +419,10 @@ class SyncService extends ChangeNotifier {
     await step('push sales', _pushSales);
     await step('push sale items', _pushSaleItems);
     await step('push movements', _pushMovements);
+    await step('push suppliers', _pushSuppliers);
+    await step('push purchase orders', _pushPOs);
+    await step('push PO items', _pushPOItems);
+    await step('push commissions', _pushCommissions);
     // Pull order likewise: parents first so ids resolve.
     await step('pull categories', _pullCategories);
     await step('pull products', _pullProducts);
@@ -413,14 +431,19 @@ class SyncService extends ChangeNotifier {
     await step('pull sales', _pullSales);
     await step('pull sale items', _pullSaleItems);
     await step('pull movements', _pullMovements);
+    await step('pull suppliers', _pullSuppliers);
+    await step('pull purchase orders', _pullPOs);
+    await step('pull PO items', _pullPOItems);
+    await step('pull commissions', _pullCommissions);
 
     // Rows that never matched anything in the cloud (created before this
     // device first synced, e.g. seed catalog) get pushed as new rows.
     // The second push round is a no-op when nothing was marked.
     await step('mark unsynced rows', () async {
       final db = await _db;
-      for (final t in [...kSyncTables, ...kSalesTables]) {
-        await db.execute('UPDATE $t SET dirty = 1 WHERE cloud_id IS NULL');
+      for (final t in [...kSyncTables, ...kSalesTables, ...kOpsTables]) {
+        await db.execute(
+            'UPDATE $t SET dirty = 1 WHERE cloud_id IS NULL');
       }
     });
     await step('push categories 2', _pushCategories);
@@ -430,6 +453,10 @@ class SyncService extends ChangeNotifier {
     await step('push sales 2', _pushSales);
     await step('push sale items 2', _pushSaleItems);
     await step('push movements 2', _pushMovements);
+    await step('push suppliers 2', _pushSuppliers);
+    await step('push purchase orders 2', _pushPOs);
+    await step('push PO items 2', _pushPOItems);
+    await step('push commissions 2', _pushCommissions);
 
     // Red "Sync issue" only when at least one step actually failed;
     // failed rows stay dirty and are retried on the next cycle.
@@ -465,6 +492,16 @@ class SyncService extends ChangeNotifier {
           (epochSeconds <= 0 ? _now() : epochSeconds) * 1000,
           isUtc: true)
       .toIso8601String();
+
+  String? _isoOrNull(int? epochSeconds) =>
+      epochSeconds == null || epochSeconds <= 0 ? null : _iso(epochSeconds);
+
+  int? _epochOrNull(dynamic cloudTs) {
+    final t = DateTime.tryParse(cloudTs?.toString() ?? '');
+    return t == null
+        ? null
+        : t.toUtc().millisecondsSinceEpoch ~/ 1000;
+  }
 
   int _epoch(dynamic cloudTs) {
     final t = DateTime.tryParse(cloudTs?.toString() ?? '');
@@ -766,6 +803,7 @@ class SyncService extends ChangeNotifier {
         'product_name': r['product_name'],
         'variant_desc': r['variant_desc'],
         'unit_price': (r['unit_price'] as num? ?? 0).toDouble(),
+        'unit_cost': (r['unit_cost'] as num? ?? 0).toDouble(),
         'qty': r['qty'],
         'line_total': (r['line_total'] as num? ?? 0).toDouble(),
         'created_at': _iso(r['updated_at'] as int? ?? 0),
@@ -775,6 +813,165 @@ class SyncService extends ChangeNotifier {
     if (payload.isNotEmpty) await _gateway.upsertRows('sale_items', payload);
     for (final e in ids.entries) {
       await db.update('sale_items', {'dirty': 0, 'cloud_id': e.value},
+          where: 'id = ?', whereArgs: [e.key]);
+    }
+  }
+
+  /// Cloud user id for a LOCAL staff row (commissions stay attributed to
+  /// the salesperson even when the manager's device pushes the payout).
+  Future<String?> _cloudUserIdFor(int? localUserId) async {
+    if (localUserId == null || localUserId <= 0) return null;
+    final db = await _db;
+    final rows = await db.query('users',
+        columns: ['cloud_id'],
+        where: 'id = ?',
+        whereArgs: [localUserId],
+        limit: 1);
+    return rows.first['cloud_id'] as String? ?? _cloudUid;
+  }
+
+  Future<void> _pushSuppliers() async {
+    final db = await _db;
+    final rows = await db.query('suppliers', where: 'dirty = 1');
+    if (rows.isEmpty) return;
+    final payload = <Map<String, dynamic>>[];
+    final ids = <int, String>{};
+    for (final r in rows) {
+      final cloudId = (r['cloud_id'] as String?) ?? _uuid.v4();
+      ids[r['id'] as int] = cloudId;
+      payload.add({
+        'id': cloudId,
+        'name': r['name'],
+        'phone': r['phone'],
+        'email': r['email'],
+        'address': r['address'],
+        'notes': r['notes'],
+        'created_at': _iso(r['created_at'] as int? ?? 0),
+        'deleted': (r['deleted'] as int? ?? 0) == 1,
+        'updated_at': _iso(r['updated_at'] as int? ?? 0),
+      });
+    }
+    await _gateway.upsertRows('suppliers', payload);
+    for (final e in ids.entries) {
+      await db.update('suppliers', {'dirty': 0, 'cloud_id': e.value},
+          where: 'id = ?', whereArgs: [e.key]);
+    }
+  }
+
+  Future<void> _pushPOs() async {
+    final db = await _db;
+    final rows = await db.query('purchase_orders', where: 'dirty = 1');
+    if (rows.isEmpty) return;
+
+    final supCloud = <int, String?>{};
+    for (final s in await db.query('suppliers', columns: ['id', 'cloud_id'])) {
+      supCloud[s['id'] as int] = s['cloud_id'] as String?;
+    }
+
+    final payload = <Map<String, dynamic>>[];
+    final ids = <int, String>{};
+    for (final r in rows) {
+      final cloudId = (r['cloud_id'] as String?) ?? _uuid.v4();
+      ids[r['id'] as int] = cloudId;
+      payload.add({
+        'id': cloudId,
+        'supplier_id': supCloud[r['supplier_id'] as int?],
+        'status': r['status'],
+        'order_date': _isoOrNull(r['order_date'] as int?),
+        'expected_date': _isoOrNull(r['expected_date'] as int?),
+        'received_date': _isoOrNull(r['received_date'] as int?),
+        'notes': r['notes'],
+        'created_by': await _cloudUserIdFor(r['created_by'] as int?),
+        'created_at': _iso(r['created_at'] as int? ?? 0),
+        'deleted': (r['deleted'] as int? ?? 0) == 1,
+        'updated_at': _iso(r['updated_at'] as int? ?? 0),
+      });
+    }
+    await _gateway.upsertRows('purchase_orders', payload);
+    for (final e in ids.entries) {
+      await db.update('purchase_orders', {'dirty': 0, 'cloud_id': e.value},
+          where: 'id = ?', whereArgs: [e.key]);
+    }
+  }
+
+  Future<void> _pushPOItems() async {
+    final db = await _db;
+    final rows = await db.query('purchase_order_items', where: 'dirty = 1');
+    if (rows.isEmpty) return;
+
+    final poCloud = <int, String?>{};
+    for (final p in await db
+        .query('purchase_orders', columns: ['id', 'cloud_id'])) {
+      poCloud[p['id'] as int] = p['cloud_id'] as String?;
+    }
+    final varCloud = <int, String?>{};
+    for (final v in await db.query('variants', columns: ['id', 'cloud_id'])) {
+      varCloud[v['id'] as int] = v['cloud_id'] as String?;
+    }
+
+    final payload = <Map<String, dynamic>>[];
+    final ids = <int, String>{};
+    for (final r in rows) {
+      final poCloudId = poCloud[r['po_id'] as int];
+      if (poCloudId == null) continue; // parent PO not synced yet
+      final cloudId = (r['cloud_id'] as String?) ?? _uuid.v4();
+      ids[r['id'] as int] = cloudId;
+      payload.add({
+        'id': cloudId,
+        'po_id': poCloudId,
+        'variant_id': varCloud[r['variant_id'] as int?],
+        'product_name': r['product_name'],
+        'variant_desc': r['variant_desc'],
+        'sku': r['sku'],
+        'qty_ordered': r['qty_ordered'],
+        'qty_received': r['qty_received'],
+        'unit_cost': (r['unit_cost'] as num? ?? 0).toDouble(),
+        'created_at': _iso(r['updated_at'] as int? ?? 0),
+        'updated_at': _iso(r['updated_at'] as int? ?? 0),
+      });
+    }
+    if (payload.isNotEmpty) {
+      await _gateway.upsertRows('purchase_order_items', payload);
+    }
+    for (final e in ids.entries) {
+      await db.update('purchase_order_items',
+          {'dirty': 0, 'cloud_id': e.value},
+          where: 'id = ?', whereArgs: [e.key]);
+    }
+  }
+
+  Future<void> _pushCommissions() async {
+    final db = await _db;
+    final rows = await db.query('commissions', where: 'dirty = 1');
+    if (rows.isEmpty) return;
+
+    final saleCloud = <int, String?>{};
+    for (final s in await db.query('sales', columns: ['id', 'cloud_id'])) {
+      saleCloud[s['id'] as int] = s['cloud_id'] as String?;
+    }
+
+    final payload = <Map<String, dynamic>>[];
+    final ids = <int, String>{};
+    for (final r in rows) {
+      final cloudId = (r['cloud_id'] as String?) ?? _uuid.v4();
+      ids[r['id'] as int] = cloudId;
+      payload.add({
+        'id': cloudId,
+        'user_id': await _cloudUserIdFor(r['user_id'] as int?),
+        'sale_id': saleCloud[r['sale_id'] as int?],
+        'amount': (r['amount'] as num? ?? 0).toDouble(),
+        'basis': r['basis'],
+        'status': r['status'],
+        'note': r['note'],
+        'period': r['period'],
+        'paid_at': _isoOrNull(r['paid_at'] as int?),
+        'created_at': _iso(r['created_at'] as int? ?? 0),
+        'updated_at': _iso(r['updated_at'] as int? ?? 0),
+      });
+    }
+    await _gateway.upsertRows('commissions', payload);
+    for (final e in ids.entries) {
+      await db.update('commissions', {'dirty': 0, 'cloud_id': e.value},
           where: 'id = ?', whereArgs: [e.key]);
     }
   }
@@ -867,6 +1064,22 @@ class SyncService extends ChangeNotifier {
 
   Future<void> _pullMovements() async {
     await _pullTable('stock_movements', (r, ts) => _mergeMovement(r, ts));
+  }
+
+  Future<void> _pullSuppliers() async {
+    await _pullTable('suppliers', (r, ts) => _mergeSupplier(r, ts));
+  }
+
+  Future<void> _pullPOs() async {
+    await _pullTable('purchase_orders', (r, ts) => _mergePO(r, ts));
+  }
+
+  Future<void> _pullPOItems() async {
+    await _pullTable('purchase_order_items', (r, ts) => _mergePOItem(r, ts));
+  }
+
+  Future<void> _pullCommissions() async {
+    await _pullTable('commissions', (r, ts) => _mergeCommission(r, ts));
   }
 
   Future<void> _mergeCategory(Map<String, dynamic> r, int cloudTs) async {
@@ -1205,6 +1418,7 @@ class SyncService extends ChangeNotifier {
       'product_name': r['product_name'] ?? '',
       'variant_desc': r['variant_desc'] ?? '',
       'unit_price': (r['unit_price'] as num? ?? 0).toDouble(),
+      'unit_cost': (r['unit_cost'] as num? ?? 0).toDouble(),
       'qty': r['qty'] as int? ?? 0,
       'line_total': (r['line_total'] as num? ?? 0).toDouble(),
       'cloud_id': r['id'],
@@ -1228,6 +1442,183 @@ class SyncService extends ChangeNotifier {
       'reason': r['reason'] ?? 'adjust',
       'note': r['note'],
       'user_id': userId,
+      'created_at': _epoch(r['created_at']),
+      'cloud_id': r['id'],
+      'dirty': 0,
+      'updated_at': cloudTs,
+    });
+  }
+
+  // -------------------------------------------------- ops merges (Task 28)
+
+  Future<void> _mergeSupplier(Map<String, dynamic> r, int cloudTs) async {
+    final db = await _db;
+    var rows = await _byCloudId('suppliers', r['id']);
+    if (rows.isEmpty) {
+      // Natural-key adoption: same name entered on two devices.
+      rows = await db.query('suppliers',
+          where: 'name = ? COLLATE NOCASE AND cloud_id IS NULL',
+          whereArgs: [r['name']],
+          limit: 1);
+      if (rows.isNotEmpty) {
+        await db.update('suppliers', {'cloud_id': r['id']},
+            where: 'id = ?', whereArgs: [rows.first['id']]);
+      }
+    }
+    if (rows.isEmpty) {
+      if (_b(r['deleted'])) return;
+      await db.insert('suppliers', {
+        'name': r['name'],
+        'phone': r['phone'],
+        'email': r['email'],
+        'address': r['address'],
+        'notes': r['notes'],
+        'created_at': _epoch(r['created_at']),
+        'cloud_id': r['id'],
+        'dirty': 0,
+        'deleted': _b(r['deleted']) ? 1 : 0,
+        'updated_at': cloudTs,
+      });
+      return;
+    }
+    final local = rows.first;
+    final localTs = local['updated_at'] as int? ?? 0;
+    if ((local['dirty'] as int? ?? 0) == 1 && localTs >= cloudTs) return;
+    await db.update('suppliers', {
+      'name': r['name'],
+      'phone': r['phone'],
+      'email': r['email'],
+      'address': r['address'],
+      'notes': r['notes'],
+      'deleted': _b(r['deleted']) ? 1 : 0,
+      'updated_at': cloudTs,
+      'dirty': 0,
+    }, where: 'id = ?', whereArgs: [local['id']]);
+  }
+
+  Future<void> _mergePO(Map<String, dynamic> r, int cloudTs) async {
+    final db = await _db;
+    var rows = await _byCloudId('purchase_orders', r['id']);
+    if (rows.isEmpty) {
+      if (_b(r['deleted'])) return;
+      int? supplierId;
+      if (r['supplier_id'] != null) {
+        final s = await _byCloudId('suppliers', r['supplier_id']);
+        if (s.isNotEmpty) supplierId = s.first['id'] as int?;
+      }
+      final createdBy = await _localUserIdFor(r['created_by'] as String?);
+      await db.insert('purchase_orders', {
+        'supplier_id': supplierId,
+        'status': r['status'] ?? 'draft',
+        'order_date': _epochOrNull(r['order_date']),
+        'expected_date': _epochOrNull(r['expected_date']),
+        'received_date': _epochOrNull(r['received_date']),
+        'notes': r['notes'],
+        'created_by': createdBy,
+        'created_at': _epoch(r['created_at']),
+        'cloud_id': r['id'],
+        'dirty': 0,
+        'deleted': _b(r['deleted']) ? 1 : 0,
+        'updated_at': cloudTs,
+      });
+      return;
+    }
+    final local = rows.first;
+    final localTs = local['updated_at'] as int? ?? 0;
+    if ((local['dirty'] as int? ?? 0) == 1 && localTs >= cloudTs) return;
+    int? supplierId = local['supplier_id'] as int?;
+    if (r['supplier_id'] != null) {
+      final s = await _byCloudId('suppliers', r['supplier_id']);
+      supplierId = s.isNotEmpty ? s.first['id'] as int? : null;
+    } else {
+      supplierId = null;
+    }
+    await db.update('purchase_orders', {
+      'supplier_id': supplierId,
+      'status': r['status'] ?? 'draft',
+      'order_date': _epochOrNull(r['order_date']),
+      'expected_date': _epochOrNull(r['expected_date']),
+      'received_date': _epochOrNull(r['received_date']),
+      'notes': r['notes'],
+      'deleted': _b(r['deleted']) ? 1 : 0,
+      'updated_at': cloudTs,
+      'dirty': 0,
+    }, where: 'id = ?', whereArgs: [local['id']]);
+  }
+
+  Future<void> _mergePOItem(Map<String, dynamic> r, int cloudTs) async {
+    final db = await _db;
+    final existing = await _byCloudId('purchase_order_items', r['id']);
+
+    if (existing.isNotEmpty) {
+      // Lines move (receive) — adopt cloud quantity when it is newer.
+      final local = existing.first;
+      final localTs = local['updated_at'] as int? ?? 0;
+      if ((local['dirty'] as int? ?? 0) == 1 && localTs >= cloudTs) return;
+      await db.update('purchase_order_items', {
+        'qty_received': r['qty_received'] as int? ?? 0,
+        'unit_cost': (r['unit_cost'] as num? ?? 0).toDouble(),
+        'updated_at': cloudTs,
+        'dirty': 0,
+      }, where: 'id = ?', whereArgs: [local['id']]);
+      return;
+    }
+
+    final po = await _byCloudId('purchase_orders', r['po_id']);
+    if (po.isEmpty) return; // parent PO not pulled yet; next round
+
+    int? variantId;
+    if (r['variant_id'] != null) {
+      final v = await _byCloudId('variants', r['variant_id']);
+      if (v.isNotEmpty) variantId = v.first['id'] as int?;
+    }
+    await db.insert('purchase_order_items', {
+      'po_id': po.first['id'],
+      'variant_id': variantId,
+      'product_name': r['product_name'] ?? '',
+      'variant_desc': r['variant_desc'] ?? '',
+      'sku': r['sku'] ?? '',
+      'qty_ordered': r['qty_ordered'] as int? ?? 0,
+      'qty_received': r['qty_received'] as int? ?? 0,
+      'unit_cost': (r['unit_cost'] as num? ?? 0).toDouble(),
+      'cloud_id': r['id'],
+      'dirty': 0,
+      'updated_at': cloudTs,
+    });
+  }
+
+  Future<void> _mergeCommission(Map<String, dynamic> r, int cloudTs) async {
+    final db = await _db;
+    final existing = await _byCloudId('commissions', r['id']);
+
+    if (existing.isNotEmpty) {
+      final local = existing.first;
+      final localTs = local['updated_at'] as int? ?? 0;
+      if ((local['dirty'] as int? ?? 0) == 1 && localTs >= cloudTs) return;
+      await db.update('commissions', {
+        'status': r['status'] ?? 'pending',
+        'paid_at': _epochOrNull(r['paid_at']),
+        'updated_at': cloudTs,
+        'dirty': 0,
+      }, where: 'id = ?', whereArgs: [local['id']]);
+      return;
+    }
+
+    final userId = await _localUserIdFor(r['user_id'] as String?);
+    int? saleId;
+    if (r['sale_id'] != null) {
+      final s = await _byCloudId('sales', r['sale_id']);
+      if (s.isNotEmpty) saleId = s.first['id'] as int?;
+    }
+    await db.insert('commissions', {
+      'user_id': userId,
+      'sale_id': saleId,
+      'amount': (r['amount'] as num? ?? 0).toDouble(),
+      'basis': r['basis'] ?? 'sale',
+      'status': r['status'] ?? 'pending',
+      'note': r['note'],
+      'period': r['period'] ?? '',
+      'paid_at': _epochOrNull(r['paid_at']),
       'created_at': _epoch(r['created_at']),
       'cloud_id': r['id'],
       'dirty': 0,

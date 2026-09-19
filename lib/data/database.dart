@@ -48,7 +48,7 @@ class DB {
 
     _instance = await openDatabase(
       dbPath,
-      version: 6,
+      version: 7,
       onConfigure: (db) => db.execute('PRAGMA foreign_keys = ON'),
       onUpgrade: (db, oldVersion, newVersion) async {
         // v2: product photos (relative filename inside the app images dir).
@@ -113,6 +113,18 @@ class DB {
         if (oldVersion < 6) {
           await _createAccountabilityTables(db);
         }
+        // v7: purchasing (suppliers + purchase orders + received goods) and
+        // commissions, cost snapshot on sale lines (true margins), staff
+        // permissions (discount/refund rights) and commission rates.
+        if (oldVersion < 7) {
+          await _createOpsTables(db);
+          await db.execute(
+              'ALTER TABLE users ADD COLUMN permissions TEXT');
+          await db.execute(
+              'ALTER TABLE users ADD COLUMN commission_rate REAL NOT NULL DEFAULT 0');
+          await db.execute(
+              'ALTER TABLE sale_items ADD COLUMN unit_cost REAL NOT NULL DEFAULT 0');
+        }
       },
       onCreate: (db, version) async {
         await db.execute('''
@@ -125,7 +137,9 @@ class DB {
             role TEXT NOT NULL DEFAULT 'cashier',
             active INTEGER NOT NULL DEFAULT 1,
             created_at INTEGER NOT NULL,
-            cloud_id TEXT
+            cloud_id TEXT,
+            permissions TEXT,
+            commission_rate REAL NOT NULL DEFAULT 0
           )
         ''');
         await db.execute('''
@@ -221,6 +235,7 @@ class DB {
             product_name TEXT NOT NULL,
             variant_desc TEXT NOT NULL,
             unit_price REAL NOT NULL DEFAULT 0,
+            unit_cost REAL NOT NULL DEFAULT 0,
             qty INTEGER NOT NULL DEFAULT 0,
             line_total REAL NOT NULL DEFAULT 0,
             cloud_id TEXT,
@@ -251,11 +266,92 @@ class DB {
         ''');
 
         await _createAccountabilityTables(db);
+        await _createOpsTables(db);
 
         await _seed(db);
       },
     );
     return _instance!;
+  }
+
+  /// Purchasing + commissions tables. Kept in a helper so both fresh
+  /// installs (onCreate) and upgrades (< v7) build them once. All four
+  /// carry the standard sync bookkeeping (cloud_id / dirty / deleted /
+  /// updated_at); commissions and po items are append-or-status rows.
+  static Future<void> _createOpsTables(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS suppliers (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        phone TEXT,
+        email TEXT,
+        address TEXT,
+        notes TEXT,
+        created_at INTEGER NOT NULL,
+        cloud_id TEXT,
+        dirty INTEGER NOT NULL DEFAULT 0,
+        deleted INTEGER NOT NULL DEFAULT 0,
+        updated_at INTEGER NOT NULL DEFAULT 0
+      )
+    ''');
+    await db.execute(
+        'CREATE INDEX IF NOT EXISTS idx_suppliers_name ON suppliers(name)');
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS purchase_orders (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        supplier_id INTEGER,
+        status TEXT NOT NULL DEFAULT 'draft',
+        order_date INTEGER,
+        expected_date INTEGER,
+        received_date INTEGER,
+        notes TEXT,
+        created_by INTEGER,
+        created_at INTEGER NOT NULL,
+        cloud_id TEXT,
+        dirty INTEGER NOT NULL DEFAULT 0,
+        deleted INTEGER NOT NULL DEFAULT 0,
+        updated_at INTEGER NOT NULL DEFAULT 0
+      )
+    ''');
+    await db.execute(
+        'CREATE INDEX IF NOT EXISTS idx_pos_supplier ON purchase_orders(supplier_id)');
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS purchase_order_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        po_id INTEGER NOT NULL,
+        variant_id INTEGER,
+        product_name TEXT NOT NULL DEFAULT '',
+        variant_desc TEXT NOT NULL DEFAULT '',
+        sku TEXT NOT NULL DEFAULT '',
+        qty_ordered INTEGER NOT NULL DEFAULT 0,
+        qty_received INTEGER NOT NULL DEFAULT 0,
+        unit_cost REAL NOT NULL DEFAULT 0,
+        cloud_id TEXT,
+        dirty INTEGER NOT NULL DEFAULT 0,
+        updated_at INTEGER NOT NULL DEFAULT 0
+      )
+    ''');
+    await db.execute(
+        'CREATE INDEX IF NOT EXISTS idx_po_items_po ON purchase_order_items(po_id)');
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS commissions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL DEFAULT 0,
+        sale_id INTEGER,
+        amount REAL NOT NULL DEFAULT 0,
+        basis TEXT NOT NULL DEFAULT 'sale',
+        status TEXT NOT NULL DEFAULT 'pending',
+        note TEXT,
+        period TEXT NOT NULL DEFAULT '',
+        paid_at INTEGER,
+        created_at INTEGER NOT NULL,
+        cloud_id TEXT,
+        dirty INTEGER NOT NULL DEFAULT 0,
+        updated_at INTEGER NOT NULL DEFAULT 0
+      )
+    ''');
+    await db.execute(
+        'CREATE INDEX IF NOT EXISTS idx_commissions_user ON commissions(user_id)');
   }
 
   /// Shift logs (clock in/out) and the audit trail. Kept in a helper so
@@ -352,6 +448,10 @@ class DB {
         'attendance',
         'audit_log',
         'settings',
+        'suppliers',
+        'purchase_orders',
+        'purchase_order_items',
+        'commissions',
       ]) {
         await txn.execute('DELETE FROM $t');
       }

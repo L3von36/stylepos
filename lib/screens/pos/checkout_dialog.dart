@@ -69,7 +69,9 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
     if (discountNeedsApproval(
         isAdmin: actor.isAdmin,
         discount: discount,
-        threshold: settings.discountPinThreshold)) {
+        threshold: settings.discountPinThreshold,
+        canDiscount: actor.canDiscount,
+        discountCap: actor.discountCap)) {
       final ok = await Approvals.request(
         context,
         title: 'Discount needs approval',

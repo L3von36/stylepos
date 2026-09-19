@@ -327,11 +327,21 @@ class _ApprovalDialogState extends State<_ApprovalDialog> {
 }
 
 /// True when a non-manager user's [discount] must be approved first.
+///
+/// A salesperson who was GRANTED discount rights ([canDiscount]) discounts
+/// freely up to their [discountCap] (0 cap = unlimited) — above the cap,
+/// or without the grant, the manager PIN (or the configured threshold)
+/// applies as before.
 bool discountNeedsApproval({
   required bool isAdmin,
   required double discount,
   required double threshold,
+  bool canDiscount = false,
+  double discountCap = 0,
 }) {
   if (isAdmin || discount <= 0) return false;
+  if (canDiscount && (discountCap <= 0 || discount <= discountCap)) {
+    return false;
+  }
   return discount >= threshold;
 }

@@ -85,6 +85,7 @@ class SalesProvider extends ChangeNotifier {
           'product_name': item.product.name,
           'variant_desc': item.variant.descriptor,
           'unit_price': item.variant.price,
+          'unit_cost': item.variant.cost,
           'qty': item.qty,
           'line_total': item.lineTotal,
           'cloud_id': null,
@@ -116,6 +117,37 @@ class SalesProvider extends ChangeNotifier {
             'UPDATE customers SET points = points + ?, dirty = 1, updated_at = ? WHERE id = ?',
             [earned, now, cart.customer!.id],
           );
+        }
+      }
+
+      // commission: rate% of net revenue (total minus tax) for the seller
+      if (userId > 0) {
+        final seller = await txn
+            .query('users',
+                columns: ['commission_rate'],
+                where: 'id = ?',
+                whereArgs: [userId],
+                limit: 1)
+            .then((r) =>
+                (r.isEmpty ? 0.0 : (r.first['commission_rate'] as num? ?? 0))
+                    .toDouble());
+        if (seller > 0) {
+          final net = (totals.total - totals.tax).clamp(0.0, double.maxFinite);
+          await txn.insert('commissions', {
+            'user_id': userId,
+            'sale_id': saleId,
+            'amount': net * seller / 100.0,
+            'basis': 'sale',
+            'status': 'pending',
+            'note': receiptNo,
+            'period':
+                '${DateTime.now().year}-${DateTime.now().month.toString().padLeft(2, '0')}',
+            'paid_at': null,
+            'created_at': now,
+            'cloud_id': null,
+            'dirty': 1,
+            'updated_at': now,
+          });
         }
       }
 
@@ -404,6 +436,87 @@ class SalesProvider extends ChangeNotifier {
               name: r['name'] as String? ?? 'Unknown',
               orders: r['orders'] as int? ?? 0,
               revenue: (r['revenue'] as num?)?.toDouble() ?? 0,
+            ))
+        .toList();
+  }
+
+  /// Margin per product for the window: what each item earned vs what it
+  /// cost. Uses the per-sale cost snapshot (sale_items.unit_cost) when the
+  /// sale carries one, falling back to the variant's current cost for
+  /// older history.
+  Future<List<({String name, int units, double revenue, double cost})>>
+      productMargins(int days, {int limit = 8}) async {
+    final db = await DB.instance();
+    final cutoff = days > 0
+        ? DateTime.now()
+                .subtract(Duration(days: days))
+                .millisecondsSinceEpoch ~/
+            1000
+        : 0;
+    final rows = await db.rawQuery('''
+      SELECT si.product_name AS name,
+             SUM(si.qty) AS units,
+             SUM(si.line_total) AS revenue,
+             SUM(si.qty * CASE WHEN si.unit_cost > 0 THEN si.unit_cost
+                               ELSE COALESCE(v.cost, 0) END) AS cost
+      FROM sale_items si
+      JOIN sales s ON s.id = si.sale_id
+      LEFT JOIN variants v ON v.id = si.variant_id
+      WHERE s.status = 'completed' AND s.created_at >= ?
+      GROUP BY si.product_name
+      HAVING revenue > 0
+      ORDER BY revenue DESC
+      LIMIT ?
+    ''', [cutoff, limit]);
+    return rows
+        .map((r) => (
+              name: r['name'] as String? ?? 'Unknown',
+              units: r['units'] as int? ?? 0,
+              revenue: (r['revenue'] as num?)?.toDouble() ?? 0,
+              cost: (r['cost'] as num?)?.toDouble() ?? 0,
+            ))
+        .toList();
+  }
+
+  /// Detailed per-staff performance for the window: who sold what, how
+  /// much, and how much discount they handed out (manager feature).
+  Future<List<
+          ({
+            int userId,
+            String name,
+            int orders,
+            int items,
+            double revenue,
+            double discount
+          })>> staffPerformanceDetailed(int days) async {
+    final db = await DB.instance();
+    final cutoff = days > 0
+        ? DateTime.now()
+                .subtract(Duration(days: days))
+                .millisecondsSinceEpoch ~/
+            1000
+        : 0;
+    final rows = await db.rawQuery('''
+      SELECT u.id AS user_id, u.name AS name,
+             COUNT(DISTINCT s.id) AS orders,
+             COALESCE(SUM(si.qty), 0) AS items,
+             COALESCE(SUM(s.total), 0) AS revenue,
+             COALESCE(SUM(s.discount), 0) AS discount
+      FROM sales s
+      JOIN users u ON u.id = s.user_id
+      LEFT JOIN sale_items si ON si.sale_id = s.id
+      WHERE s.status = 'completed' AND s.created_at >= ?
+      GROUP BY u.id, u.name
+      ORDER BY revenue DESC
+    ''', [cutoff]);
+    return rows
+        .map((r) => (
+              userId: r['user_id'] as int? ?? 0,
+              name: r['name'] as String? ?? 'Unknown',
+              orders: r['orders'] as int? ?? 0,
+              items: r['items'] as int? ?? 0,
+              revenue: (r['revenue'] as num?)?.toDouble() ?? 0,
+              discount: (r['discount'] as num?)?.toDouble() ?? 0,
             ))
         .toList();
   }

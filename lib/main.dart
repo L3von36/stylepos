@@ -14,6 +14,8 @@ import 'state/cart.dart';
 import 'state/catalog.dart';
 import 'state/customers.dart';
 import 'state/nav.dart';
+import 'state/commissions.dart';
+import 'state/purchasing.dart';
 import 'state/sales.dart';
 import 'state/settings.dart';
 import 'widgets/ui.dart';
@@ -29,6 +31,8 @@ Future<void> main() async {
   final sales = SalesProvider();
   final nav = NavProvider();
   final attendance = AttendanceProvider();
+  final purchasing = PurchasingProvider();
+  final commissions = CommissionsProvider();
 
   // Load persisted settings + session before showing UI.
   await Future.wait([settings.load(), auth.init(), ProductImages.init()]);
@@ -48,6 +52,8 @@ Future<void> main() async {
       await settings.load(); // shop settings refresh after wipes/pulls
       await catalog.reload();
       await customers.reload();
+      await purchasing.reloadAll(); // suppliers + POs arrive from the cloud
+      await commissions.reload();
       sales.bump(); // reports + POS strip refresh with cloud sales
     };
     SyncService.I.start();
@@ -64,6 +70,8 @@ Future<void> main() async {
     sales: sales,
     nav: nav,
     attendance: attendance,
+    purchasing: purchasing,
+    commissions: commissions,
   ));
 }
 
@@ -76,6 +84,8 @@ class StylePosApp extends StatelessWidget {
   final SalesProvider sales;
   final NavProvider nav;
   final AttendanceProvider attendance;
+  final PurchasingProvider purchasing;
+  final CommissionsProvider commissions;
 
   const StylePosApp({
     super.key,
@@ -87,6 +97,8 @@ class StylePosApp extends StatelessWidget {
     required this.sales,
     required this.nav,
     required this.attendance,
+    required this.purchasing,
+    required this.commissions,
   });
 
   @override
@@ -101,6 +113,8 @@ class StylePosApp extends StatelessWidget {
         ChangeNotifierProvider<SalesProvider>.value(value: sales),
         ChangeNotifierProvider<NavProvider>.value(value: nav),
         ChangeNotifierProvider<AttendanceProvider>.value(value: attendance),
+        ChangeNotifierProvider<PurchasingProvider>.value(value: purchasing),
+        ChangeNotifierProvider<CommissionsProvider>.value(value: commissions),
       ],
       child: Builder(builder: (context) {
         // Watch settings so a System/Light/Dark switch rebuilds MaterialApp.

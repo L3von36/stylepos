@@ -105,6 +105,8 @@ class AuthProvider extends ChangeNotifier {
     required String email,
     required String role,
     required String password,
+    String? permissions,
+    double commissionRate = 0,
   }) async {
     if (name.trim().isEmpty) return 'Name is required.';
     if (password.length < 6) return 'Password must be at least 6 characters.';
@@ -119,6 +121,8 @@ class AuthProvider extends ChangeNotifier {
       email: email,
       role: role,
       createdAt: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+      permissions: permissions,
+      commissionRate: commissionRate,
     ).toMap()
       ..['salt'] = salt
       ..['pass_hash'] = hashPassword(password, salt));
@@ -126,7 +130,8 @@ class AuthProvider extends ChangeNotifier {
     return null;
   }
 
-  /// Updates name / role / active flag. Returns null on success, or an error.
+  /// Updates name / role / active flag / permissions / commission rate.
+  /// Returns null on success, or an error.
   Future<String?> updateUser(AppUser u, {bool? active}) async {
     final db = await DB.instance();
     await db.update('users', u.copyWith(active: active ?? u.active).toMap(),

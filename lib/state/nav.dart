@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 /// Identifiers for the app's main destinations.
-enum NavId { pos, products, sales, customers, reports }
+enum NavId { pos, products, sales, customers, purchasing, reports }
 
 /// Tiny navigation notifier so any screen can jump to a tab
 /// (e.g. customer detail -> "Start sale" -> POS tab).

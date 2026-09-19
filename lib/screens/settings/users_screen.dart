@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -21,6 +23,11 @@ class _StaffEntry {
   final bool active;
   final bool isSelf;
 
+  /// JSON permissions object (see [AppUser.encodePermissions]); the cloud
+  /// roster returns it as a jsonb map, local rows store the JSON string.
+  final String? permissions;
+  final double commissionRate;
+
   const _StaffEntry({
     this.cloudId,
     this.localId,
@@ -29,10 +36,23 @@ class _StaffEntry {
     required this.role,
     required this.active,
     this.isSelf = false,
+    this.permissions,
+    this.commissionRate = 0,
   });
 
   bool get isCloud => cloudId != null;
   bool get isManager => role == 'admin';
+
+  /// Normalises the many shapes a permissions field can arrive in
+  /// (jsonb map from PostgREST, JSON string from SQLite, null).
+  static String? _permJson(dynamic p) {
+    if (p == null) return null;
+    if (p is String) return p.isEmpty ? null : p;
+    if (p is Map) return jsonEncode(p);
+    return null;
+  }
+
+  static double _rate(dynamic v) => (v as num?)?.toDouble() ?? 0;
 }
 
 /// Staff account management (admin only).
@@ -112,6 +132,11 @@ class _UsersScreenState extends State<UsersScreen> {
             role: c['role'] as String? ?? 'cashier',
             active: c['active'] as bool? ?? true,
             isSelf: cid == myUid,
+            permissions: _StaffEntry._permJson(c['permissions']) ??
+                (local?['permissions'] as String?),
+            commissionRate: _StaffEntry._rate(c['commission_rate']) != 0
+                ? _StaffEntry._rate(c['commission_rate'])
+                : _StaffEntry._rate(local?['commission_rate']),
           ));
         }
         // Local-only accounts created before cloud staff existed.
@@ -127,6 +152,8 @@ class _UsersScreenState extends State<UsersScreen> {
               email: email,
               role: l['role'] as String? ?? 'cashier',
               active: (l['active'] as int? ?? 1) == 1,
+              permissions: l['permissions'] as String?,
+              commissionRate: _StaffEntry._rate(l['commission_rate']),
             ));
           }
         }
@@ -149,6 +176,8 @@ class _UsersScreenState extends State<UsersScreen> {
                 email: (l['email'] as String? ?? '').toLowerCase(),
                 role: l['role'] as String? ?? 'cashier',
                 active: (l['active'] as int? ?? 1) == 1,
+                permissions: l['permissions'] as String?,
+                commissionRate: _StaffEntry._rate(l['commission_rate']),
               ))
           .toList();
       if (mounted) {
@@ -251,9 +280,13 @@ class _UsersScreenState extends State<UsersScreen> {
   }
 
   /// Keeps the device-local copy of a cloud staff member in step so the
-  /// local login gate and report names agree with the cloud.
+  /// local login gate, permission gates and report names agree with the cloud.
   Future<void> _syncLocalCopy(_StaffEntry u,
-      {String? name, String? role, bool? active}) async {
+      {String? name,
+      String? role,
+      bool? active,
+      String? permissions,
+      double? commissionRate}) async {
     try {
       if (u.localId == null) return;
       final db = await DB.instance();
@@ -263,6 +296,8 @@ class _UsersScreenState extends State<UsersScreen> {
             'name': ?(name?.trim().isNotEmpty ?? false ? name!.trim() : null),
             'role': ?role,
             'active': ?(active != null ? (active ? 1 : 0) : null),
+            'permissions': ?permissions,
+            'commission_rate': ?commissionRate,
           },
           where: 'id = ?',
           whereArgs: [u.localId]);
@@ -365,6 +400,30 @@ class _UsersScreenState extends State<UsersScreen> {
     );
   }
 
+  /// Short " · can discount / can refund / 5% comm" tail for the card.
+  static String _permSummary(_StaffEntry u) {
+    if (u.isManager) return '';
+    final bits = <String>[];
+    final appUser = AppUser(
+        name: u.name,
+        email: u.email,
+        role: u.role,
+        createdAt: 0,
+        permissions: u.permissions,
+        commissionRate: u.commissionRate);
+    if (appUser.canDiscount) {
+      bits.add(appUser.discountCap > 0
+          ? 'discounts ≤ ${appUser.discountCap.toStringAsFixed(0)}'
+          : 'discounts');
+    }
+    if (appUser.canRefund) bits.add('refunds');
+    if (appUser.earnsCommission) {
+      final r = appUser.commissionRate;
+      bits.add('${r == r.roundToDouble() ? r.toStringAsFixed(0) : r.toString()}% comm');
+    }
+    return bits.isEmpty ? '' : ' · ${bits.join(' · ')}';
+  }
+
   Widget _staffCard(_StaffEntry u, AuthProvider auth) {
     return Card(
       child: ListTile(
@@ -424,7 +483,8 @@ class _UsersScreenState extends State<UsersScreen> {
         ),
         subtitle: Text(
             '${u.email.isEmpty ? "no email" : u.email} · '
-            '${u.isManager ? "Manager" : "Sales"}',
+            '${u.isManager ? "Manager" : "Sales"}'
+            '${u.isManager ? "" : _permSummary(u)}',
             style: const TextStyle(fontFamily: 'Carlito', fontSize: 12)),
         trailing: PopupMenuButton<String>(
           icon: Icon(Icons.more_vert_rounded, size: 20, color: AppColors.muted),
@@ -551,6 +611,41 @@ class _BannerCard extends StatelessWidget {
   }
 }
 
+class _PermSwitch extends StatelessWidget {
+  final bool value;
+  final String title;
+  final String subtitle;
+  final ValueChanged<bool> onChanged;
+
+  const _PermSwitch({
+    required this.value,
+    required this.title,
+    required this.subtitle,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return MergeSemantics(
+      child: ListTile(
+        contentPadding: EdgeInsets.zero,
+        dense: true,
+        visualDensity: VisualDensity.compact,
+        title: Text(title,
+            style: TextStyle(
+                fontFamily: 'Carlito',
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: AppColors.ink)),
+        subtitle: Text(subtitle,
+            style: TextStyle(
+                fontFamily: 'Carlito', fontSize: 11, color: AppColors.muted)),
+        trailing: Switch(value: value, onChanged: onChanged),
+      ),
+    );
+  }
+}
+
 class _UserEditDialog extends StatefulWidget {
   final _StaffEntry? entry;
   final bool cloudMode;
@@ -565,12 +660,17 @@ class _UserEditDialogState extends State<_UserEditDialog> {
   late final TextEditingController _name;
   late final TextEditingController _email;
   late final TextEditingController _password;
+  late final TextEditingController _cap;
+  late final TextEditingController _rate;
   late String _role;
+  late bool _canDiscount;
+  late bool _canRefund;
   String? _error;
   bool _busy = false;
 
   bool get _isNew => widget.entry == null;
   bool get _cloudTarget => widget.cloudMode && (widget.entry == null || widget.entry!.isCloud);
+  bool get _salesperson => _role == 'cashier';
 
   @override
   void initState() {
@@ -579,6 +679,26 @@ class _UserEditDialogState extends State<_UserEditDialog> {
     _email = TextEditingController(text: widget.entry?.email ?? '');
     _password = TextEditingController();
     _role = widget.entry?.role ?? 'cashier';
+    final perm = AppUser(
+      name: '',
+      email: '',
+      role: 'cashier',
+      createdAt: 0,
+      permissions: widget.entry?.permissions,
+      commissionRate: widget.entry?.commissionRate ?? 0,
+    );
+    _canDiscount = perm.canDiscount;
+    _canRefund = perm.canRefund;
+    _cap = TextEditingController(
+        text: perm.discountCap.isFinite && perm.discountCap > 0
+            ? perm.discountCap.toStringAsFixed(0)
+            : '');
+    _rate = TextEditingController(
+        text: perm.commissionRate == perm.commissionRate.roundToDouble()
+            ? (perm.commissionRate == 0
+                ? ''
+                : perm.commissionRate.toStringAsFixed(0))
+            : perm.commissionRate.toString());
   }
 
   @override
@@ -586,8 +706,20 @@ class _UserEditDialogState extends State<_UserEditDialog> {
     _name.dispose();
     _email.dispose();
     _password.dispose();
+    _cap.dispose();
+    _rate.dispose();
     super.dispose();
   }
+
+  String get _permissionsJson => AppUser.encodePermissions(
+        canDiscount: _canDiscount,
+        discountCap: double.tryParse(_cap.text) ?? 0,
+        canRefund: _canRefund,
+      );
+
+  double get _commissionRate => (double.tryParse(_rate.text) ?? 0)
+      .clamp(0, 100)
+      .toDouble();
 
   Future<void> _save() async {
     final auth = context.read<AuthProvider>();
@@ -607,21 +739,55 @@ class _UserEditDialogState extends State<_UserEditDialog> {
           role: _role,
           password: _password.text,
         );
+        if (err == null && _salesperson) {
+          // create_staff_account does not take permissions — patch them
+          // onto the freshly created app_users row (found by email).
+          try {
+            final roster = await CloudAuth.fetchStaffRoster();
+            final row = roster?.firstWhere(
+              (r) =>
+                  (r['email'] as String? ?? '').toLowerCase() ==
+                  _email.text.trim().toLowerCase(),
+            );
+            if (row != null) {
+              err = await CloudAuth.updateStaff(
+                row['id'] as String,
+                permissionsJson: _permissionsJson,
+                commissionRate: _commissionRate,
+              );
+            }
+          } catch (_) {// Permissions can be added later via Edit.
+          }
+        }
       } else {
         err = await auth.createUser(
           name: _name.text,
           email: _email.text,
           role: _role,
           password: _password.text,
+          permissions: _salesperson ? _permissionsJson : null,
+          commissionRate: _salesperson ? _commissionRate : 0,
         );
       }
     } else {
       // ---- edit ----
       final e = widget.entry!;
       if (e.isCloud) {
-        err = await CloudAuth.updateStaff(e.cloudId!, name: _name.text, role: _role);
+        err = await CloudAuth.updateStaff(
+          e.cloudId!,
+          name: _name.text,
+          role: _role,
+          permissionsJson: _salesperson ? _permissionsJson : null,
+          commissionRate: _salesperson ? _commissionRate : 0,
+        );
         if (err == null) {
-          await screen?._syncLocalCopy(e, name: _name.text, role: _role);
+          await screen?._syncLocalCopy(
+            e,
+            name: _name.text,
+            role: _role,
+            permissions: _salesperson ? _permissionsJson : null,
+            commissionRate: _salesperson ? _commissionRate : 0,
+          );
         }
       } else {
         err = await auth.updateUser(
@@ -632,6 +798,8 @@ class _UserEditDialogState extends State<_UserEditDialog> {
             role: _role,
             active: e.active,
             createdAt: 0,
+            permissions: _salesperson ? _permissionsJson : null,
+            commissionRate: _salesperson ? _commissionRate : 0,
           ),
         );
       }
@@ -646,10 +814,16 @@ class _UserEditDialogState extends State<_UserEditDialog> {
     } else {
       // Audit: who created/edited which staff account.
       final me = auth.user;
+      final permsNote = _salesperson
+          ? ' · ${_canDiscount ? 'discounts${(double.tryParse(_cap.text) ?? 0) > 0 ? '≤${double.tryParse(_cap.text)!.toStringAsFixed(0)}' : ''}' : 'no discounts'}'
+              '${_canRefund ? ' · refunds' : ''}'
+              '${_commissionRate > 0 ? ' · ${_commissionRate.toStringAsFixed(_commissionRate == _commissionRate.roundToDouble() ? 0 : 1)}% comm' : ''}'
+          : '';
       await Audit.add(
         _isNew ? 'staff_created' : 'staff_updated',
         '${_name.text.trim()} · role: $_role'
-            '${_cloudTarget ? ' · cloud account' : ' · device account'}',
+            '${_cloudTarget ? ' · cloud account' : ' · device account'}'
+            '$permsNote',
         userId: me?.id,
         userName: me?.name,
       );
@@ -744,6 +918,82 @@ class _UserEditDialogState extends State<_UserEditDialog> {
               ],
               onChanged: (v) => setState(() => _role = v ?? 'cashier'),
             ),
+            if (_salesperson) ...[
+              const SizedBox(height: AppSpace.s3),
+              Container(
+                padding: const EdgeInsets.all(AppSpace.s3),
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceTint,
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(children: [
+                      Icon(Icons.verified_user_outlined,
+                          size: 15, color: AppColors.primary),
+                      const SizedBox(width: AppSpace.s2),
+                      Text('PERMISSIONS & COMMISSION',
+                          style: TextStyle(
+                              fontFamily: 'Carlito',
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.4,
+                              color: AppColors.muted)),
+                    ]),
+                    const SizedBox(height: AppSpace.s2),
+                    _PermSwitch(
+                      value: _canDiscount,
+                      title: 'Give manual discounts',
+                      subtitle: _canDiscount
+                          ? 'No manager PIN needed up to the cap below'
+                          : 'Every discount needs manager approval',
+                      onChanged: (v) => setState(() => _canDiscount = v),
+                    ),
+                    if (_canDiscount)
+                      Padding(
+                        padding: const EdgeInsets.only(left: AppSpace.s6),
+                        child: TextField(
+                          controller: _cap,
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(
+                            labelText: 'Discount cap per sale (0 = no cap)',
+                            isDense: true,
+                          ),
+                        ),
+                      ),
+                    _PermSwitch(
+                      value: _canRefund,
+                      title: 'Process refunds',
+                      subtitle: _canRefund
+                          ? 'Refunds without manager approval'
+                          : 'Refunds need manager approval (PIN)',
+                      onChanged: (v) => setState(() => _canRefund = v),
+                    ),
+                    TextField(
+                      controller: _rate,
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
+                      decoration: const InputDecoration(
+                        labelText: 'Commission rate (% of net sales, 0 = none)',
+                        isDense: true,
+                        prefixIcon: Icon(Icons.percent_rounded, size: 19),
+                      ),
+                    ),
+                    const SizedBox(height: AppSpace.s1),
+                    Text(
+                      'Commission is earned automatically on every sale this '
+                      'salesperson completes and shows in Reports.',
+                      style: TextStyle(
+                          fontFamily: 'Carlito',
+                          fontSize: 11,
+                          height: 1.35,
+                          color: AppColors.faint),
+                    ),
+                  ],
+                ),
+              ),
+            ],
             if (_isNew) ...[
               const SizedBox(height: AppSpace.s3),
               TextField(
