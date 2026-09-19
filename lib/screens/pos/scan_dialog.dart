@@ -11,7 +11,10 @@ import '../../widgets/ui.dart';
 /// one pop even though the camera keeps emitting detections while the
 /// code is in frame. Returns the scanned string to the caller.
 class ScanDialog extends StatefulWidget {
-  const ScanDialog({super.key});
+  /// App bar text — override it when scanning something other than an item
+  /// barcode (e.g. receipt QR codes in the verifier).
+  final String title;
+  const ScanDialog({super.key, this.title = 'Scan item barcode'});
 
   @override
   State<ScanDialog> createState() => _ScanDialogState();
@@ -62,7 +65,7 @@ class _ScanDialogState extends State<ScanDialog> {
       appBar: AppBar(
         backgroundColor: Colors.black,
         foregroundColor: Colors.white,
-        title: const Text('Scan item barcode'),
+        title: Text(widget.title),
         actions: [
           IconButton(
             tooltip: 'Torch',

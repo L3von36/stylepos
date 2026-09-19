@@ -21,6 +21,8 @@ import '../widgets/app_sidebar.dart';
 import '../widgets/backup_reminder.dart';
 import '../widgets/ui.dart';
 import 'sync_status_pill.dart';
+import 'verify/receipt_verifier_screen.dart';
+import '../state/cart.dart';
 
 class _Dest {
   final NavId id;
@@ -246,6 +248,7 @@ class _HomeShellState extends State<HomeShell> {
             children: [
               AppSidebar(
                 extended: extended,
+                onVerify: () => _openVerifier(context),
                 destinations: [
                   for (var i = 0; i < all.length; i++)
                     SidebarDest(
@@ -311,6 +314,11 @@ class _HomeShellState extends State<HomeShell> {
       // Phone layout: content + compact bottom bar. The trailing "More"
       // slot opens the account sheet (settings, staff, password, sign out)
       // so every manager tool stays one tap away without crowding the bar.
+      //
+      // Bar cap: at most SIX destination cells + More (seven taps total).
+      // Anything beyond that must live inside the More sheet — the bar
+      // itself never grows past 7 so it stays small and tappable.
+      final barDestinations = all.length > 6 ? all.sublist(0, 6) : all;
       return Scaffold(
         appBar: appBar,
         body: Column(
@@ -329,13 +337,15 @@ class _HomeShellState extends State<HomeShell> {
         ),
         bottomNavigationBar: _PhoneNavBar(
           items: [
-            for (final d in all) _NavItem(d.icon, d.activeIcon, d.label),
+            for (final d in barDestinations)
+              _NavItem(d.icon, d.activeIcon, d.label),
             const _NavItem(Icons.more_horiz_rounded, Icons.more_horiz_rounded,
                 'More', isMore: true),
           ],
-          selectedIndex: index,
+          selectedIndex: barDestinations.indexWhere((d) => d.id == nav.id),
           lowStock: lowCount,
-          lowStockIndex: all.indexWhere((d) => d.id == NavId.products),
+          lowStockIndex:
+              barDestinations.indexWhere((d) => d.id == NavId.products),
           onSelect: (i) {
             // Defer the unfocus + tab switch to after the current pointer
             // dispatch (see the sidebar onSelect comment). Unfocusing or
@@ -346,13 +356,22 @@ class _HomeShellState extends State<HomeShell> {
             WidgetsBinding.instance.addPostFrameCallback((_) {
               if (!mounted) return;
               FocusManager.instance.primaryFocus?.unfocus();
-              nav.goTo(all[i].id);
+              nav.goTo(barDestinations[i].id);
             });
           },
           onMore: () => _showAccountSheet(context, user),
         ),
       );
     });
+  }
+
+  /// Opens the receipt verifier as a pushed task screen. [expectedAmount]
+  /// prefills the "amount they should have paid" comparison field (the open
+  /// cart total when launched from the till).
+  void _openVerifier(BuildContext context, {double? expectedAmount}) {
+    Navigator.of(context).push(MaterialPageRoute(
+        builder: (_) => ReceiptVerifierScreen(
+            initialExpectedAmount: expectedAmount)));
   }
 
   /// The app bar. On desktop it spans only the content column — identity,
@@ -366,6 +385,7 @@ class _HomeShellState extends State<HomeShell> {
     required AppSettings settings,
     required bool desktop,
   }) {
+    final nav = context.read<NavProvider>();
     final appBar = AppBar(
       title: desktop
           ? Text(settings.shopName, overflow: TextOverflow.ellipsis)
@@ -390,6 +410,21 @@ class _HomeShellState extends State<HomeShell> {
               ],
             ),
       actions: [
+        // Till-side receipt verification: one tap from wherever the cashier
+        // already is. On the Sell tab it prefills the open cart total so the
+        // "did they pay enough?" comparison is zero-effort.
+        IconButton(
+          tooltip: 'Verify receipt',
+          icon: const Icon(Icons.verified_user_outlined, size: 20),
+          onPressed: () {
+            double? expected;
+            if (nav.id == NavId.pos) {
+              final cart = context.read<CartProvider>();
+              if (cart.subtotal > 0) expected = cart.total(settings.taxRate);
+            }
+            _openVerifier(context, expectedAmount: expected);
+          },
+        ),
         const SyncStatusPill(),
         if (!desktop && user.isAdmin)
           IconButton(
@@ -447,6 +482,17 @@ class _HomeShellState extends State<HomeShell> {
               ),
             ),
             const Divider(),
+            ListTile(
+              leading:
+                  Icon(Icons.verified_user_outlined, color: AppColors.muted),
+              title: const Text('Verify receipt'),
+              subtitle: const Text(
+                  'Check a transfer before handing over goods'),
+              onTap: () {
+                Navigator.pop(sheet);
+                _openVerifier(context);
+              },
+            ),
             if (user.isAdmin)
               ListTile(
                 leading: Icon(Icons.settings_outlined, color: AppColors.muted),

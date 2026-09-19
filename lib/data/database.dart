@@ -48,7 +48,7 @@ class DB {
 
     _instance = await openDatabase(
       dbPath,
-      version: 8,
+      version: 9,
       onConfigure: (db) => db.execute('PRAGMA foreign_keys = ON'),
       onUpgrade: (db, oldVersion, newVersion) async {
         // v2: product photos (relative filename inside the app images dir).
@@ -171,6 +171,13 @@ class DB {
             await db.execute(
                 'ALTER TABLE sales ADD COLUMN promo_discount REAL NOT NULL DEFAULT 0');
           } catch (_) {}
+        }
+        // v9: receipt verifier history — one row per bank/wallet receipt
+        // check made on this device, so cashiers can revisit what they saw
+        // when a dispute comes up later. Local-only by design (like the
+        // audit trail): a till's checks are its own record.
+        if (oldVersion < 9) {
+          await _createReceiptChecksTable(db);
         }
       },
       onCreate: (db, version) async {
@@ -319,6 +326,7 @@ class DB {
         await _createAccountabilityTables(db);
         await _createOpsTables(db);
         await _createPromoTables(db);
+        await _createReceiptChecksTable(db);
 
         await _seed(db);
       },
@@ -404,6 +412,32 @@ class DB {
     ''');
     await db.execute(
         'CREATE INDEX IF NOT EXISTS idx_commissions_user ON commissions(user_id)');
+  }
+
+  /// Receipt verifier history (v9). One row per bank receipt check made on
+  /// this device; kept local-only like the audit trail. CREATE IF NOT
+  /// EXISTS so fresh installs and upgrades share one definition.
+  static Future<void> _createReceiptChecksTable(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS receipt_checks (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        bank TEXT NOT NULL,
+        bank_name TEXT NOT NULL,
+        reference TEXT NOT NULL,
+        status TEXT NOT NULL,
+        expected_amount REAL,
+        amount REAL,
+        sender_name TEXT,
+        receiver_name TEXT,
+        receipt_date TEXT,
+        detail TEXT,
+        checked_by TEXT,
+        checked_at INTEGER NOT NULL
+      )
+    ''');
+    await db.execute(
+        'CREATE INDEX IF NOT EXISTS idx_receipt_checks_checked_at '
+        'ON receipt_checks(checked_at DESC)');
   }
 
   /// Promotions (coupons + seasonal campaigns). Kept in a helper so both

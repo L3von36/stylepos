@@ -36,6 +36,8 @@ class AppSidebar extends StatefulWidget {
   /// Manager-only actions; null hides the whole MANAGE section entry.
   final VoidCallback? onSettings;
   final VoidCallback? onStaff;
+  /// Receipt-verifier tool entry (all roles) — opens as a pushed screen.
+  final VoidCallback? onVerify;
   final VoidCallback onChangePassword;
   final VoidCallback onSignOut;
 
@@ -50,6 +52,7 @@ class AppSidebar extends StatefulWidget {
     required this.onSignOut,
     this.onSettings,
     this.onStaff,
+    this.onVerify,
   });
 
   @override
@@ -409,6 +412,17 @@ class _AppSidebarState extends State<AppSidebar> {
                       tooltip: widget.destinations[i].label,
                       badge: widget.destinations[i].badge,
                     ),
+                  if (widget.onVerify != null) ...[
+                    if (_extended) _sectionLabel('Tools') else const SizedBox(height: AppSpace.s5),
+                    _navRow(
+                      icon: Icons.verified_user_outlined,
+                      activeIcon: Icons.verified_user_rounded,
+                      label: 'Verify receipt',
+                      onTap: widget.onVerify!,
+                      selected: false,
+                      tooltip: 'Verify receipt',
+                    ),
+                  ],
                   if (showManage) ...[
                     if (_extended)
                       _sectionLabel('Manage')

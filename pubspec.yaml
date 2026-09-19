@@ -1,7 +1,7 @@
 name: stylepos
 description: "Sami (formerly StylePOS) - an offline-first point-of-sale app for clothing shops, built with Flutter (Android + Windows + Web)."
 publish_to: 'none'
-version: 1.17.0+27
+version: 1.18.0+28
 
 environment:
   sdk: ^3.13.3
@@ -36,6 +36,12 @@ dependencies:
 
   # Password hashing
   crypto: ^3.0.6
+
+  # Receipt verifier: fetch receipts straight from the banks (CBE, Telebirr,
+  # BOA, M-Pesa, Dashen, Awash, Zemen, CBE Birr, Siinqee, eBirr) and decrypt
+  # BOA receipt QR codes (AES-256-CBC + PBKDF2). Inspired by 1RB/cheki (MIT).
+  http: ^1.6.0
+  pointycastle: ^4.0.0
 
   # Charts for the reports screen
   fl_chart: ^0.69.2
