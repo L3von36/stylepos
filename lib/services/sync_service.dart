@@ -1127,6 +1127,8 @@ class SyncService extends ChangeNotifier {
 
   Future<void> _pullCommissions() async {
     await _pullTable('commissions', (r, ts) => _mergeCommission(r, ts));
+  }
+
   Future<void> _pullAttendance() async {
     await _pullTable('attendance', (r, ts) => _mergeAttendance(r, ts));
   }
@@ -1734,7 +1736,7 @@ class SyncService extends ChangeNotifier {
   // ------------------------------------------------------------ photos
 
   /// Downloads a cloud photo for a brand-new local product.
-  Future<({String localName})?> _takeCloudPhoto(
+  Future<({String? localName})?> _takeCloudPhoto(
       String cloudId, String? cloudImage, String? currentLocal) async {
     if (cloudImage == null) return null;
     if (currentLocal != null && photoExists(currentLocal)) {
