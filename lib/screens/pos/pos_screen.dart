@@ -324,7 +324,11 @@ class _PosScreenState extends State<PosScreen> {
         ),
         const SizedBox(height: AppSpace.s4),
 
-        // product grid
+        // product catalog. Products WITH an uploaded photo render as image
+        // tiles in the grid; products WITHOUT a photo render as compact list
+        // rows — a sea of identical placeholder icons reads as broken
+        // thumbnails, and a row carries the name/price/stock far better than
+        // an empty picture frame (see _CatalogGrid for the split rule).
         Expanded(
           child: products.isEmpty
               ? EmptyState(
@@ -340,20 +344,10 @@ class _PosScreenState extends State<PosScreen> {
                       ? () => context.read<NavProvider>().goTo(NavId.products)
                       : null,
                 )
-              : GridView.builder(
-                  padding: const EdgeInsets.only(bottom: AppSpace.s4),
-                  gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                    maxCrossAxisExtent: 200,
-                    mainAxisSpacing: 12,
-                    crossAxisSpacing: 12,
-                    childAspectRatio: 0.86,
-                  ),
-                  itemCount: products.length,
-                  itemBuilder: (context, i) => _ProductCard(
-                    product: products[i],
-                    settings: settings,
-                    onTap: () => _openProduct(products[i]),
-                  ),
+              : _CatalogGrid(
+                  products: products,
+                  settings: settings,
+                  onTap: _openProduct,
                 ),
         ),
       ],
@@ -379,6 +373,229 @@ class _PosScreenState extends State<PosScreen> {
       // M3 chips use the small shape (8dp)
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.sm)),
       onSelected: (_) => setState(() => _categoryFilter = value),
+    );
+  }
+}
+
+/// Splits the visible catalog by whether a photo was actually uploaded.
+/// A blank/whitespace image field counts as "no photo" — the edit screen
+/// can leave stray spaces behind when a picture is removed.
+({List<Product> withPhotos, List<Product> withoutPhotos}) splitByPhoto(
+    List<Product> products) {
+  final withPhotos = <Product>[];
+  final withoutPhotos = <Product>[];
+  for (final p in products) {
+    ((p.image ?? '').trim().isEmpty ? withoutPhotos : withPhotos).add(p);
+  }
+  return (withPhotos: withPhotos, withoutPhotos: withoutPhotos);
+}
+
+/// Garment-flavoured fallback icon, guessed from the product name.
+IconData garmentIconFor(Product p) {
+  final n = p.name.toLowerCase();
+  if (n.contains('jean') || n.contains('trouser')) {
+    return Icons.checkroom_rounded;
+  }
+  if (n.contains('dress')) {
+    return Icons.woman_rounded;
+  }
+  if (n.contains('shirt') || n.contains('tee') || n.contains('top')) {
+    return Icons.dry_cleaning_rounded;
+  }
+  if (n.contains('shoe') || n.contains('sneaker') || n.contains('boot')) {
+    return Icons.hiking_rounded;
+  }
+  if (n.contains('jacket') || n.contains('coat')) {
+    return Icons.storm_rounded;
+  }
+  if (n.contains('belt') || n.contains('hat') || n.contains('beanie') ||
+      n.contains('scarf') || n.contains('accessor')) {
+    return Icons.watch_outlined;
+  }
+  return Icons.checkroom_rounded;
+}
+
+/// The scrollable catalog area on the Sell tab.
+///
+/// Layout rule: photo'd products get the familiar image-tile grid;
+/// photo-less products are rendered as a compact list under the caption
+/// "WITHOUT PHOTOS" (only shown when both kinds are on screen). A shop
+/// that never uploaded pictures therefore sees its whole stock as a
+/// tidy list instead of a wall of identical icon placeholders, and a
+/// fully-photographed shop sees exactly the old grid.
+class _CatalogGrid extends StatelessWidget {
+  final List<Product> products;
+  final AppSettings settings;
+  final void Function(Product) onTap;
+
+  const _CatalogGrid({
+    required this.products,
+    required this.settings,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final split = splitByPhoto(products);
+    final hasBoth = split.withPhotos.isNotEmpty && split.withoutPhotos.isNotEmpty;
+
+    return CustomScrollView(slivers: [
+      if (split.withPhotos.isNotEmpty)
+        SliverPadding(
+          padding: const EdgeInsets.only(bottom: AppSpace.s2),
+          sliver: SliverGrid.builder(
+            gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+              maxCrossAxisExtent: 200,
+              mainAxisSpacing: 12,
+              crossAxisSpacing: 12,
+              childAspectRatio: 0.86,
+            ),
+            itemCount: split.withPhotos.length,
+            itemBuilder: (context, i) => _ProductCard(
+              product: split.withPhotos[i],
+              settings: settings,
+              onTap: () => onTap(split.withPhotos[i]),
+            ),
+          ),
+        ),
+      if (hasBoth)
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(4, 2, 4, 8),
+          sliver: SliverToBoxAdapter(
+            child: Text('WITHOUT PHOTOS',
+                style: TextStyle(
+                    fontFamily: 'Carlito',
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.8,
+                    color: AppColors.muted)),
+          ),
+        ),
+      if (split.withoutPhotos.isNotEmpty)
+        SliverPadding(
+          padding: const EdgeInsets.only(bottom: AppSpace.s4),
+          sliver: SliverList.builder(
+            itemCount: split.withoutPhotos.length,
+            itemBuilder: (context, i) {
+              final p = split.withoutPhotos[i];
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: _ProductRow(
+                  product: p,
+                  settings: settings,
+                  onTap: () => onTap(p),
+                ),
+              );
+            },
+          ),
+        ),
+    ]);
+  }
+}
+
+/// Compact sell-row for products without an uploaded photo: name, price,
+/// variant count and stock stay visible — everything the big tile showed,
+/// minus the empty picture frame. Tap behaviour is identical to the grid
+/// cards (single variant adds straight to the cart, multi opens picker).
+class _ProductRow extends StatelessWidget {
+  final Product product;
+  final AppSettings settings;
+  final VoidCallback onTap;
+
+  const _ProductRow({
+    required this.product,
+    required this.settings,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final p = product;
+    final out = p.totalStock <= 0;
+    final lowVariants = p.variants.where((v) => v.stock <= p.lowStock).length;
+
+    return Card(
+      margin: EdgeInsets.zero,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+              horizontal: AppSpace.s3, vertical: AppSpace.s2 + 2),
+          child: Row(
+            children: [
+              ProductThumb(
+                image: p.image,
+                size: 40,
+                radius: AppRadius.sm,
+                icon: garmentIconFor(p),
+                iconSize: 20,
+              ),
+              const SizedBox(width: AppSpace.s3),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      p.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                          fontFamily: 'Carlito',
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14,
+                          color: AppColors.ink),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${p.variants.isEmpty ? '-' : settings.priceLabel(p.minPrice, p.maxPrice)}'
+                      ' · ${p.variants.length} variant${p.variants.length == 1 ? '' : 's'}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                          fontFamily: 'Carlito',
+                          fontSize: 12,
+                          color: AppColors.muted),
+                    ),
+                  ],
+                ),
+              ),
+              if (out) ...[
+                const SizedBox(width: AppSpace.s2),
+                StatusPill.build(context,
+                    label: 'Out',
+                    foreground: AppColors.danger,
+                    background: AppColors.dangerSoft),
+              ] else if (p.hasLowStock) ...[
+                const SizedBox(width: AppSpace.s2),
+                StatusPill.build(context,
+                    label: 'Low',
+                    foreground: AppColors.warning,
+                    background: AppColors.warningSoft),
+              ],
+              const SizedBox(width: AppSpace.s2),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpace.s3, vertical: AppSpace.s1),
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceTint,
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
+                  border: Border.all(color: AppColors.borderSoft),
+                ),
+                child: Text(
+                  '${p.totalStock} pcs',
+                  style: TextStyle(
+                    fontFamily: 'Carlito',
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: lowVariants > 0 ? AppColors.warning : AppColors.body,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -618,7 +835,7 @@ class _ProductCardState extends State<_ProductCard> {
                         child: ProductThumb(
                           image: p.image,
                           radius: AppRadius.sm,
-                          icon: _iconFor(p),
+                          icon: garmentIconFor(p),
                           iconSize: 34,
                         ),
                       ),
@@ -688,30 +905,6 @@ class _ProductCardState extends State<_ProductCard> {
         ),
       ),
     );
-  }
-
-  IconData _iconFor(Product p) {
-    final n = p.name.toLowerCase();
-    if (n.contains('jean') || n.contains('trouser')) {
-      return Icons.checkroom_rounded;
-    }
-    if (n.contains('dress')) {
-      return Icons.woman_rounded;
-    }
-    if (n.contains('shirt') || n.contains('tee') || n.contains('top')) {
-      return Icons.dry_cleaning_rounded;
-    }
-    if (n.contains('shoe') || n.contains('sneaker') || n.contains('boot')) {
-      return Icons.hiking_rounded;
-    }
-    if (n.contains('jacket') || n.contains('coat')) {
-      return Icons.storm_rounded;
-    }
-    if (n.contains('belt') || n.contains('hat') || n.contains('beanie') ||
-        n.contains('scarf') || n.contains('accessor')) {
-      return Icons.watch_outlined;
-    }
-    return Icons.checkroom_rounded;
   }
 }
 

@@ -392,9 +392,10 @@ class _HomeShellState extends State<HomeShell> {
 
   /// The app bar. On desktop it spans only the content column — identity,
   /// settings and sign-out live in the sidebar, so it stays minimal
-  /// (shop name + sync pill). Phones keep it equally quiet: sync pill +
-  /// gear (managers) — everything else lives in the More tab's account
-  /// sheet, so the header never crowds the shop name.
+  /// (shop name + sync pill). Phones keep it equally quiet: sync pill + a
+  /// one-tap Sign out in the top-right corner (the old gear was redundant —
+  /// Settings still lives in the More sheet), so ending a shift never
+  /// requires digging through menus.
   PreferredSizeWidget _buildAppBar(
     BuildContext context, {
     required AppUser user,
@@ -442,12 +443,11 @@ class _HomeShellState extends State<HomeShell> {
           },
         ),
         const SyncStatusPill(),
-        if (!desktop && user.isAdmin)
+        if (!desktop)
           IconButton(
-            tooltip: 'Settings',
-            icon: const Icon(Icons.settings_outlined, size: 21),
-            onPressed: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const SettingsScreen())),
+            tooltip: 'Sign out',
+            icon: Icon(Icons.logout_rounded, size: 21, color: AppColors.danger),
+            onPressed: () => _confirmSignOut(context),
           ),
         const SizedBox(width: AppSpace.s1),
       ],
