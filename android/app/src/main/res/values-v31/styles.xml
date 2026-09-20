@@ -10,6 +10,9 @@
         <item name="android:windowSplashScreenBackground">#FFFFFF</item>
         <item name="android:windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item>
         <item name="android:windowSplashScreenAnimationDuration">600</item>
-        <item name="android:postSplashScreenTheme">@style/NormalTheme</item>
+        <!-- postSplashScreenTheme intentionally omitted: it is an androidx
+             core-splashscreen attribute, not a platform attr (resource
+             linking fails without the library). FlutterActivity already
+             switches to NormalTheme via the manifest meta-data. -->
     </style>
 </resources>
