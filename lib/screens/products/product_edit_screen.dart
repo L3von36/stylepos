@@ -8,6 +8,7 @@ import 'label_print_dialog.dart';
 import '../../state/catalog.dart';
 import '../../state/settings.dart';
 import '../../widgets/ui.dart';
+import 'category_quick_add.dart';
 
 /// Full-screen editor for a product and its size/color variants.
 /// Open without [product] to create a new one.
@@ -27,6 +28,13 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
   int? _categoryId;
   late List<ProductVariant> _variants;
   final Set<int> _removedIds = {};
+
+  /// Sentinel for the "Add new category…" dropdown entry (never a real id).
+  static const int _addCategorySentinel = -1;
+
+  /// Bumped whenever the quick-add flow ends so the category dropdown
+  /// remounts showing the actual selection (created id or previous value).
+  int _catMenuNonce = 0;
 
   // Product photo: `_image` is the pending value, `_oldImage` the one
   // currently stored in the DB (deleted on save after being replaced).
@@ -519,17 +527,47 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
                       children: [
                         Expanded(
                           child: DropdownButtonFormField<int?>(
+                            // Keyed by the selection so the quick-add flow
+                            // can force the field back onto a real item.
+                            key: ValueKey('cat-$_categoryId-$_catMenuNonce'),
                             initialValue: _categoryId,
                             icon: const Icon(Icons.expand_more_rounded, size: 19),
-                            decoration:
-                                const InputDecoration(labelText: 'Category'),
+                            decoration: const InputDecoration(
+                                labelText: 'Category'),
                             items: [
                               const DropdownMenuItem(
                                   value: null, child: Text('Uncategorized')),
                               for (final c in catalog.categories)
-                                DropdownMenuItem(value: c.id, child: Text(c.name)),
+                                DropdownMenuItem(
+                                    value: c.id, child: Text(c.name)),
+                              DropdownMenuItem(
+                                value: _addCategorySentinel,
+                                child: Row(children: [
+                                  Icon(Icons.add_circle_outline_rounded,
+                                      size: 17, color: AppColors.primary),
+                                  const SizedBox(width: 6),
+                                  Text('Add new category…',
+                                      style: TextStyle(
+                                          color: AppColors.primary,
+                                          fontWeight: FontWeight.w600)),
+                                ]),
+                              ),
                             ],
-                            onChanged: (v) => setState(() => _categoryId = v),
+                            onChanged: (v) async {
+                              if (v == _addCategorySentinel) {
+                                final created =
+                                    await showAddCategoryDialog(context, catalog);
+                                if (!mounted) return;
+                                setState(() {
+                                  if (created?.id != null) {
+                                    _categoryId = created!.id;
+                                  }
+                                  _catMenuNonce++; // remount on the real value
+                                });
+                                return;
+                              }
+                              setState(() => _categoryId = v);
+                            },
                           ),
                         ),
                         const SizedBox(width: AppSpace.s3),

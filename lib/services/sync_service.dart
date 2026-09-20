@@ -6,6 +6,7 @@ import 'package:sqflite/sqflite.dart' show ConflictAlgorithm, Database;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
+import '../core/app_log.dart';
 import '../data/database.dart';
 import 'photo_store.dart';
 
@@ -67,13 +68,22 @@ class SupabaseGateway implements CloudGateway {
   @override
   Future<List<Map<String, dynamic>>> fetchUpdated(
       String table, DateTime since) async {
-    final rows = await _c
-        .from(table)
-        .select()
-        .gt('updated_at', since.toUtc().toIso8601String())
-        .order('updated_at');
+    final List<dynamic> rows;
+    try {
+      rows = await _c
+          .from(table)
+          .select()
+          .gt('updated_at', since.toUtc().toIso8601String())
+          .order('updated_at');
+    } catch (e) {
+      // A shop whose cloud was never patched for this table (promotions,
+      // attendance, …) must not flip the whole engine into "error" — the
+      // caller decides (optional tables go on cooldown silently).
+      if (isMissingTableError(e)) throw CloudTableMissingException(table, e);
+      rethrow;
+    }
     return [
-      for (final r in (rows as List)) Map<String, dynamic>.from(r as Map),
+      for (final r in rows) Map<String, dynamic>.from(r as Map),
     ];
   }
 
@@ -150,6 +160,49 @@ class SupabaseGateway implements CloudGateway {
 
 enum SyncPhase { idle, syncing, error }
 
+/// The cloud does not have [table] at all (a shop that never ran the
+/// patch that creates it). Optional tables surface this as a silent
+/// cooldown, core tables as an actionable sync issue.
+class CloudTableMissingException implements Exception {
+  final String table;
+  final Object? cause;
+  CloudTableMissingException(this.table, [this.cause]);
+  @override
+  String toString() =>
+      'CloudTableMissingException($table${cause == null ? '' : ', $cause'})';
+}
+
+/// Parses a PostgREST/Postgres failure and returns the name of the column
+/// the cloud schema is missing, or null when the error is anything else.
+///
+/// Works on any thrown object (message text matching), so unit tests can
+/// use plain exceptions instead of a live Supabase client. Typical shape:
+/// `Could not find the 'device_id' column of 'stock_movements' in the
+/// schema cache` (PGRST204).
+String? missingColumnFrom(Object error) {
+  final raw = error.toString();
+  final m = RegExp(r"could not find the '([a-zA-Z_]+)' column",
+          caseSensitive: false)
+      .firstMatch(raw);
+  if (m != null) return m.group(1);
+  // Postgres-native shape: column "x" of relation "y" does not exist (42703)
+  final m2 = RegExp(r'column "?([a-zA-Z_]+)"? of relation', caseSensitive: false)
+      .firstMatch(raw);
+  return m2?.group(1);
+}
+
+/// True when the failure means "the whole TABLE is absent from the cloud
+/// schema" (never patched). Distinct from a missing COLUMN, which the
+/// engine self-heals by dropping that field from the payload.
+bool isMissingTableError(Object error) {
+  final raw = error.toString().toLowerCase();
+  if (raw.contains('pgrst205')) return true;
+  if (RegExp(r'code:\s*42p01').hasMatch(raw)) return true;
+  if (raw.contains('could not find the table')) return true;
+  if (raw.contains('relation') && raw.contains('does not exist')) return true;
+  return false;
+}
+
 /// Offline-first sync engine: local SQLite stays the brain, the cloud is a
 /// mirror for the other devices.
 ///
@@ -207,6 +260,65 @@ class SyncService extends ChangeNotifier {
   bool realtimeLive = false;
 
   RealtimeChannel? _channel;
+
+  // ------------------------------------------------------------- self-heal
+  // Cloud schema drift: a device running a newer app than the shop's cloud
+  // SQL must keep syncing EVERYTHING ELSE instead of freezing in "Sync
+  // issue". Two mechanisms:
+  //
+  //  * missing COLUMN  -> drop that field from the payload and retry
+  //    (remembered for the session in [_missingCols]; the patch SQL makes
+  //    the cloud accept it again and the memory clears itself on the next
+  //    successful full upsert).
+  //  * missing TABLE   -> optional tables (purchasing/attendance/promos)
+  //    go on a 30-minute cooldown and sync silently skips them; core
+  //    tables surface an actionable sync issue with the patch SQL.
+  final Map<String, Set<String>> _missingCols = {};
+  final Map<String, DateTime> _tableCooldown = {};
+
+  /// How long a table that the cloud does not have is skipped silently.
+  static const Duration _tableCooldownFor = Duration(minutes: 30);
+
+  bool _inCooldown(String table) =>
+      _tableCooldown[table]?.isAfter(DateTime.now()) ?? false;
+
+  /// Forgets every self-heal assumption (used when the Manager taps
+  /// "Retry now" in the fix-sync dialog or the sync pill): the next cycle
+  /// re-probes the cloud with full payloads and all tables.
+  void forgetSchemaGaps() {
+    _missingCols.clear();
+    _tableCooldown.clear();
+  }
+
+  /// Upserts through the gateway, transparently surviving a cloud schema
+  /// that lacks a column: strips it, retries, and remembers the gap so
+  /// later pushes (and the remaining 60-row chunks) skip it immediately.
+  ///
+  /// The memory is session-scoped and only cleared by [forgetSchemaGaps]
+  /// (manual sync / fix dialog) — automatic cycles therefore never repeat
+  /// a failed chunk, and running the patch SQL takes effect on the next
+  /// manual "Sync now".
+  Future<void> _upsert(String table, List<Map<String, dynamic>> payload) async {
+    if (payload.isEmpty) return;
+    final skip = _missingCols[table];
+    var rows = payload;
+    if (skip != null && skip.isNotEmpty) {
+      rows = [
+        for (final r in payload)
+          Map<String, dynamic>.from(r)..removeWhere((k, _) => skip.contains(k)),
+      ];
+    }
+    try {
+      await _gateway.upsertRows(table, rows);
+    } catch (e) {
+      final col = missingColumnFrom(e);
+      if (col == null || !rows.any((r) => r.containsKey(col))) rethrow;
+      AppLog.w('sync/schema', '$table: cloud lacks column "$col" — '
+          'pushing without it (run the patch SQL to restore)');
+      _missingCols.putIfAbsent(table, () => {}).add(col);
+      await _upsert(table, rows); // recursion terminates: finite columns
+    }
+  }
 
   /// Called after a successful sync so providers reload from SQLite.
   Future<void> Function()? onSynced;
@@ -410,12 +522,18 @@ class SyncService extends ChangeNotifier {
       return '$step: waiting for a related record to upload — '
           'the next sync finishes it.';
     }
+    if (error is CloudTableMissingException) {
+      return '$step: the cloud database does not have the '
+          '"${error.table}" table yet — tap the Sync pill and copy the '
+          'cloud fix SQL into Supabase, then retry.';
+    }
     if (code == '42P01' ||
         lower.contains('could not find the') ||
         lower.contains('schema cache') ||
         (code != null && code.startsWith('PGRST2'))) {
-      return '$step: this app is newer than the cloud database — run the '
-          'latest Supabase schema patch SQL, then retry.';
+      return '$step: this app is newer than the cloud database — tap the '
+          'Sync pill to copy the cloud schema patch SQL, run it in '
+          'Supabase, then retry.';
     }
     if (lower.contains('jwt') || lower.contains('unauthorized')) {
       return '$step: your cloud session expired — sign in again.';
@@ -438,12 +556,16 @@ class SyncService extends ChangeNotifier {
   /// Before this, a cashier's rejected variant-stock push aborted the
   /// whole cycle — the device froze in a red "Sync issue" state AND
   /// stopped pulling, so sales made elsewhere never appeared.
-  Future<void> run() async {
+  ///
+  /// [manual] (Sync-now button / pill tap) re-probes tables that went on
+  /// cooldown for missing from the cloud schema.
+  Future<void> run({bool manual = false}) async {
     if (!signedIn) return;
     if (_running) {
       _queued = true;
       return;
     }
+    if (manual) forgetSchemaGaps();
     _running = true;
     phase = SyncPhase.syncing;
     lastError = null;
@@ -460,6 +582,24 @@ class SyncService extends ChangeNotifier {
       }
     }
 
+    /// Steps for tables the cloud MAY not have (Task 28 purchasing,
+    /// attendance, promotions). These features are optional: if their
+    /// cloud side was never patched (or rejects rows), the shop is NOT
+    /// told "sync issue" — the core business (selling) must never look
+    /// broken because an extra feature is not configured. The failure is
+    /// logged and the table goes on a 30-minute cooldown.
+    Future<void> opt(String table, String name,
+        Future<void> Function() action) async {
+      if (_inCooldown(table)) return;
+      try {
+        await action();
+      } catch (e) {
+        _tableCooldown[table] = DateTime.now().add(_tableCooldownFor);
+        AppLog.w('sync/$name', 'optional table "$table" skipped for '
+            '30 min :: $e');
+      }
+    }
+
     // Another device may have cleared the sales history — honour that
     // before anything else so old sales never resurrect here.
     await step('sales clear marker', _applySalesClearMarker);
@@ -470,12 +610,13 @@ class SyncService extends ChangeNotifier {
     await step('push customers', _pushCustomers);
     await step('push sales', _pushSales);
     await step('push sale items', _pushSaleItems);
-    await step('push suppliers', _pushSuppliers);
-    await step('push purchase orders', _pushPOs);
-    await step('push PO items', _pushPOItems);
-    await step('push commissions', _pushCommissions);
-    await step('push promotions', _pushPromotions);
-    await step('push attendance', _pushAttendance);
+    await step('push movements', _pushMovements);
+    await opt('suppliers', 'push suppliers', _pushSuppliers);
+    await opt('purchase_orders', 'push purchase orders', _pushPOs);
+    await opt('purchase_order_items', 'push PO items', _pushPOItems);
+    await opt('commissions', 'push commissions', _pushCommissions);
+    await opt('promotions', 'push promotions', _pushPromotions);
+    await opt('attendance', 'push attendance', _pushAttendance);
     // Pull order likewise: parents first so ids resolve.
     await step('pull categories', _pullCategories);
     await step('pull products', _pullProducts);
@@ -484,12 +625,12 @@ class SyncService extends ChangeNotifier {
     await step('pull sales', _pullSales);
     await step('pull sale items', _pullSaleItems);
     await step('pull movements', _pullMovements);
-    await step('pull suppliers', _pullSuppliers);
-    await step('pull purchase orders', _pullPOs);
-    await step('pull PO items', _pullPOItems);
-    await step('pull commissions', _pullCommissions);
-    await step('pull promotions', _pullPromotions);
-    await step('pull attendance', _pullAttendance);
+    await opt('suppliers', 'pull suppliers', _pullSuppliers);
+    await opt('purchase_orders', 'pull purchase orders', _pullPOs);
+    await opt('purchase_order_items', 'pull PO items', _pullPOItems);
+    await opt('commissions', 'pull commissions', _pullCommissions);
+    await opt('promotions', 'pull promotions', _pullPromotions);
+    await opt('attendance', 'pull attendance', _pullAttendance);
 
     // Rows that never matched anything in the cloud (created before this
     // device first synced, e.g. seed catalog) get pushed as new rows.
@@ -513,12 +654,12 @@ class SyncService extends ChangeNotifier {
     await step('push sales 2', _pushSales);
     await step('push sale items 2', _pushSaleItems);
     await step('push movements 2', _pushMovements);
-    await step('push suppliers 2', _pushSuppliers);
-    await step('push purchase orders 2', _pushPOs);
-    await step('push PO items 2', _pushPOItems);
-    await step('push commissions 2', _pushCommissions);
-    await step('push promotions 2', _pushPromotions);
-    await step('push attendance 2', _pushAttendance);
+    await opt('suppliers', 'push suppliers 2', _pushSuppliers);
+    await opt('purchase_orders', 'push purchase orders 2', _pushPOs);
+    await opt('purchase_order_items', 'push PO items 2', _pushPOItems);
+    await opt('commissions', 'push commissions 2', _pushCommissions);
+    await opt('promotions', 'push promotions 2', _pushPromotions);
+    await opt('attendance', 'push attendance 2', _pushAttendance);
 
     // Red "Sync issue" only when at least one step actually failed;
     // failed rows stay dirty and are retried on the next cycle.
@@ -672,7 +813,7 @@ class SyncService extends ChangeNotifier {
         'updated_at': _iso(r['updated_at'] as int? ?? 0),
       });
     }
-    await _gateway.upsertRows('categories', payload);
+    await _upsert('categories', payload);
     for (final e in ids.entries) {
       await db.update('categories', {'dirty': 0, 'cloud_id': e.value},
           where: 'id = ?', whereArgs: [e.key]);
@@ -728,7 +869,7 @@ class SyncService extends ChangeNotifier {
           {'dirty': 0, 'cloud_image': cloudImage},
           where: 'id = ?', whereArgs: [r['id']]);
     }
-    await _gateway.upsertRows('products', payload);
+    await _upsert('products', payload);
   }
 
   Future<void> _pushVariants() async {
@@ -764,7 +905,7 @@ class SyncService extends ChangeNotifier {
       });
     }
     if (payload.isNotEmpty) {
-      await _gateway.upsertRows('variants', payload);
+      await _upsert('variants', payload);
     }
     for (final e in ids.entries) {
       await db.update('variants', {'dirty': 0, 'cloud_id': e.value},
@@ -792,7 +933,7 @@ class SyncService extends ChangeNotifier {
         'updated_at': _iso(r['updated_at'] as int? ?? 0),
       });
     }
-    await _gateway.upsertRows('customers', payload);
+    await _upsert('customers', payload);
     for (final e in ids.entries) {
       await db.update('customers', {'dirty': 0, 'cloud_id': e.value},
           where: 'id = ?', whereArgs: [e.key]);
@@ -836,7 +977,7 @@ class SyncService extends ChangeNotifier {
         'updated_at': _iso(r['updated_at'] as int? ?? 0),
       });
     }
-    await _gateway.upsertRows('sales', payload);
+    await _upsert('sales', payload);
     for (final e in ids.entries) {
       await db.update('sales', {'dirty': 0, 'cloud_id': e.value},
           where: 'id = ?', whereArgs: [e.key]);
@@ -878,7 +1019,7 @@ class SyncService extends ChangeNotifier {
         'updated_at': _iso(r['updated_at'] as int? ?? 0),
       });
     }
-    if (payload.isNotEmpty) await _gateway.upsertRows('sale_items', payload);
+    if (payload.isNotEmpty) await _upsert('sale_items', payload);
     for (final e in ids.entries) {
       await db.update('sale_items', {'dirty': 0, 'cloud_id': e.value},
           where: 'id = ?', whereArgs: [e.key]);
@@ -919,7 +1060,7 @@ class SyncService extends ChangeNotifier {
         'updated_at': _iso(r['updated_at'] as int? ?? 0),
       });
     }
-    await _gateway.upsertRows('suppliers', payload);
+    await _upsert('suppliers', payload);
     for (final e in ids.entries) {
       await db.update('suppliers', {'dirty': 0, 'cloud_id': e.value},
           where: 'id = ?', whereArgs: [e.key]);
@@ -955,7 +1096,7 @@ class SyncService extends ChangeNotifier {
         'updated_at': _iso(r['updated_at'] as int? ?? 0),
       });
     }
-    await _gateway.upsertRows('purchase_orders', payload);
+    await _upsert('purchase_orders', payload);
     for (final e in ids.entries) {
       await db.update('purchase_orders', {'dirty': 0, 'cloud_id': e.value},
           where: 'id = ?', whereArgs: [e.key]);
@@ -999,7 +1140,7 @@ class SyncService extends ChangeNotifier {
       });
     }
     if (payload.isNotEmpty) {
-      await _gateway.upsertRows('purchase_order_items', payload);
+      await _upsert('purchase_order_items', payload);
     }
     for (final e in ids.entries) {
       await db.update('purchase_order_items',
@@ -1037,7 +1178,7 @@ class SyncService extends ChangeNotifier {
         'updated_at': _iso(r['updated_at'] as int? ?? 0),
       });
     }
-    await _gateway.upsertRows('commissions', payload);
+    await _upsert('commissions', payload);
     for (final e in ids.entries) {
       await db.update('commissions', {'dirty': 0, 'cloud_id': e.value},
           where: 'id = ?', whereArgs: [e.key]);
@@ -1076,7 +1217,7 @@ class SyncService extends ChangeNotifier {
       });
     }
     if (payload.isNotEmpty) {
-      await _gateway.upsertRows('stock_movements', payload);
+      await _upsert('stock_movements', payload);
     }
     for (final e in ids.entries) {
       await db.update('stock_movements', {'dirty': 0, 'cloud_id': e.value},
@@ -1112,7 +1253,7 @@ class SyncService extends ChangeNotifier {
         'updated_at': _iso(r['updated_at'] as int? ?? 0),
       });
     }
-    await _gateway.upsertRows('promotions', payload);
+    await _upsert('promotions', payload);
     for (final e in ids.entries) {
       await db.update('promotions', {'dirty': 0, 'cloud_id': e.value},
           where: 'id = ?', whereArgs: [e.key]);
@@ -1146,7 +1287,7 @@ class SyncService extends ChangeNotifier {
       });
     }
     if (payload.isNotEmpty) {
-      await _gateway.upsertRows('attendance', payload);
+      await _upsert('attendance', payload);
     }
     for (final e in ids.entries) {
       await db.update('attendance', {'dirty': 0, 'cloud_id': e.value},

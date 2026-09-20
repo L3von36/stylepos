@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../services/sync_service.dart';
 import '../widgets/ui.dart';
+import 'sync_fix_dialog.dart';
 
 /// Compact cloud status pill for the app bar. Makes realtime visible:
 ///
@@ -63,7 +64,20 @@ class SyncStatusPill extends StatelessWidget {
           waitDuration: const Duration(milliseconds: 400),
           child: InkWell(
             borderRadius: BorderRadius.circular(AppRadius.pill),
-            onTap: sync.isBusy ? null : () => sync.run(),
+            onTap: sync.isBusy
+                ? null
+                : () async {
+                    // A schema-gap failure deserves the guided fix, not a
+                    // bare retry that would just fail the same way again.
+                    if (sync.phase == SyncPhase.error &&
+                        SyncFixDialog.isSchemaGapError(sync.lastError)) {
+                      await showDialog(
+                          context: context,
+                          builder: (_) => SyncFixDialog(sync: sync));
+                      return;
+                    }
+                    await sync.run(manual: true);
+                  },
             child: Container(
               padding: const EdgeInsets.symmetric(
                   horizontal: AppSpace.s3, vertical: 5),

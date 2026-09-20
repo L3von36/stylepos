@@ -14,6 +14,8 @@ import '../../state/cart.dart';
 import '../../state/catalog.dart';
 import '../../state/customers.dart';
 import '../../state/sales.dart';
+import '../../core/app_log.dart';
+import '../../core/errors.dart';
 import '../../state/settings.dart';
 import '../../widgets/rive_view.dart';
 import '../../widgets/ui.dart';
@@ -167,10 +169,11 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
         _sale = sale;
         _stage = _Stage.done;
       });
-    } catch (e) {
+    } catch (e, s) {
+      AppLog.e('checkout', e, s);
       setState(() {
         _stage = _Stage.payment;
-        _error = 'Sale failed: $e';
+        _error = friendlyError(e);
       });
     }
   }
@@ -194,10 +197,11 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
           SnackBar(content: Text('Saved to ${file.path}')),
         );
       }
-    } catch (e) {
+    } catch (e, s) {
+      AppLog.e('receipt/save-pdf', e, s);
       if (mounted) {
         ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Could not save PDF: $e')));
+            .showSnackBar(SnackBar(content: Text(friendlyError(e))));
       }
     }
   }
@@ -215,10 +219,11 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
         pointsEarned: _pointsEarned,
       );
       await ReceiptService.printPdf(bytes);
-    } catch (e) {
+    } catch (e, s) {
+      AppLog.e('receipt/print', e, s);
       if (mounted) {
         ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Print failed: $e')));
+            .showSnackBar(SnackBar(content: Text(friendlyError(e))));
       }
     }
   }

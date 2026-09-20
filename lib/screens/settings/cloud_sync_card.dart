@@ -181,7 +181,7 @@ class _CloudSyncCardState extends State<CloudSyncCard> {
             const SizedBox(height: AppSpace.s3),
             FilledButton.icon(
               style: FilledButton.styleFrom(minimumSize: const Size(0, 46)),
-              onPressed: sync.isBusy ? null : () => SyncService.I.run(),
+              onPressed: sync.isBusy ? null : () => SyncService.I.run(manual: true),
               icon: const Icon(Icons.sync_rounded, size: 18),
               label: const Text('Sync now'),
             ),

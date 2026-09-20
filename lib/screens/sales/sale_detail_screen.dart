@@ -10,6 +10,8 @@ import '../../state/cart.dart';
 import '../../state/catalog.dart';
 import '../../state/nav.dart';
 import '../../state/sales.dart';
+import '../../core/app_log.dart';
+import '../../core/errors.dart';
 import '../../state/settings.dart';
 import '../../widgets/ui.dart';
 
@@ -206,10 +208,11 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
               .showSnackBar(SnackBar(content: Text('Saved to ${file.path}')));
         }
       }
-    } catch (e) {
+    } catch (e, s) {
+      AppLog.e('receipt/reprint', e, s);
       if (mounted) {
         ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Failed: $e')));
+            .showSnackBar(SnackBar(content: Text(friendlyError(e))));
       }
     }
   }

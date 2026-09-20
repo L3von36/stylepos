@@ -98,7 +98,7 @@ class _HomeShellState extends State<HomeShell> {
               ? 'Keeping local data — it will join your shop on the next sync.'
               : 'Fresh start! Pulling your shop data from the cloud…'),
         ));
-        await SyncService.I.run();
+        await SyncService.I.run(manual: true);
       }
     } catch (e, s) {
       AppLog.w('gate/legacy-data', e, s); // Never block the till on the gate.
