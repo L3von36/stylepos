@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -21,6 +22,27 @@ import '../../widgets/rive_view.dart';
 import '../../widgets/ui.dart';
 
 enum _Stage { payment, processing, done }
+
+/// Context-aware quick-cash chips for the payment sheet: the exact amount
+/// first (the recommended tap, highlighted), then the round numbers and
+/// common notes above it that a customer could actually hand over —
+/// deduped, ascending, capped at four so the row never wraps forever.
+List<double> quickCashFor(double total) {
+  double ceilTo(double v, double step) => (v / step).ceilToDouble() * step;
+  final candidates = <double>{
+    total.ceilToDouble(),
+    ceilTo(total, 50),
+    ceilTo(total, 100),
+    200.0,
+    500.0,
+    1000.0,
+    2000.0,
+  }
+      .where((q) => q + 0.001 >= total)
+      .toList()
+    ..sort();
+  return candidates.take(4).toList();
+}
 
 /// Presents checkout. On phones it opens as a modal bottom sheet — it
 /// slides up over the till, the keypad sits in the thumb zone and the
@@ -118,11 +140,13 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
             'A manager must approve it before checkout.',
       );
       if (ok == null) {
+        if (!mounted) return;
         setState(() {
           _error = 'Discount not approved — reduce it or ask a manager.';
         });
         return;
       }
+      if (!mounted) return;
       await Audit.add(
         'discount_approved',
         '${settings.money(discount)} approved via ${ok.methodLabel} '
@@ -135,6 +159,7 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
     // Cash guard: never record a cash sale that was not fully tendered.
     final due = cart.total(settings.taxRate);
     if (_method == 'cash' && _tenderedValue + 0.001 < due) {
+      if (!mounted) return;
       setState(() {
         _error = 'Cash received is less than the amount due — collect '
             '${settings.money(due - _tenderedValue)} more.';
@@ -164,7 +189,7 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
       cart.clear();
       await catalog.reload();
       await customers.reload();
-
+      if (!mounted) return;
       setState(() {
         _sale = sale;
         _stage = _Stage.done;
@@ -532,6 +557,10 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
       {required bool mobile}) {
     final cart = context.watch<CartProvider>();
     final change = _changeDue(total);
+    // Compact segments on tight widths (phone sheets, narrow desktop
+    // dialogs) or when the manager enables many methods.
+    final compact = MediaQuery.sizeOf(context).width < 460 ||
+        settings.paymentMethods.length > 3;
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -589,25 +618,27 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
         const SizedBox(height: 8),
         // Three methods with icons + full labels overflow phone-sized
         // dialogs (~280dp content width) — compact them on tight widths.
-        LayoutBuilder(builder: (context, lc) {
-          final compact = lc.maxWidth < 400 || settings.paymentMethods.length > 3;
-          return SegmentedButton<String>(
-            showSelectedIcon: false,
-            style: const ButtonStyle(
-              visualDensity: VisualDensity(vertical: 1.6),
-            ),
-            segments: [
-              for (final m in settings.paymentMethods)
-                ButtonSegment(
-                  value: m,
-                  icon: compact ? null : Icon(_methodIcon(m), size: 18),
-                  label: Text(compact ? _shortMethodLabel(m) : _methodLabel(m)),
-                ),
-            ],
-            selected: {_method},
-            onSelectionChanged: (s) => setState(() => _method = s.first),
-          );
-        }),
+        // No LayoutBuilder here: AlertDialog sizes its content with
+        // intrinsic dimensions, which a LayoutBuilder cannot provide —
+        // it crashed the desktop dialog layout (and mis-sized it in
+        // release). The window width from MediaQuery answers the same
+        // question without speculative layout.
+        SegmentedButton<String>(
+          showSelectedIcon: false,
+          style: const ButtonStyle(
+            visualDensity: VisualDensity(vertical: 1.6),
+          ),
+          segments: [
+            for (final m in settings.paymentMethods)
+              ButtonSegment(
+                value: m,
+                icon: compact ? null : Icon(_methodIcon(m), size: 18),
+                label: Text(compact ? _shortMethodLabel(m) : _methodLabel(m)),
+              ),
+          ],
+          selected: {_method},
+          onSelectionChanged: (s) => setState(() => _method = s.first),
+        ),
 
         if (_method == 'cash') ...[
           const SizedBox(height: AppSpace.s4),
@@ -644,19 +675,26 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
             spacing: AppSpace.s2,
             runSpacing: AppSpace.s2,
             children: [
-              for (final quick in [
-                total.ceilToDouble(),
-                (total / 2).ceilToDouble() * 2,
-                500.0,
-                1000.0,
-                2000.0,
-              ].where((q) => q >= total).toSet())
+              for (final quick in quickCashFor(total))
                 ActionChip(
-                  label: Text(settings.money(quick)),
-                  labelStyle: const TextStyle(fontFamily: 'Carlito', fontSize: 12, fontWeight: FontWeight.w700),
-                  backgroundColor: AppColors.primarySoft,
+                  label: Text(quick == total
+                      ? 'Exact · ${settings.money(quick)}'
+                      : settings.money(quick)),
+                  labelStyle: TextStyle(
+                      fontFamily: 'Carlito',
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      // The first chip is the exact amount due — the
+                      // recommended tap, rendered filled.
+                      color: quick == total
+                          ? AppColors.onPrimary
+                          : AppColors.primaryDark),
+                  backgroundColor: quick == total
+                      ? AppColors.primary
+                      : AppColors.primarySoft,
                   side: BorderSide.none,
                   onPressed: () {
+                    HapticFeedback.selectionClick();
                     // Defer the controller write + rebuild out of the gesture
                     // dispatch: mutating the focused field's text mid-tap
                     // fouled the web pointer stream — every later tap on the
@@ -1045,7 +1083,11 @@ class _PaymentKeypad extends StatelessWidget {
         borderRadius: BorderRadius.circular(AppRadius.md),
         child: InkWell(
           borderRadius: BorderRadius.circular(AppRadius.md),
-          onTap: () => onKey(code),
+          onTap: () {
+            // Terminal feel: every key press answers with a tick.
+            HapticFeedback.selectionClick();
+            onKey(code);
+          },
           child: SizedBox(
             height: 52,
             child: Center(

@@ -1,4 +1,5 @@
 import 'dart:io' show Platform;
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -237,20 +238,36 @@ class _PosScreenState extends State<PosScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       backgroundColor: AppColors.surface,
       shape: const RoundedRectangleBorder(
         // M3 modal bottom sheet: extra-large top corners
         borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.xl)),
       ),
-      builder: (_) => SizedBox(
-        height: MediaQuery.of(context).size.height * 0.78,
-        child: Column(
-          children: [
-            const SheetHandle(),
-            const Expanded(child: CartPanel(scrollable: false)),
-          ],
-        ),
-      ),
+      builder: (sheetCtx) {
+        // Keyboard-aware sheet: the old fixed 0.78-height box kept its
+        // size when the keyboard rose (discount field), so the inner
+        // column shrank and silently clipped the charge button off the
+        // bottom. The sheet now lifts above the keyboard and its height
+        // is capped to the space that is actually left.
+        final kb = MediaQuery.viewInsetsOf(sheetCtx).bottom;
+        final h = MediaQuery.sizeOf(sheetCtx).height;
+        return Padding(
+          padding: EdgeInsets.only(bottom: kb),
+          child: SafeArea(
+            top: false,
+            child: SizedBox(
+              height: math.max(280, math.min(h * 0.85, h - kb - 8)),
+              child: Column(
+                children: [
+                  const SheetHandle(),
+                  const Expanded(child: CartPanel(scrollable: false)),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 

@@ -35,9 +35,8 @@ class CartPanel extends StatelessWidget {
         canDiscount: user?.canDiscount ?? false,
         discountCap: user?.discountCap ?? 0);
 
-    final content = Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
+    // Fixed header pieces shared by both layouts (wide till + phone sheet).
+    final headerWidgets = <Widget>[
         if (cart.exchangeNote != null)
           Container(
             margin: const EdgeInsets.fromLTRB(AppSpace.s4, AppSpace.s3, AppSpace.s4, 0),
@@ -221,45 +220,54 @@ class CartPanel extends StatelessWidget {
           ),
         ),
 
-        // items
-        Expanded(
-          child: cart.isEmpty
-              ? Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const EmptyCartArt(),
-                    const SizedBox(height: AppSpace.s3),
-                    Text('Cart is empty',
-                        style: TextStyle(
-                            fontFamily: 'Carlito',
-                            fontSize: 15,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.ink)),
-                    const SizedBox(height: 4),
-                    Padding(
-                      padding: EdgeInsets.symmetric(horizontal: AppSpace.s5),
-                      child: Text(
-                        'Tap products or scan a barcode to add them.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                            fontFamily: 'Carlito',
-                            fontSize: 12,
-                            height: 16 / 12,
-                            color: AppColors.muted),
-                      ),
-                    ),
-                  ],
-                )
-              : ListView.builder(
-                  padding: const EdgeInsets.fromLTRB(AppSpace.s3, AppSpace.s2, AppSpace.s3, AppSpace.s1),
-                  itemCount: cart.items.length,
-                  itemBuilder: (context, i) => _CartTile(item: cart.items[i]),
-                ),
-        ),
+      ];
 
-        // discount + totals
-        if (cart.isNotEmpty)
-          Container(
+    final emptyArt = Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const EmptyCartArt(),
+        const SizedBox(height: AppSpace.s3),
+        Text('Cart is empty',
+            style: TextStyle(
+                fontFamily: 'Carlito',
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: AppColors.ink)),
+        const SizedBox(height: 4),
+        Padding(
+          padding: EdgeInsets.symmetric(horizontal: AppSpace.s5),
+          child: Text(
+            'Tap products or scan a barcode to add them.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+                fontFamily: 'Carlito',
+                fontSize: 12,
+                height: 16 / 12,
+                color: AppColors.muted),
+          ),
+        ),
+      ],
+    );
+
+    final Widget chargeButton = Padding(
+      padding: const EdgeInsets.all(AppSpace.s4),
+      child: FilledButton.icon(
+        style: FilledButton.styleFrom(
+            minimumSize: const Size(0, 48)), // M3 touch target
+        onPressed: cart.isEmpty ? null : () => showCheckout(context),
+        icon: const Icon(Icons.payments_outlined, size: 20),
+        label: Text(
+          cart.isEmpty
+              ? 'Charge'
+              : 'Charge · ${settings.money(cart.total(settings.taxRate))}',
+          style: const TextStyle(fontSize: 15),
+        ),
+      ),
+    );
+
+    final Widget? totalsBlock = cart.isEmpty
+        ? null
+        : Container(
             margin: const EdgeInsets.fromLTRB(AppSpace.s4, AppSpace.s2, AppSpace.s4, 0),
             padding: const EdgeInsets.fromLTRB(AppSpace.s4, AppSpace.s3, AppSpace.s4, AppSpace.s3),
             decoration: BoxDecoration(
@@ -339,37 +347,65 @@ class CartPanel extends StatelessWidget {
                 ),
               ],
             ),
-          ),
+          );
 
-        Padding(
-          padding: const EdgeInsets.all(AppSpace.s4),
-          child: FilledButton.icon(
-            style: FilledButton.styleFrom(minimumSize: const Size(0, 48)), // M3 touch target
-            onPressed: cart.isEmpty
-                ? null
-                : () => showCheckout(context),
-            icon: const Icon(Icons.payments_outlined, size: 20),
-            label: Text(
-              cart.isEmpty
-                  ? 'Charge'
-                  : 'Charge · ${settings.money(cart.total(settings.taxRate))}',
-              style: const TextStyle(fontSize: 15),
-            ),
+    // WIDE TILL (right column, full height): items scroll, totals and the
+    // charge button stay pinned.
+    final Widget content;
+    if (scrollable) {
+      content = Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ...headerWidgets,
+          Expanded(
+            child: cart.isEmpty
+                ? Center(child: emptyArt)
+                : ListView.builder(
+                    padding: const EdgeInsets.fromLTRB(
+                        AppSpace.s3, AppSpace.s2, AppSpace.s3, AppSpace.s1),
+                    itemCount: cart.items.length,
+                    itemBuilder: (context, i) => _CartTile(item: cart.items[i]),
+                  ),
           ),
-        ),
-      ],
-    );
+          ?totalsBlock,
+          chargeButton,
+        ],
+      );
+    } else {
+      // PHONE CART SHEET: on a short screen (or with the keyboard open)
+      // the old all-fixed Column silently clipped the charge button off
+      // the bottom of the card. Only the header stays fixed now — the
+      // basket AND the totals scroll in the middle and the charge button
+      // is ALWAYS pinned. The sheet itself lifts above the keyboard (see
+      // pos_screen._openCartSheet) so the discount field stays visible.
+      content = Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ...headerWidgets,
+          Expanded(
+            child: cart.isEmpty
+                ? Center(child: emptyArt)
+                : SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(
+                        AppSpace.s3, AppSpace.s2, AppSpace.s3, AppSpace.s2),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        for (final item in cart.items) _CartTile(item: item),
+                        if (totalsBlock != null) ...[
+                          totalsBlock,
+                          const SizedBox(height: AppSpace.s2),
+                        ],
+                      ],
+                    ),
+                  ),
+          ),
+          chargeButton,
+        ],
+      );
+    }
 
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      child: scrollable
-          ? content
-          : Padding(
-              padding: EdgeInsets.only(
-                  bottom: MediaQuery.of(context).viewInsets.bottom),
-              child: content,
-            ),
-    );
+    return Card(clipBehavior: Clip.antiAlias, child: content);
   }
 
   /// Lists parked sales so the sales person can serve several customers

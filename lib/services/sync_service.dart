@@ -240,8 +240,13 @@ class SyncService extends ChangeNotifier {
   bool _started = false;
 
   /// Safety-net so a missed realtime event (websocket blip, device asleep)
-  /// still converges within a minute instead of waiting for a local edit.
+  /// still converges without waiting for a local edit. The tick is ADAPTIVE
+  /// (see [start]) — the cloud is only contacted when something changed,
+  /// or on a gentle verify, never on a fixed drumbeat.
   Timer? _keepAlive;
+
+  /// Counts [keepAlive] ticks since start — drives the adaptive cadence.
+  int _keepAliveTicks = 0;
 
   /// Reconnects a dropped realtime channel with growing backoff.
   Timer? _reconnectTimer;
@@ -354,9 +359,30 @@ class SyncService extends ChangeNotifier {
       // Supabase not initialised (unit tests) — manual runs still work.
     }
 
-    // Safety-net: pull every 45s even if no realtime event arrives.
+    // QUOTA GUARD — the cloud API is a paid, rate-limited resource, so a
+    // sync only happens when there is something to exchange:
+    //  * a LOCAL EDIT schedules a sync 4s later (every provider does),
+    //  * a REMOTE CHANGE arrives as a realtime event -> sync ~1s later,
+    //  * sign-in, app resume and manual taps sync immediately.
+    // The old behaviour re-ran a full push+pull cycle every 45s even when
+    // nothing had changed for hours — thousands of wasted REST calls per
+    // day against the shop's Supabase quota. The timer below is only a
+    // safety net now, and its cadence adapts to the channel state:
+    //  * a FAILED cycle retries after ~90s so stuck rows never wait long,
+    //  * with realtime confirmed live, one light verify every ~15 min
+    //    guards against silently dropped websocket events,
+    //  * while the channel is down, a catch-up pull runs every ~3 min.
     _keepAlive ??= Timer.periodic(const Duration(seconds: 45), (_) {
-      if (signedIn) scheduleSync();
+      if (!signedIn) return;
+      _keepAliveTicks += 1;
+      if (lastError != null) {
+        // Retry the failed work sooner than the safety nets below.
+        if (_keepAliveTicks.isEven) scheduleSync();
+      } else if (realtimeLive) {
+        if (_keepAliveTicks % 20 == 0) scheduleSync();
+      } else {
+        if (_keepAliveTicks % 4 == 0) scheduleSync();
+      }
     });
 
     // Coming back to the foreground (phone app switch / browser tab):
@@ -446,8 +472,9 @@ class SyncService extends ChangeNotifier {
   }
 
   /// Tears down and re-joins the channel after a growing delay
-  /// (3s, 10s, 30s, then every 60s; caps at 6 tries — the 45s keep-alive
-  /// pull keeps data fresh even when realtime never comes back).
+  /// (3s, 10s, 30s, then every 60s; caps at 6 tries — the keep-alive
+  /// catch-up pull every ~3 min keeps data fresh even when realtime
+  /// never comes back).
   void _scheduleRealtimeReconnect() {
     _reconnectTimer?.cancel();
     final attempt = _reconnectAttempt += 1;
