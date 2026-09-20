@@ -14,6 +14,7 @@ import '../../state/catalog.dart';
 import '../../state/commissions.dart';
 import '../../state/nav.dart';
 import '../../state/sales.dart';
+import '../../state/sell_view.dart';
 import '../../state/settings.dart';
 import '../../widgets/ui.dart';
 import 'cart_panel.dart';
@@ -38,8 +39,9 @@ class _PosScreenState extends State<PosScreen> {
   final _search = TextEditingController();
   final _scanFocus = FocusNode();
   final ScanGate _gate = ScanGate();
-  int _categoryFilter = -1; // -1 = all
-  String _query = '';
+  // Search text + category chip live in SellViewState (provider-owned,
+  // restored/persisted with the rest of the shell state) — this State
+  // only owns widgets: the text controller and the scan focus node.
 
   bool get _cameraAvailable => !kIsWeb && (Platform.isAndroid || Platform.isIOS);
 
@@ -52,7 +54,7 @@ class _PosScreenState extends State<PosScreen> {
 
   void _refocus() {
     _search.clear();
-    setState(() => _query = '');
+    context.read<SellViewState>().setQuery('');
     _scanFocus.requestFocus();
   }
 
@@ -150,7 +152,7 @@ class _PosScreenState extends State<PosScreen> {
     if (_tryRingUp(v, strict: false)) {
       _refocus();
     } else {
-      setState(() => _query = v);
+      context.read<SellViewState>().setQuery(v);
     }
   }
 
@@ -163,13 +165,13 @@ class _PosScreenState extends State<PosScreen> {
     _scanFocus.requestFocus();
   }
 
-  List<Product> _filtered(CatalogProvider catalog) {
+  List<Product> _filtered(CatalogProvider catalog, SellViewState view) {
     Iterable<Product> out = catalog.products;
-    if (_categoryFilter >= 0) {
-      out = out.where((p) => p.categoryId == _categoryFilter);
+    if (view.categoryFilter >= 0) {
+      out = out.where((p) => p.categoryId == view.categoryFilter);
     }
-    if (_query.trim().isNotEmpty) {
-      final q = _query.trim().toLowerCase();
+    if (view.query.trim().isNotEmpty) {
+      final q = view.query.trim().toLowerCase();
       out = out.where((p) =>
           p.name.toLowerCase().contains(q) ||
           (p.barcode ?? '').contains(q) ||
@@ -194,11 +196,13 @@ class _PosScreenState extends State<PosScreen> {
   Widget build(BuildContext context) {
     final catalog = context.watch<CatalogProvider>();
     final settings = context.watch<AppSettings>();
-    final products = _filtered(catalog);
+    final sellView = context.watch<SellViewState>();
+    final products = _filtered(catalog, sellView);
 
     return LayoutBuilder(builder: (context, c) {
       final wide = c.maxWidth >= 1100;
-      final grid = _buildCatalogArea(context, catalog, settings, products);
+      final grid =
+          _buildCatalogArea(context, catalog, settings, products, sellView);
 
       if (wide) {
         return Padding(
@@ -250,6 +254,7 @@ class _PosScreenState extends State<PosScreen> {
     CatalogProvider catalog,
     AppSettings settings,
     List<Product> products,
+    SellViewState sellView,
   ) {
     final auth = context.watch<AuthProvider>();
     final user = auth.user;
@@ -269,7 +274,7 @@ class _PosScreenState extends State<PosScreen> {
           autofocus: !_cameraAvailable,
           textInputAction: TextInputAction.search,
           onSubmitted: _onSearchSubmit,
-          onChanged: (v) => setState(() => _query = v),
+          onChanged: (v) => context.read<SellViewState>().setQuery(v),
           style: const TextStyle(fontSize: 14),
           decoration: InputDecoration(
             hintText: 'Scan barcode or search name / SKU…',
@@ -290,7 +295,7 @@ class _PosScreenState extends State<PosScreen> {
                   icon: Icon(Icons.photo_camera_outlined, size: 20, color: AppColors.primary),
                   onPressed: _openCameraScanner,
                 ),
-              if (_query.isEmpty)
+              if (sellView.query.isEmpty)
                 const SizedBox(width: AppSpace.s3)
               else
                 IconButton(
@@ -298,7 +303,7 @@ class _PosScreenState extends State<PosScreen> {
                   icon: const Icon(Icons.close_rounded, size: 19),
                   onPressed: () {
                     _search.clear();
-                    setState(() => _query = '');
+                    context.read<SellViewState>().setQuery('');
                     _scanFocus.requestFocus();
                   },
                 ),
@@ -313,10 +318,10 @@ class _PosScreenState extends State<PosScreen> {
           child: ListView(
             scrollDirection: Axis.horizontal,
             children: [
-              _chip(context, 'All', -1),
+              _chip(context, 'All', -1, sellView),
               const SizedBox(width: AppSpace.s2),
               for (final cat in catalog.categories) ...[
-                _chip(context, cat.name, cat.id ?? -1),
+                _chip(context, cat.name, cat.id ?? -1, sellView),
                 const SizedBox(width: AppSpace.s2),
               ],
             ],
@@ -335,12 +340,12 @@ class _PosScreenState extends State<PosScreen> {
                   icon: Icons.storefront_outlined,
                   // An empty catalog is a different situation from a search
                   // that matched nothing — say so, and offer the way out.
-                  title: _query.isEmpty ? 'No products yet' : 'No products match',
-                  message: _query.isEmpty
+                  title: sellView.query.isEmpty ? 'No products yet' : 'No products match',
+                  message: sellView.query.isEmpty
                       ? 'Add your first product under the Products tab, then come back here to sell.'
                       : 'Try a different search term or clear the filters.',
-                  actionLabel: _query.isEmpty ? 'Go to Products' : null,
-                  onAction: _query.isEmpty
+                  actionLabel: sellView.query.isEmpty ? 'Go to Products' : null,
+                  onAction: sellView.query.isEmpty
                       ? () => context.read<NavProvider>().goTo(NavId.products)
                       : null,
                 )
@@ -354,8 +359,9 @@ class _PosScreenState extends State<PosScreen> {
     );
   }
 
-  Widget _chip(BuildContext context, String label, int value) {
-    final selected = _categoryFilter == value;
+  Widget _chip(
+      BuildContext context, String label, int value, SellViewState sellView) {
+    final selected = sellView.categoryFilter == value;
     return ChoiceChip(
       label: Text(label),
       selected: selected,
@@ -372,7 +378,7 @@ class _PosScreenState extends State<PosScreen> {
       side: BorderSide(color: selected ? AppColors.primary.withValues(alpha: 0.35) : AppColors.border),
       // M3 chips use the small shape (8dp)
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.sm)),
-      onSelected: (_) => setState(() => _categoryFilter = value),
+      onSelected: (_) => sellView.setCategoryFilter(value),
     );
   }
 }

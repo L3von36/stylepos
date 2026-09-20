@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../models/product.dart';
 import '../../state/auth.dart';
 import '../../state/catalog.dart';
+import '../../state/products_view.dart';
 import '../../state/settings.dart';
 import '../../widgets/ui.dart';
 import '../promotions/promotions_screen.dart';
@@ -38,9 +39,9 @@ String? _rowBarcode(Product product) {
 
 class _ProductsScreenState extends State<ProductsScreen> {
   final _search = TextEditingController();
-  String _query = '';
-  int _categoryFilter = -1;
-  bool _lowOnly = false;
+  // Search text, category filter and the low-stock chip live in
+  // ProductsViewState (provider-owned, persisted across restarts) — this
+  // State only owns the text controller.
 
   @override
   void dispose() {
@@ -48,14 +49,14 @@ class _ProductsScreenState extends State<ProductsScreen> {
     super.dispose();
   }
 
-  List<Product> _filtered(CatalogProvider catalog) {
+  List<Product> _filtered(CatalogProvider catalog, ProductsViewState view) {
     Iterable<Product> out = catalog.products;
-    if (_categoryFilter >= 0) {
-      out = out.where((p) => p.categoryId == _categoryFilter);
+    if (view.categoryFilter >= 0) {
+      out = out.where((p) => p.categoryId == view.categoryFilter);
     }
-    if (_lowOnly) out = out.where((p) => p.hasLowStock);
-    if (_query.trim().isNotEmpty) {
-      final q = _query.trim().toLowerCase();
+    if (view.lowOnly) out = out.where((p) => p.hasLowStock);
+    if (view.query.trim().isNotEmpty) {
+      final q = view.query.trim().toLowerCase();
       out = out.where((p) =>
           p.name.toLowerCase().contains(q) ||
           (p.barcode ?? '').contains(q) ||
@@ -94,8 +95,9 @@ class _ProductsScreenState extends State<ProductsScreen> {
     final catalog = context.watch<CatalogProvider>();
     final settings = context.watch<AppSettings>();
     final auth = context.watch<AuthProvider>();
+    final view = context.watch<ProductsViewState>();
     final canManage = auth.user?.isAdmin ?? false;
-    final products = _filtered(catalog);
+    final products = _filtered(catalog, view);
     final lowCount = catalog.products.where((p) => p.hasLowStock).length;
 
     return Padding(
@@ -192,14 +194,14 @@ class _ProductsScreenState extends State<ProductsScreen> {
             final search = SearchField(
               controller: _search,
               hint: 'Search products, SKU or barcode…',
-              onChanged: (v) => setState(() => _query = v),
+              onChanged: (v) => view.setQuery(v),
               onClear: () {
                 _search.clear();
-                setState(() => _query = '');
+                view.setQuery('');
               },
             );
             final dropdown = DropdownButtonFormField<int>(
-              initialValue: _categoryFilter,
+              initialValue: view.categoryFilter,
               isDense: true,
               isExpanded: true,
               icon: const Icon(Icons.expand_more_rounded, size: 19),
@@ -210,28 +212,28 @@ class _ProductsScreenState extends State<ProductsScreen> {
                 for (final c in catalog.categories)
                   DropdownMenuItem(value: c.id, child: Text(c.name)),
               ],
-              onChanged: (v) => setState(() => _categoryFilter = v ?? -1),
+              onChanged: (v) => view.setCategoryFilter(v ?? -1),
             );
             final chip = FilterChip(
               label: const Text('Low stock'),
-              selected: _lowOnly,
+              selected: view.lowOnly,
               showCheckmark: false,
               labelStyle: TextStyle(
                 fontFamily: 'Carlito',
                 fontSize: 13,
                 fontWeight: FontWeight.w700,
-                color: _lowOnly ? AppColors.warning : AppColors.muted,
+                color: view.lowOnly ? AppColors.warning : AppColors.muted,
               ),
               selectedColor: AppColors.warningSoft,
               checkmarkColor: AppColors.warning,
               side: BorderSide(
-                  color: _lowOnly ? AppColors.warning.withValues(alpha: 0.35) : AppColors.border),
+                  color: view.lowOnly ? AppColors.warning.withValues(alpha: 0.35) : AppColors.border),
               avatar: Icon(
                 Icons.warning_amber_rounded,
                 size: 15,
-                color: _lowOnly ? AppColors.warning : AppColors.faint,
+                color: view.lowOnly ? AppColors.warning : AppColors.faint,
               ),
-              onSelected: (v) => setState(() => _lowOnly = v),
+              onSelected: (v) => view.setLowOnly(v),
             );
             if (narrow) {
               return Column(
@@ -265,10 +267,10 @@ class _ProductsScreenState extends State<ProductsScreen> {
                     icon: Icons.inventory_2_outlined,
                     // "Not found" is for filtered views; a fresh shop with
                     // zero rows should read as a welcome, not a failure.
-                    title: _query.isNotEmpty || _lowOnly || _categoryFilter >= 0
+                    title: view.query.isNotEmpty || view.lowOnly || view.categoryFilter >= 0
                         ? 'No products found'
                         : 'No products yet',
-                    message: _query.isNotEmpty || _lowOnly || _categoryFilter >= 0
+                    message: view.query.isNotEmpty || view.lowOnly || view.categoryFilter >= 0
                         ? 'Try clearing the search or filters.'
                         : 'Add your first product to start tracking stock.',
                     actionLabel: canManage ? 'New product' : null,
@@ -298,7 +300,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
       context: context,
       builder: (_) => const _CategoriesDialog(),
     );
-    setState(() {});
+    // No setState needed — CatalogProvider notifies and the list rebuilds.
   }
 }
 

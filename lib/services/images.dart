@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path/path.dart' as p;
 
+import '../core/app_log.dart';
 import '../widgets/ui.dart';
+import 'photo_compress.dart';
 import 'photo_store.dart';
 
 export 'photo_store.dart'
@@ -107,13 +109,22 @@ class ProductImages {
       }
       if (picked == null) return null;
 
-      final bytes = await picked.readAsBytes();
+      final raw = await picked.readAsBytes();
+      // One compression gate for every platform: desktop file dialogs (and
+      // any picker that skips its own downscale) would otherwise store the
+      // raw 4–8 MB shot. compressPhoto keeps the original when it cannot
+      // do better, so this can only shrink.
+      final compressed = await compressPhoto(raw);
+      final bytes = compressed ?? raw;
       var ext = p.extension(picked.name).toLowerCase();
+      if (compressed != null) ext = '.jpg'; // re-encoded — say what it is
       if (ext.isEmpty || ext.length > 5) ext = '.jpg';
       final name = 'img_${DateTime.now().millisecondsSinceEpoch}$ext';
       return await photoSave(name, bytes);
-    } catch (_) {
-      // Picker unavailable / permission denied — treat as cancelled.
+    } catch (e, s) {
+      // Picker unavailable / permission denied — treat as cancelled, but
+      // leave a trace instead of failing silently.
+      AppLog.w('photo/pick failed', e, s);
       return null;
     }
   }

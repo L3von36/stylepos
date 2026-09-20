@@ -10,6 +10,7 @@ import 'sales/sales_screen.dart';
 import 'settings/settings_screen.dart';
 import 'settings/users_screen.dart';
 import '../data/database.dart';
+import '../core/app_log.dart';
 import '../models/user.dart';
 import '../services/cloud_auth.dart';
 import '../services/sync_service.dart';
@@ -99,7 +100,8 @@ class _HomeShellState extends State<HomeShell> {
         ));
         await SyncService.I.run();
       }
-    } catch (_) {// Never block the till on the gate.
+    } catch (e, s) {
+      AppLog.w('gate/legacy-data', e, s); // Never block the till on the gate.
     }
 
     // ---- gate 3: keep the local shop name in step with the cloud shop ---
@@ -116,7 +118,9 @@ class _HomeShellState extends State<HomeShell> {
           await sp.save(shopName: cloudName);
         }
       }
-    } catch (_) {// Cosmetic heal — never block the till.
+    } catch (e, s) {
+      // Cosmetic heal — never block the till.
+      AppLog.w('gate/shop-name-heal', e, s);
     }
 
     // ---- gate 2: first-run staff hint (managers) ---------------------
@@ -132,7 +136,8 @@ class _HomeShellState extends State<HomeShell> {
         await _showStaffPrompt();
       }
       await db.insert('settings', {'key': 'staff_prompt_done', 'value': '1'});
-    } catch (_) {
+    } catch (e, s) {
+      AppLog.w('gate/staff-prompt', e, s);
     }
   }
 

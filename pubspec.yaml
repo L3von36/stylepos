@@ -1,7 +1,7 @@
 name: stylepos
 description: "Sami (formerly StylePOS) - an offline-first point-of-sale app for clothing shops, built with Flutter (Android + Windows + Web)."
 publish_to: 'none'
-version: 1.19.1+33
+version: 1.20.0+34
 
 environment:
   sdk: ^3.13.3

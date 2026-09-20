@@ -1,7 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'core/app_log.dart';
+import 'core/errors.dart';
 import 'screens/splash_screen.dart';
 import 'services/cloud_auth.dart';
 import 'services/cloud_config.dart';
@@ -14,14 +18,28 @@ import 'state/catalog.dart';
 import 'state/customers.dart';
 import 'state/nav.dart';
 import 'state/commissions.dart';
+import 'state/products_view.dart';
 import 'state/purchasing.dart';
 import 'state/promotions.dart';
 import 'state/sales.dart';
+import 'state/sell_view.dart';
 import 'state/settings.dart';
 import 'widgets/ui.dart';
 
-Future<void> main() async {
+void main() {
+  // Zone guard: anything that escapes async callbacks (a timer, a sync
+  // microtask) lands here instead of killing the app. The till staying
+  // alive matters more than any single failed task.
+  runZonedGuarded(() async {
+    await _bootstrap();
+  }, (error, stack) {
+    AppLog.e('zone/uncaught', error, stack);
+  });
+}
+
+Future<void> _bootstrap() async {
   WidgetsFlutterBinding.ensureInitialized();
+  installGlobalErrorHandlers();
 
   final settings = AppSettings();
   final auth = AuthProvider();
@@ -34,9 +52,20 @@ Future<void> main() async {
   final purchasing = PurchasingProvider();
   final commissions = CommissionsProvider();
   final promotions = PromotionsProvider();
+  final sellView = SellViewState();
+  final productsView = ProductsViewState();
 
-  // Load persisted settings + session before showing UI.
-  await Future.wait([settings.load(), auth.init(), ProductImages.init()]);
+  // Load persisted settings + session before showing UI. Shell/UI state
+  // (last tab, screen filters) restores in the same breath so the first
+  // frame already shows where the shift left off.
+  await Future.wait([
+    settings.load(),
+    auth.init(),
+    ProductImages.init(),
+    nav.restore(),
+    sellView.restore(),
+    productsView.restore(),
+  ]);
   // First-run bootstrapping of the starter catalog.
   await catalog.reload();
   await customers.reload();
@@ -60,8 +89,9 @@ Future<void> main() async {
       attendance.bump(); // shift logs refresh when remote punches arrive
     };
     SyncService.I.start();
-  } catch (_) {
+  } catch (e, s) {
     // No network / Supabase unreachable — the app stays fully offline.
+    AppLog.w('cloud/init skipped', e, s);
   }
 
   runApp(StylePosApp(
@@ -76,6 +106,8 @@ Future<void> main() async {
     purchasing: purchasing,
     commissions: commissions,
     promotions: promotions,
+    sellView: sellView,
+    productsView: productsView,
   ));
 }
 
@@ -91,6 +123,8 @@ class StylePosApp extends StatelessWidget {
   final PurchasingProvider purchasing;
   final CommissionsProvider commissions;
   final PromotionsProvider promotions;
+  final SellViewState sellView;
+  final ProductsViewState productsView;
 
   const StylePosApp({
     super.key,
@@ -105,6 +139,8 @@ class StylePosApp extends StatelessWidget {
     required this.purchasing,
     required this.commissions,
     required this.promotions,
+    required this.sellView,
+    required this.productsView,
   });
 
   @override
@@ -122,6 +158,8 @@ class StylePosApp extends StatelessWidget {
         ChangeNotifierProvider<PurchasingProvider>.value(value: purchasing),
         ChangeNotifierProvider<CommissionsProvider>.value(value: commissions),
         ChangeNotifierProvider<PromotionsProvider>.value(value: promotions),
+        ChangeNotifierProvider<SellViewState>.value(value: sellView),
+        ChangeNotifierProvider<ProductsViewState>.value(value: productsView),
       ],
       child: Builder(builder: (context) {
         // Watch settings so a System/Light/Dark switch rebuilds MaterialApp.
@@ -146,7 +184,11 @@ class StylePosApp extends StatelessWidget {
           theme: AppTheme.build(),
           darkTheme: AppTheme.dark(),
           themeMode: mode,
-          builder: (context, child) => _ThemeSync(child: child!),
+          // ErrorToaster sits above the Navigator so every ErrorCenter
+          // report surfaces as one consistent floating SnackBar, on every
+          // screen, theme switches included.
+          builder: (context, child) =>
+              _ThemeSync(child: ErrorToaster(child: child!)),
           home: const SplashGate(),
         );
       }),
