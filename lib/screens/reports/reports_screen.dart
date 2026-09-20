@@ -3,14 +3,17 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/product.dart';
+import '../../services/branches.dart';
 import '../../services/csv_util.dart';
 import '../../state/catalog.dart';
 import '../../state/nav.dart';
 import '../../state/sales.dart';
 import '../../state/settings.dart';
 import '../../widgets/ui.dart';
+import 'branches_overview_card.dart';
 import 'manager_tools_card.dart';
 import 'ops_cards.dart';
+import 'sales_calendar_card.dart';
 import 'z_report_card.dart';
 
 /// Reports: KPI cards + revenue line chart + top products + category share.
@@ -34,6 +37,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
   List<({String name, String variantDesc, int stock, int unitsSold})>? _slow;
   List<(DateTime, double)>? _months;
   List<({DateTime month, double taxable, double taxCollected, double refundedTax})>? _tax;
+  String? _branch;
   int _lastRevision = 0;
 
   @override
@@ -63,6 +67,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
       sales.slowMovers(_range, limit: 6),
       sales.revenueByMonth(12),
       sales.taxByMonth(6),
+      Branches.currentName(),
     ]);
     if (!mounted) return;
     setState(() {
@@ -87,6 +92,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
       _months = results[12] as List<(DateTime, double)>;
       _tax = results[13]
           as List<({DateTime month, double taxable, double taxCollected, double refundedTax})>;
+      _branch = results[14] as String?;
     });
   }
 
@@ -117,9 +123,11 @@ class _ReportsScreenState extends State<ReportsScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const PageHeader(
+              PageHeader(
                 title: 'Reports',
-                subtitle: 'Revenue, best sellers and inventory health at a glance',
+                subtitle: (_branch == null || _branch!.isEmpty)
+                    ? 'Revenue, best sellers and inventory health at a glance'
+                    : '$_branch — revenue, best sellers and inventory health',
               ),
 
               // KPI cards
@@ -200,6 +208,15 @@ class _ReportsScreenState extends State<ReportsScreen> {
                   ],
                 );
               }),
+              const SizedBox(height: AppSpace.s4),
+
+              // sales calendar: tap a day to see that day's receipts,
+              // total and who sold them
+              const SalesCalendarCard(),
+              const SizedBox(height: AppSpace.s4),
+
+              // manager-only: cross-branch totals from the cloud
+              const BranchesOverviewCard(),
               const SizedBox(height: AppSpace.s4),
 
               // Day close (Z-report): pick a business day, print the

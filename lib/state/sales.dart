@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:sqflite/sqflite.dart' show ConflictAlgorithm, Database;
 import 'package:uuid/uuid.dart';
 
+import '../core/calendar_logic.dart' show bucketSalesByDay, dayEpochRange, monthEpochRange;
 import '../data/database.dart';
 import '../models/sale.dart';
 import '../services/sync_service.dart';
@@ -234,6 +235,91 @@ class SalesProvider extends ChangeNotifier {
     final rows = await db.query('sale_items',
         where: 'sale_id = ?', whereArgs: [saleId], orderBy: 'id');
     return rows.map(SaleItem.fromMap).toList();
+  }
+
+  // ---- day / calendar queries (sales calendar + day drill-down) ----
+
+  /// Lists sales in a half-open `[startEpoch, endEpoch)` window with the
+  /// same filters as [listSales] — the engine behind the calendar's
+  /// "show me this day" drill-down.
+  Future<List<Sale>> listSalesBetween(int startEpoch, int endEpoch,
+      {String? query, int? userId}) async {
+    final db = await DB.instance();
+    final where = <String>[
+      's.created_at >= ?',
+      's.created_at < ?',
+    ];
+    final args = <Object?>[startEpoch, endEpoch];
+
+    if (userId != null) {
+      where.add('s.user_id = ?');
+      args.add(userId);
+    }
+    if (query != null && query.trim().isNotEmpty) {
+      final q = '%${query.trim().toLowerCase()}%';
+      where.add(
+          '(LOWER(s.receipt_no) LIKE ? OR LOWER(IFNULL(c.name, "")) LIKE ? OR LOWER(IFNULL(u.name, "")) LIKE ?)');
+      args.addAll([q, q, q]);
+    }
+
+    final rows = await db.rawQuery('''
+      SELECT s.*, c.name AS customer_name, u.name AS cashier_name
+      FROM sales s
+      LEFT JOIN customers c ON c.id = s.customer_id
+      LEFT JOIN users u ON u.id = s.user_id
+      WHERE ${where.join(' AND ')}
+      ORDER BY s.created_at DESC
+      LIMIT 500
+    ''', args);
+    return rows.map(Sale.fromMap).toList();
+  }
+
+  /// All receipts of one local calendar day (any status).
+  Future<List<Sale>> salesOnDay(DateTime day, {String? query, int? userId}) async {
+    final (start, end) = dayEpochRange(day);
+    return listSalesBetween(start, end, query: query, userId: userId);
+  }
+
+  /// Revenue per cashier for one local day — the "who sold that day"
+  /// answer at the top of the calendar day sheet.
+  Future<List<({String name, int orders, double revenue})>> staffOnDay(
+      DateTime day) async {
+    final db = await DB.instance();
+    final (start, end) = dayEpochRange(day);
+    final rows = await db.rawQuery('''
+      SELECT u.name AS name,
+             COUNT(*) AS orders,
+             COALESCE(SUM(s.total), 0) AS revenue
+      FROM sales s
+      JOIN users u ON u.id = s.user_id
+      WHERE s.status = 'completed' AND s.created_at >= ? AND s.created_at < ?
+      GROUP BY u.id, u.name
+      ORDER BY revenue DESC
+    ''', [start, end]);
+    return rows
+        .map((r) => (
+              name: r['name'] as String? ?? 'Unknown',
+              orders: r['orders'] as int? ?? 0,
+              revenue: (r['revenue'] as num?)?.toDouble() ?? 0,
+            ))
+        .toList();
+  }
+
+  /// Completed-sale day buckets for the calendar month — keys are
+  /// `YYYY-MM-DD` local-day strings, values are order count + revenue.
+  Future<Map<String, ({int orders, double revenue})>> monthDayTotals(
+      DateTime month) async {
+    final db = await DB.instance();
+    final (start, end) = monthEpochRange(month);
+    final rows = await db.rawQuery(
+      "SELECT created_at, total FROM sales "
+      "WHERE status = 'completed' AND created_at >= ? AND created_at < ?",
+      [start, end],
+    );
+    return bucketSalesByDay([
+      for (final r in rows)
+        (r['created_at'] as int, (r['total'] as num? ?? 0).toDouble()),
+    ]);
   }
 
   /// Bumps the revision so listeners (reports, POS strip) reload — used by

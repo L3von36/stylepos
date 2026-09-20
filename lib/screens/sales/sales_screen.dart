@@ -15,6 +15,7 @@ import '../../models/sale.dart';
 import '../../state/auth.dart';
 import '../../state/sales.dart';
 import '../../state/settings.dart';
+import '../../widgets/calendar.dart';
 import '../../widgets/ui.dart';
 import 'sale_detail_screen.dart';
 
@@ -28,6 +29,7 @@ class SalesScreen extends StatefulWidget {
 
 class _SalesScreenState extends State<SalesScreen> {
   int _days = 1; // 1 = today
+  DateTime? _selectedDay; // calendar day filter (overrides the period segments)
   final _search = TextEditingController();
   String _query = '';
   List<Sale>? _sales;
@@ -51,13 +53,29 @@ class _SalesScreenState extends State<SalesScreen> {
   Future<void> _load() async {
     final auth = context.read<AuthProvider>();
     final user = auth.user;
-    final sales = await context.read<SalesProvider>().listSales(
-          days: _days,
-          query: _query,
-          // Salespeople see only their own receipts (manager sees all).
-          userId: (user?.isAdmin ?? false) ? null : user?.id,
-        );
-    if (mounted) setState(() => _sales = sales);
+    final sales = context.read<SalesProvider>();
+    // Salespeople see only their own receipts (manager sees all).
+    final scoped = (user?.isAdmin ?? false) ? null : user?.id;
+    final res = _selectedDay != null
+        ? await sales.salesOnDay(_selectedDay!, query: _query, userId: scoped)
+        : await sales.listSales(days: _days, query: _query, userId: scoped);
+    if (mounted) setState(() => _sales = res);
+  }
+
+  /// Opens the month calendar; the picked day filters the receipt list.
+  Future<void> _pickDay() async {
+    final picked = await showDialog<DateTime>(
+      context: context,
+      builder: (_) => const _DayPickerDialog(),
+    );
+    if (picked == null || !mounted) return;
+    setState(() => _selectedDay = picked);
+    _load();
+  }
+
+  void _clearDayFilter() {
+    setState(() => _selectedDay = null);
+    _load();
   }
 
   /// Manager-only: exports the currently filtered sales list as CSV —
@@ -154,6 +172,11 @@ class _SalesScreenState extends State<SalesScreen> {
                     ' · ${settings.money(totalRevenue)} revenue'
                     '${isAdmin ? '' : ' · your sales'}',
             actions: [
+              IconButton(
+                tooltip: 'Pick a day',
+                icon: const Icon(Icons.calendar_month_rounded, size: 21),
+                onPressed: _pickDay,
+              ),
               if (isAdmin && _sales != null && _sales!.isNotEmpty)
                 IconButton(
                   tooltip: 'Export CSV',
@@ -192,7 +215,10 @@ class _SalesScreenState extends State<SalesScreen> {
               ],
               selected: {_days},
               onSelectionChanged: (s) {
-                setState(() => _days = s.first);
+                setState(() {
+                  _days = s.first;
+                  _selectedDay = null; // a period pick clears the day filter
+                });
                 _load();
               },
             );
@@ -214,6 +240,27 @@ class _SalesScreenState extends State<SalesScreen> {
               ],
             );
           }),
+          if (_selectedDay != null) ...[
+            const SizedBox(height: AppSpace.s2),
+            Wrap(
+              spacing: 8,
+              children: [
+                InputChip(
+                  avatar: Icon(Icons.calendar_today_rounded,
+                      size: 15, color: AppColors.primary),
+                  label: Text(
+                    'Day: ${_selectedDay!.day}/${_selectedDay!.month}/${_selectedDay!.year}',
+                    style: TextStyle(
+                        fontFamily: 'Carlito',
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.ink),
+                  ),
+                  onDeleted: _clearDayFilter,
+                ),
+              ],
+            ),
+          ],
           const SizedBox(height: AppSpace.s4),
           Expanded(
             child: _sales == null
@@ -339,4 +386,77 @@ class _SaleTile extends StatelessWidget {
 void _reloadSales(BuildContext context) {
   final state = context.findAncestorStateOfType<_SalesScreenState>();
   state?._load();
+}
+
+/// Month calendar dialog behind the "Pick a day" action. Returns the
+/// picked local day, or null when dismissed.
+class _DayPickerDialog extends StatefulWidget {
+  const _DayPickerDialog();
+
+  @override
+  State<_DayPickerDialog> createState() => _DayPickerDialogState();
+}
+
+class _DayPickerDialogState extends State<_DayPickerDialog> {
+  late DateTime _month =
+      DateTime(DateTime.now().year, DateTime.now().month, 1);
+  Map<String, ({int orders, double revenue})>? _totals;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final totals =
+        await context.read<SalesProvider>().monthDayTotals(_month);
+    if (mounted) setState(() => _totals = totals);
+  }
+
+  bool get _isCurrentMonth {
+    final now = DateTime.now();
+    return _month.year == now.year && _month.month == now.month;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Pick a day'),
+      content: SizedBox(
+        width: 320,
+        child: _totals == null
+            ? const Padding(
+                padding: EdgeInsets.all(24),
+                child: Center(child: CircularProgressIndicator()),
+              )
+            : MonthCalendar(
+                month: _month,
+                totals: _totals!,
+                selectedDay: null,
+                onDayTap: (d) => Navigator.of(context).pop(d),
+                onPrevMonth: () {
+                  setState(() {
+                    _month = DateTime(_month.year, _month.month - 1, 1);
+                  });
+                  _load();
+                },
+                onNextMonth: _isCurrentMonth
+                    ? null
+                    : () {
+                        setState(() {
+                          _month =
+                              DateTime(_month.year, _month.month + 1, 1);
+                        });
+                        _load();
+                      },
+              ),
+      ),
+      actions: [
+        TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel')),
+      ],
+    );
+  }
 }

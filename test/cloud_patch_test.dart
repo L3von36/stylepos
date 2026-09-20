@@ -30,4 +30,20 @@ void main() {
     // realtime joins must not break re-runs
     expect(kCloudFixSql, contains('exception when others then null'));
   });
+
+  test('fix SQL covers the multi-branch RPCs (patch 6 + 7)', () {
+    // branch tree column + visibility
+    expect(kCloudFixSql,
+        contains('add column if not exists parent_shop_id'));
+    expect(kCloudFixSql, contains('my_root_shop_id'));
+    // Branches.create / Branches.switchTo call these RPCs by name
+    expect(kCloudFixSql, contains('create or replace function public.create_branch'));
+    expect(kCloudFixSql, contains('create or replace function public.switch_to_shop'));
+    // Reports -> Branch sales overview (owner's cross-branch totals)
+    expect(kCloudFixSql,
+        contains('create or replace function public.branch_sales_overview'));
+    // grants so the app's authenticated session can actually call them
+    expect(kCloudFixSql,
+        contains('grant execute on function public.branch_sales_overview'));
+  });
 }

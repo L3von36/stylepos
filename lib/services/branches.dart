@@ -1,5 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../data/database.dart';
 import 'audit.dart';
 import 'cloud_auth.dart';
 
@@ -106,4 +107,108 @@ class Branches {
     }
     return 'Cloud error: ${msg.split('\n').first}';
   }
+
+  /// Name of the branch this device mirrors right now, for labels on
+  /// receipts, sale details and report headers — every sale in the local
+  /// mirror belongs to this branch by construction (switching wipes the
+  /// mirror). Prefers the remembered cloud shop name; falls back to the
+  /// local shop name, then "Main shop".
+  static Future<String> currentName() async {
+    try {
+      final db = await DB.instance();
+      final rows = await db.query('settings',
+          where: 'key IN (?, ?)', whereArgs: ['cloud_shop_name', 'shop_name']);
+      String? cloud;
+      String? local;
+      for (final r in rows) {
+        final v = (r['value'] as String?) ?? '';
+        switch (r['key'] as String) {
+          case 'cloud_shop_name':
+            cloud = v;
+          case 'shop_name':
+            local = v;
+        }
+      }
+      final name = (cloud != null && cloud.isNotEmpty) ? cloud : (local ?? '');
+      return name.isEmpty ? 'Main shop' : name;
+    } catch (_) {
+      return 'Main shop';
+    }
+  }
+
+  /// PostgREST's "no such function" family — the cloud predates the RPC
+  /// (fix: run the latest fix SQL from the guided dialog).
+  static bool isMissingRpcError(String msg) {
+    final l = msg.toLowerCase();
+    return l.contains('could not find the function') ||
+        l.contains('pgrst202') ||
+        l.contains('does not exist') ||
+        l.contains('schema cache');
+  }
+
+  /// Cross-branch sales totals for the manager (root shop + every branch):
+  /// completed revenue all-time and today. Returns `(rows, needsCloudFix)`;
+  /// [needsCloudFix] is true when the cloud doesn't have
+  /// `branch_sales_overview` yet and the caller should offer the guided
+  /// fix-SQL dialog. Signed-out, offline or non-manager callers get an
+  /// empty list — the card simply stays hidden.
+  static Future<(List<BranchSales>, bool)> overview() async {
+    try {
+      if (_c.auth.currentSession == null) return (const <BranchSales>[], false);
+      final now = DateTime.now();
+      final midnight =
+          DateTime(now.year, now.month, now.day).millisecondsSinceEpoch ~/
+              1000;
+      final rows = await _c.rpc('branch_sales_overview',
+          params: {'p_today_epoch': midnight});
+      return (
+        <BranchSales>[
+          for (final r in rows)
+            BranchSales.fromMap(Map<String, dynamic>.from(r as Map))
+        ],
+        false
+      );
+    } catch (e) {
+      if (isMissingRpcError(e.toString())) {
+        return (const <BranchSales>[], true);
+      }
+      // Non-manager ("Only a manager…"), offline or transient — show nothing.
+      return (const <BranchSales>[], false);
+    }
+  }
+}
+
+/// One branch's sales totals from the `branch_sales_overview` cloud RPC —
+/// the owner's cross-branch answer to "who is selling, and where".
+class BranchSales {
+  final String id;
+  final String name;
+  final String code;
+  final bool isCurrent;
+  final int orders; // completed, all time
+  final double revenue; // completed, all time
+  final int todayOrders;
+  final double todayRevenue;
+
+  const BranchSales({
+    required this.id,
+    required this.name,
+    required this.code,
+    required this.isCurrent,
+    required this.orders,
+    required this.revenue,
+    required this.todayOrders,
+    required this.todayRevenue,
+  });
+
+  factory BranchSales.fromMap(Map<String, dynamic> m) => BranchSales(
+        id: m['shop_id'] as String,
+        name: (m['name'] as String?) ?? 'Branch',
+        code: (m['code'] as String?) ?? '',
+        isCurrent: m['is_current'] == true,
+        orders: (m['all_orders'] as num?)?.toInt() ?? 0,
+        revenue: (m['all_revenue'] as num?)?.toDouble() ?? 0,
+        todayOrders: (m['today_orders'] as num?)?.toInt() ?? 0,
+        todayRevenue: (m['today_revenue'] as num?)?.toDouble() ?? 0,
+      );
 }

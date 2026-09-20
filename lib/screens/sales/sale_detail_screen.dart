@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../models/sale.dart';
 import '../../services/approvals.dart';
 import '../../services/audit.dart';
+import '../../services/branches.dart';
 import '../../services/receipt_service.dart';
 import '../../state/auth.dart';
 import '../../state/cart.dart';
@@ -27,6 +28,7 @@ class SaleDetailScreen extends StatefulWidget {
 class _SaleDetailScreenState extends State<SaleDetailScreen> {
   Sale? _sale;
   List<SaleItem> _items = [];
+  String _branch = '';
   bool _loaded = false;
 
   /// Which items the user has checked for partial refund / exchange.
@@ -51,10 +53,12 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
             total: 0,
             createdAt: 0));
     final items = await sales.itemsForSale(widget.saleId);
+    final branch = await Branches.currentName();
     if (mounted) {
       setState(() {
         _sale = sale;
         _items = items;
+        _branch = branch;
         _loaded = true;
         _selected
           ..clear()
@@ -524,6 +528,8 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
                           ),
                           child: Column(
                             children: [
+                              if (_branch.isNotEmpty)
+                                _row('Branch', _branch),
                               _row('Payment', _methodLabel(sale.paymentMethod)),
                               if (sale.paymentMethod == 'cash') ...[
                                 _row('Tendered', settings.money(sale.amountPaid)),

@@ -1,15 +1,18 @@
 -- ==============================================================
--- StylePOS — Supabase schema PATCH 5  ("Fix cloud sync" one-paste)
+-- StylePOS — Supabase schema PATCH 7  ("Fix cloud sync" one-paste)
+-- Supersedes patches 5 and 6 — running this ONE file brings any
+-- cloud fully up to date.
 -- Where: Supabase Dashboard -> SQL Editor -> New query -> paste -> Run
 -- Safe to run more than once, on any cloud state, and it never
 -- touches your data — only adds what is missing.
 --
 -- Why: StylePOS v1.16+ pushes a few fields/tables older clouds never
 -- got (stock movement device tags, promo columns, promotions,
--- purchasing, attendance). Without them the app showed
--- "this app is newer than the cloud database — run the latest
--- Supabase schema patch SQL". This file brings ANY cloud fully up
--- to date in one run.
+-- purchasing, attendance) and v1.22+ reads multi-branch RPCs
+-- (branch tree, branch switching, cross-branch sales overview).
+-- Without them the app showed "this app is newer than the cloud
+-- database — run the latest Supabase schema patch SQL". This file
+-- brings ANY cloud fully up to date in one run.
 -- ==============================================================
 
 -- ---------- A. columns on the core tables -------------------------------
@@ -223,7 +226,185 @@ do $$ begin
 exception when others then null;
 end $$;
 
+-- ---------- F. multi-branch (shops tree + switching) ---------------------
+-- v1.22: a manager can run several shops (branches) from one account.
+-- Each branch is its own workspace (own catalog/staff/sales); the
+-- manager creates and switches branches from Settings -> Branches.
+alter table public.shops
+  add column if not exists parent_shop_id uuid references public.shops(id) on delete cascade;
+
+create or replace function public.my_root_shop_id()
+returns uuid
+language sql stable security definer
+set search_path = public
+as $$
+  select coalesce(s.parent_shop_id, s.id)
+  from public.shops s
+  where s.id = (select shop_id from public.app_users where id = auth.uid())
+$$;
+
+-- branch-tree visibility: staff see their own shop, the manager also
+-- sees the root shop and every branch under it (Branches.list())
+drop policy if exists shops_select on public.shops;
+create policy shops_select on public.shops
+  for select to authenticated
+  using (
+    id = public.my_shop_id()
+    or id = public.my_root_shop_id()
+    or parent_shop_id = public.my_root_shop_id()
+  );
+
+create or replace function public.create_branch(p_name text)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_uid  uuid := auth.uid();
+  v_cur  uuid;
+  v_root uuid;
+  v_sid  uuid;
+  v_code text;
+begin
+  if v_uid is null then
+    raise exception 'Sign in first';
+  end if;
+  if not exists (
+    select 1 from public.app_users where id = v_uid and role = 'admin'
+  ) then
+    raise exception 'Only a manager can create branches.';
+  end if;
+
+  select shop_id into v_cur from public.app_users where id = v_uid;
+  if v_cur is null then
+    raise exception 'You are not part of a shop yet.';
+  end if;
+
+  select coalesce(parent_shop_id, id) into v_root
+    from public.shops where id = v_cur;
+
+  loop
+    v_code := upper(substr(replace(gen_random_uuid()::text, '-', ''), 1, 6));
+    exit when not exists (select 1 from public.shops where shops.code = v_code);
+  end loop;
+
+  insert into public.shops (code, name, parent_shop_id)
+    values (v_code, coalesce(nullif(trim(p_name), ''), 'New branch'), v_root)
+    returning id into v_sid;
+
+  return v_sid;
+end;
+$$;
+grant execute on function public.create_branch(text) to authenticated;
+
+create or replace function public.switch_to_shop(p_shop_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_uid  uuid := auth.uid();
+  v_root uuid;
+begin
+  if v_uid is null then
+    raise exception 'Sign in first';
+  end if;
+  if not exists (
+    select 1 from public.app_users where id = v_uid and role = 'admin'
+  ) then
+    raise exception 'Only a manager can switch branches.';
+  end if;
+
+  select coalesce(parent_shop_id, id) into v_root
+    from public.shops
+    where id = (select shop_id from public.app_users where id = v_uid);
+
+  if v_root is null or p_shop_id is null or not exists (
+    select 1 from public.shops s
+    where s.id = p_shop_id and (s.id = v_root or s.parent_shop_id = v_root)
+  ) then
+    raise exception 'That shop is not one of your branches.';
+  end if;
+
+  update public.app_users set shop_id = p_shop_id where id = v_uid;
+  return jsonb_build_object('ok', true);
+end;
+$$;
+grant execute on function public.switch_to_shop(uuid) to authenticated;
+
+-- ---------- G. branch sales overview (owner's cross-branch totals) -------
+-- Powers Reports -> "Branch sales": per-shop completed revenue, all-time
+-- and today, for the caller's whole branch tree. Manager-only. The app
+-- passes its local-midnight epoch so "today" matches the OWNER'S clock,
+-- not the server's.
+create or replace function public.branch_sales_overview(
+  p_today_epoch double precision default null
+)
+returns table (
+  shop_id uuid,
+  name text,
+  code text,
+  is_current boolean,
+  all_orders bigint,
+  all_revenue double precision,
+  today_orders bigint,
+  today_revenue double precision
+)
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare
+  v_uid  uuid := auth.uid();
+  v_cur  uuid;
+  v_root uuid;
+  v_day  timestamptz;
+begin
+  if v_uid is null then
+    raise exception 'Sign in first';
+  end if;
+  if not exists (
+    select 1 from public.app_users where id = v_uid and role = 'admin'
+  ) then
+    raise exception 'Only a manager can view branch sales.';
+  end if;
+
+  select shop_id into v_cur from public.app_users where id = v_uid;
+  select coalesce(parent_shop_id, id) into v_root
+    from public.shops where id = v_cur;
+
+  v_day := case
+    when p_today_epoch is null then date_trunc('day', now())
+    else to_timestamp(p_today_epoch)
+  end;
+
+  return query
+    select
+      s.id,
+      s.name,
+      s.code,
+      (s.id = v_cur),
+      count(sal.id),
+      coalesce(sum(case when sal.status = 'completed'
+                        then sal.total else 0 end), 0)::double precision,
+      count(sal.id) filter (where sal.created_at >= v_day),
+      coalesce(sum(case when sal.status = 'completed'
+                          and sal.created_at >= v_day
+                        then sal.total else 0 end), 0)::double precision
+    from public.shops s
+    left join public.sales sal on sal.shop_id = s.id
+    where s.id = v_root or s.parent_shop_id = v_root
+    group by s.id, s.name, s.code
+    order by min(s.created_at), s.name;
+end;
+$$;
+grant execute on function public.branch_sales_overview(double precision) to authenticated;
+
 -- ==============================================================
 -- DONE. Back in StylePOS: open the cloud menu (Sync pill) and tap
 -- "Retry now" — or just wait a minute; the next sync succeeds.
+-- Then Reports -> "Branch sales" lights up with every branch's totals.
 -- ==============================================================
