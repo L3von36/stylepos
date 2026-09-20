@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Android 12+ (API 31) system splash screen. The system splash IGNORES
+         android:windowBackground and draws its own screen — which used to
+         come out BLACK in dark mode (inherited from the night theme's
+         background). Pin it to white + the branded launcher icon so the
+         first thing on screen is always light, in both OS modes. -->
+    <style name="LaunchTheme" parent="@android:style/Theme.Light.NoTitleBar">
+        <item name="android:windowBackground">@drawable/launch_background</item>
+        <item name="android:windowSplashScreenBackground">#FFFFFF</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item>
+        <item name="android:windowSplashScreenAnimationDuration">600</item>
+        <item name="android:postSplashScreenTheme">@style/NormalTheme</item>
+    </style>
+</resources>

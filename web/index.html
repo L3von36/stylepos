@@ -31,8 +31,68 @@
 
   <title>Sami</title>
   <link rel="manifest" href="manifest.json">
+
+  <!-- Boot splash: light + branded while the engine (and wasm SQLite)
+       loads — was a blank page. Removed on the first Flutter frame. -->
+  <style>
+    #boot {
+      position: fixed; inset: 0; z-index: 9;
+      background: #ffffff;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      font-family: 'Carlito', system-ui, -apple-system, sans-serif;
+      user-select: none;
+    }
+    #boot .badge {
+      width: 96px; height: 96px; border-radius: 24px;
+      background: linear-gradient(135deg, #4F46E5, #6D28D9);
+      box-shadow: 0 14px 30px rgba(79, 70, 229, 0.28);
+      display: flex; align-items: center; justify-content: center;
+      animation: boot-pop 0.55s cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+    }
+    #boot .badge svg { width: 54px; height: 54px; }
+    #boot .name {
+      margin-top: 18px; font-size: 26px; font-weight: 700;
+      letter-spacing: 0.5px; color: #0F172A;
+    }
+    #boot .tag { margin-top: 4px; font-size: 13px; color: #64748B; }
+    #boot .dots { margin-top: 26px; display: flex; gap: 8px; }
+    #boot .dots span {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: #4F46E5; animation: boot-pulse 1.2s ease-in-out infinite;
+    }
+    #boot .dots span:nth-child(2) { animation-delay: 0.18s; }
+    #boot .dots span:nth-child(3) { animation-delay: 0.36s; }
+    @keyframes boot-pop {
+      from { transform: scale(0.3); opacity: 0; }
+      to   { transform: scale(1);   opacity: 1; }
+    }
+    @keyframes boot-pulse {
+      0%, 100% { opacity: 0.25; transform: scale(0.85); }
+      50%      { opacity: 0.9;  transform: scale(1); }
+    }
+  </style>
 </head>
 <body>
+  <div id="boot">
+    <div class="badge">
+      <!-- clothes hanger, echoing the launcher icon -->
+      <svg viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="1.8"
+           stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 4.5a2 2 0 1 1 2 2c-.8.4-2 .9-2 2.3"/>
+        <path d="M12 8.8 3.6 15a1.2 1.2 0 0 0 .7 2.2h15.4a1.2 1.2 0 0 0 .7-2.2L12 8.8z"/>
+      </svg>
+    </div>
+    <div class="name">Sami</div>
+    <div class="tag">Point of sale for clothing shops</div>
+    <div class="dots"><span></span><span></span><span></span></div>
+  </div>
+  <script>
+    window.addEventListener('flutter-first-frame', function () {
+      var boot = document.getElementById('boot');
+      if (boot) boot.remove();
+    });
+  </script>
   <!--
     You can customize the "flutter_bootstrap.js" script.
     This is useful to provide a custom configuration to the Flutter loader

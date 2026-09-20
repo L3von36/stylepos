@@ -2,8 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import 'screens/home_shell.dart';
-import 'screens/login_screen.dart';
+import 'screens/splash_screen.dart';
 import 'services/cloud_auth.dart';
 import 'services/cloud_config.dart';
 import 'services/images.dart';
@@ -148,7 +147,7 @@ class StylePosApp extends StatelessWidget {
           darkTheme: AppTheme.dark(),
           themeMode: mode,
           builder: (context, child) => _ThemeSync(child: child!),
-          home: const _Root(),
+          home: const SplashGate(),
         );
       }),
     );
@@ -166,20 +165,5 @@ class _ThemeSync extends StatelessWidget {
   Widget build(BuildContext context) {
     AppColors.brightness = Theme.of(context).brightness;
     return child;
-  }
-}
-
-class _Root extends StatelessWidget {
-  const _Root();
-
-  @override
-  Widget build(BuildContext context) {
-    final auth = context.watch<AuthProvider>();
-    if (!auth.ready) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
-    }
-    return auth.user == null ? const LoginScreen() : const HomeShell();
   }
 }
