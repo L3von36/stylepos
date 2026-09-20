@@ -345,3 +345,27 @@ bool discountNeedsApproval({
   }
   return discount >= threshold;
 }
+
+/// The one-tap quick-discount chips the cart may offer for the current
+/// basket + user, as `(percent, amount)` pairs.
+///
+/// Every returned chip is guaranteed to pass [discountNeedsApproval] with
+/// the caller's permissions — the chips never push a cashier into a
+/// manager-PIN dead end. Managers see all [percents]; granted salespeople
+/// see the ones that land inside their cap; everyone else gets none.
+List<({int percent, double amount})> quickDiscounts({
+  required double subtotal,
+  required bool isAdmin,
+  required bool canDiscount,
+  required double discountCap,
+  List<int> percents = const [5, 10, 15],
+}) {
+  if (subtotal <= 0 || (!isAdmin && !canDiscount)) return const [];
+  final out = <({int percent, double amount})>[];
+  for (final p in percents) {
+    final amount = subtotal * p / 100;
+    if (!isAdmin && discountCap > 0 && amount > discountCap) continue;
+    out.add((percent: p, amount: amount));
+  }
+  return out;
+}

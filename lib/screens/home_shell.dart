@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import 'customers/customers_screen.dart';
@@ -285,6 +286,7 @@ class _HomeShellState extends State<HomeShell> {
                   WidgetsBinding.instance.addPostFrameCallback((_) {
                     if (!mounted) return;
                     FocusManager.instance.primaryFocus?.unfocus();
+                    HapticFeedback.selectionClick();
                     nav.goTo(all[i].id);
                   });
                 },
@@ -377,6 +379,7 @@ class _HomeShellState extends State<HomeShell> {
             WidgetsBinding.instance.addPostFrameCallback((_) {
               if (!mounted) return;
               FocusManager.instance.primaryFocus?.unfocus();
+              HapticFeedback.selectionClick();
               nav.goTo(barDestinations[i].id);
             });
           },
@@ -460,129 +463,204 @@ class _HomeShellState extends State<HomeShell> {
     return appBar;
   }
 
-  /// Compact account sheet for phones: who is signed in, the overflow
-  /// destinations that didn't fit the four primary tabs ([moreDests] —
-  /// Purchasing and Reports today, anything added tomorrow), then the
-  /// account tools (password, sign out).
+  /// Account + overflow drawer for phones (the "More" tab's surface):
+  /// branded identity card, then the overflow destinations that didn't fit
+  /// the four primary tabs ([moreDests] — Purchasing and Reports today),
+  /// then tools / account rows and the sign-out. Grouped, tinted tiles and
+  /// a drag handle so it reads as an Android drawer, not a web menu.
   void _showAccountSheet(
       BuildContext context, AppUser user, List<_Dest> moreDests) {
+    HapticFeedback.lightImpact();
+    final settings = context.read<AppSettings>();
     showModalBottomSheet(
       context: context,
       backgroundColor: AppColors.surface,
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.xl)),
       ),
       builder: (sheet) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(
-                  AppSpace.s5, AppSpace.s5, AppSpace.s5, AppSpace.s3),
-              child: Row(
-                children: [
-                  InitialsAvatar(user.name, size: 42),
-                  const SizedBox(width: AppSpace.s3),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(user.name,
-                            style: TextStyle(
-                                fontFamily: 'Carlito', fontSize: 15,
-                                fontWeight: FontWeight.w700, color: AppColors.ink)),
-                        Text(
-                          '${user.isAdmin ? 'Manager' : 'Sales'} · ${user.email}',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                              fontFamily: 'Carlito', fontSize: 12, color: AppColors.muted),
-                        ),
-                      ],
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.only(bottom: AppSpace.s3),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const SheetHandle(),
+
+              // -- identity card ------------------------------------------------
+              Container(
+                margin: const EdgeInsets.fromLTRB(
+                    AppSpace.s4, AppSpace.s2, AppSpace.s4, AppSpace.s1),
+                padding: const EdgeInsets.all(AppSpace.s3),
+                decoration: BoxDecoration(
+                  color: AppColors.primarySoft,
+                  borderRadius: BorderRadius.circular(AppRadius.lg),
+                ),
+                child: Row(
+                  children: [
+                    InitialsAvatar(user.name, size: 46),
+                    const SizedBox(width: AppSpace.s3),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(user.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                  fontFamily: 'Carlito', fontSize: 15,
+                                  fontWeight: FontWeight.w700, color: AppColors.ink)),
+                          const SizedBox(height: 3),
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: AppSpace.s2, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: user.isAdmin
+                                      ? AppColors.primary
+                                      : AppColors.info,
+                                  borderRadius:
+                                      BorderRadius.circular(AppRadius.pill),
+                                ),
+                                child: Text(user.isAdmin ? 'Manager' : 'Sales',
+                                    style: TextStyle(
+                                        fontFamily: 'Carlito',
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w700,
+                                        color: AppColors.onPrimary)),
+                              ),
+                              const SizedBox(width: AppSpace.s2),
+                              Flexible(
+                                child: Text(user.email,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                        fontFamily: 'Carlito',
+                                        fontSize: 11.5,
+                                        color: AppColors.muted)),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
+                  ],
+                ),
+              ),
+
+              // -- overflow destinations (past the 4 primary tabs) --------------
+              if (moreDests.isNotEmpty) ...[
+                const SheetSectionLabel('Menu'),
+                for (final d in moreDests)
+                  SheetTile(
+                    icon: d.icon,
+                    iconColor: d.id == NavId.purchasing
+                        ? AppColors.warning
+                        : AppColors.primary,
+                    iconSoft: d.id == NavId.purchasing
+                        ? AppColors.warningSoft
+                        : AppColors.primarySoft,
+                    title: d.label,
+                    subtitle: d.id == NavId.purchasing
+                        ? 'Restock orders and suppliers'
+                        : 'Sales charts, calendar and branch totals',
+                    onTap: () {
+                      Navigator.pop(sheet);
+                      context.read<NavProvider>().goTo(d.id);
+                    },
                   ),
-                ],
+              ],
+
+              // -- tools ---------------------------------------------------------
+              const SheetSectionLabel('Tools'),
+              SheetTile(
+                icon: Icons.verified_user_outlined,
+                iconColor: AppColors.success,
+                iconSoft: AppColors.successSoft,
+                title: 'Verify receipt',
+                subtitle: 'Check a transfer before handing over goods',
+                onTap: () {
+                  Navigator.pop(sheet);
+                  _openVerifier(context);
+                },
               ),
-            ),
-            const Divider(),
-            if (moreDests.isNotEmpty) ...[
-              Padding(
-                padding: const EdgeInsets.fromLTRB(
-                    AppSpace.s5, AppSpace.s1, AppSpace.s5, AppSpace.s1),
-                child: Text('MENU',
-                    style: TextStyle(
-                        fontFamily: 'Carlito',
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.8,
-                        color: AppColors.muted)),
-              ),
-              for (final d in moreDests)
-                ListTile(
-                  leading: Icon(d.icon, color: AppColors.muted),
-                  title: Text(d.label),
+
+              // -- manage (manager only) ------------------------------------------
+              if (user.isAdmin) ...[
+                const SheetSectionLabel('Manage'),
+                SheetTile(
+                  icon: Icons.settings_outlined,
+                  iconColor: AppColors.muted,
+                  iconSoft: AppColors.surfaceTint,
+                  title: 'Settings',
+                  subtitle: 'Shop profile, tax, receipt, backup',
                   onTap: () {
                     Navigator.pop(sheet);
-                    context.read<NavProvider>().goTo(d.id);
+                    Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const SettingsScreen()));
                   },
                 ),
-              const Divider(),
+                SheetTile(
+                  icon: Icons.manage_accounts_outlined,
+                  iconColor: AppColors.info,
+                  iconSoft: AppColors.infoSoft,
+                  title: 'Staff accounts',
+                  subtitle: 'Add cashiers, reset passwords',
+                  onTap: () {
+                    Navigator.pop(sheet);
+                    Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const UsersScreen()));
+                  },
+                ),
+              ],
+
+              // -- account ---------------------------------------------------------
+              const SheetSectionLabel('Account'),
+              SheetTile(
+                icon: Icons.lock_reset_outlined,
+                iconColor: AppColors.muted,
+                iconSoft: AppColors.surfaceTint,
+                title: 'Change password',
+                onTap: () {
+                  Navigator.pop(sheet);
+                  _showChangePassword(context);
+                },
+              ),
+              SheetTile(
+                icon: Icons.logout_rounded,
+                iconColor: AppColors.danger,
+                iconSoft: AppColors.dangerSoft,
+                title: 'Sign out',
+                subtitle: 'Back to the login screen',
+                titleColor: AppColors.danger,
+                onTap: () {
+                  Navigator.pop(sheet);
+                  _confirmSignOut(context);
+                },
+              ),
+
+              // -- footer -----------------------------------------------------------
+              Padding(
+                padding: const EdgeInsets.only(top: AppSpace.s4),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.storefront_rounded,
+                        size: 13, color: AppColors.faint),
+                    const SizedBox(width: AppSpace.s1),
+                    Text('${settings.shopName} · Sami POS',
+                        style: TextStyle(
+                            fontFamily: 'Carlito',
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.faint)),
+                  ],
+                ),
+              ),
             ],
-            ListTile(
-              leading:
-                  Icon(Icons.verified_user_outlined, color: AppColors.muted),
-              title: const Text('Verify receipt'),
-              subtitle: const Text(
-                  'Check a transfer before handing over goods'),
-              onTap: () {
-                Navigator.pop(sheet);
-                _openVerifier(context);
-              },
-            ),
-            if (user.isAdmin)
-              ListTile(
-                leading: Icon(Icons.settings_outlined, color: AppColors.muted),
-                title: const Text('Settings'),
-                subtitle: const Text('Shop profile, tax, receipt, backup'),
-                onTap: () {
-                  Navigator.pop(sheet);
-                  Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const SettingsScreen()));
-                },
-              ),
-            if (user.isAdmin)
-              ListTile(
-                leading: Icon(Icons.manage_accounts_outlined,
-                    color: AppColors.muted),
-                title: const Text('Staff accounts'),
-                subtitle: const Text('Add cashiers, reset passwords'),
-                onTap: () {
-                  Navigator.pop(sheet);
-                  Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const UsersScreen()));
-                },
-              ),
-            ListTile(
-              leading: Icon(Icons.lock_reset_outlined, color: AppColors.muted),
-              title: const Text('Change password'),
-              onTap: () {
-                Navigator.pop(sheet);
-                _showChangePassword(context);
-              },
-            ),
-            ListTile(
-              leading: Icon(Icons.logout_rounded, color: AppColors.danger),
-              title: Text('Sign out',
-                  style: TextStyle(color: AppColors.danger)),
-              subtitle: const Text('Back to the login screen'),
-              onTap: () {
-                Navigator.pop(sheet);
-                _confirmSignOut(context);
-              },
-            ),
-            const SizedBox(height: AppSpace.s2),
-          ],
+          ),
         ),
       ),
     );

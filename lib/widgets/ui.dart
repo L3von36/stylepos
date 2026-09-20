@@ -765,6 +765,177 @@ class EmptyState extends StatelessWidget {
   }
 }
 
+/// M3 modal-bottom-sheet grabber — the 32×4 pill at the top centre of a
+/// sheet. A sheet without one reads as a detached card; with it, the app
+/// speaks Android's native bottom-sheet language (drag affordance first).
+class SheetHandle extends StatelessWidget {
+  final Color? color;
+
+  const SheetHandle({super.key, this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Container(
+        margin: const EdgeInsets.only(top: AppSpace.s3, bottom: AppSpace.s1),
+        width: 32,
+        height: 4,
+        decoration: BoxDecoration(
+          color: color ?? AppColors.border,
+          borderRadius: BorderRadius.circular(AppRadius.pill),
+        ),
+      ),
+    );
+  }
+}
+
+/// Tinted icon square — the leading visual of a [SheetTile]. A bare icon on
+/// a sheet row looks like a web context menu; a soft colour block behind it
+/// is the Android drawer / settings idiom.
+class TintIconBox extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final Color soft;
+  final double size;
+
+  const TintIconBox({
+    super.key,
+    required this.icon,
+    required this.color,
+    required this.soft,
+    this.size = 36,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: soft,
+        borderRadius: BorderRadius.circular(size * 0.3),
+      ),
+      child: Icon(icon, size: size * 0.55, color: color),
+    );
+  }
+}
+
+/// One menu row for bottom sheets and side drawers: tinted icon square,
+/// title + optional subtitle, optional trailing. 52dp minimum height (M3
+/// touch target family), full-width inkwell, no ListTile chrome — sheets
+/// built from stock ListTiles read as generic web menus.
+class SheetTile extends StatelessWidget {
+  final IconData icon;
+
+  /// Tile tint pair — null falls back to the info (sky) family. Not const
+  /// defaults: AppColors getters are brightness-aware, so they resolve at
+  /// build time, not const time.
+  final Color? iconColor;
+  final Color? iconSoft;
+  final String title;
+  final String? subtitle;
+  final Color? titleColor;
+  final Widget? trailing;
+  final VoidCallback? onTap;
+
+  const SheetTile({
+    super.key,
+    required this.icon,
+    required this.title,
+    this.subtitle,
+    this.iconColor,
+    this.iconSoft,
+    this.titleColor,
+    this.trailing,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final iconColor = this.iconColor ?? AppColors.info;
+    final iconSoft = this.iconSoft ?? AppColors.infoSoft;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSpace.s1),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 52),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpace.s2, vertical: AppSpace.s1),
+              child: Row(
+                children: [
+                  TintIconBox(icon: icon, color: iconColor, soft: iconSoft),
+                  const SizedBox(width: AppSpace.s3),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                              fontFamily: 'Carlito',
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: titleColor ?? AppColors.ink),
+                        ),
+                        if (subtitle != null)
+                          Text(
+                            subtitle!,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                                fontFamily: 'Carlito',
+                                fontSize: 11.5,
+                                color: AppColors.muted),
+                          ),
+                      ],
+                    ),
+                  ),
+                  if (trailing != null) ...[
+                    const SizedBox(width: AppSpace.s2),
+                    trailing!,
+                  ] else
+                    Icon(Icons.chevron_right_rounded,
+                        size: 18, color: AppColors.faint),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Section label for sheet groups ("MENU", "TOOLS", …) — tiny caps, faint.
+class SheetSectionLabel extends StatelessWidget {
+  final String text;
+  const SheetSectionLabel(this.text, {super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+          AppSpace.s2, AppSpace.s4, AppSpace.s2, AppSpace.s1),
+      child: Text(text.toUpperCase(),
+          style: TextStyle(
+              fontFamily: 'Carlito',
+              fontSize: 10.5,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.8,
+              color: AppColors.faint)),
+    );
+  }
+}
+
 /// KPI card for reports & dashboards. Lifts 3dp on hover (desktop pointer
 /// affordance) with a soft brand shadow.
 class KpiCard extends StatefulWidget {

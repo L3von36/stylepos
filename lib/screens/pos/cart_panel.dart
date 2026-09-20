@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/customer.dart';
@@ -82,12 +83,39 @@ class CartPanel extends StatelessWidget {
               Icon(Icons.shopping_cart_outlined, size: 19, color: AppColors.primary),
               const SizedBox(width: AppSpace.s2),
               Expanded(
-                child: Text('Current Sale',
-                    style: TextStyle(
-                        fontFamily: 'Carlito',
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.ink)),
+                child: Row(
+                  children: [
+                    Flexible(
+                      child: Text('Current Sale',
+                          style: TextStyle(
+                              fontFamily: 'Carlito',
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.ink)),
+                    ),
+                    // Live item-count pill — the till answer to "how much
+                    // is in here?" without reading the whole basket.
+                    if (cart.isNotEmpty) ...[
+                      const SizedBox(width: AppSpace.s2),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: AppSpace.s2, vertical: 1),
+                        constraints: const BoxConstraints(minWidth: 20),
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: AppColors.primary,
+                          borderRadius: BorderRadius.circular(AppRadius.pill),
+                        ),
+                        child: Text('${cart.itemCount}',
+                            style: TextStyle(
+                                fontFamily: 'Carlito',
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.onPrimary)),
+                      ),
+                    ],
+                  ],
+                ),
               ),
               if (cart.heldCount > 0)
                 TextButton.icon(
@@ -164,9 +192,25 @@ class CartPanel extends StatelessWidget {
                               fontFamily: 'Carlito', fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink),
                           overflow: TextOverflow.ellipsis,
                         ),
-                        if (cart.customer != null && cart.customer!.points > 0)
-                          Text('${cart.customer!.points} loyalty points',
-                              style: TextStyle(fontFamily: 'Carlito', fontSize: 11, color: AppColors.muted)),
+                        // Loyalty subline: current balance + a live "what
+                        // this sale earns" preview (same floor(total/step)
+                        // rule the checkout award uses).
+                        if (cart.customer != null &&
+                            (cart.customer!.points > 0 ||
+                                (cart.isNotEmpty && settings.loyaltyStep > 0)))
+                          Text(
+                            () {
+                              final pts = <String>[];
+                              if (cart.customer!.points > 0) {
+                                pts.add('${cart.customer!.points} pts');
+                              }
+                              if (cart.isNotEmpty && settings.loyaltyStep > 0) {
+                                pts.add('+${(cart.total(settings.taxRate) / settings.loyaltyStep).floor()} on this sale');
+                              }
+                              return pts.join(' · ');
+                            }(),
+                            style: TextStyle(fontFamily: 'Carlito', fontSize: 11, color: AppColors.muted),
+                          ),
                       ],
                     ),
                   ),
@@ -228,6 +272,10 @@ class CartPanel extends StatelessWidget {
                 // Promotion code: apply / applied state. Promo discounts
                 // are manager-approved by design — no PIN gate here.
                 _PromoRow(),
+                const SizedBox(height: AppSpace.s2),
+                // One-tap percentage chips (5/10/15) — only for users who
+                // can legally use them; see [quickDiscounts].
+                const _QuickDiscountRow(),
                 const SizedBox(height: AppSpace.s2),
                 Row(
                   children: [
@@ -345,9 +393,10 @@ class CartPanel extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                const SheetHandle(),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(
-                      AppSpace.s5, AppSpace.s5, AppSpace.s5, AppSpace.s2),
+                      AppSpace.s5, AppSpace.s2, AppSpace.s5, AppSpace.s2),
                   child: Row(
                     children: [
                       Icon(Icons.bookmark_rounded, size: 20, color: AppColors.primary),
@@ -543,6 +592,104 @@ class CartPanel extends StatelessWidget {
     }
     cart.setCustomer(selected.id == 0 ? null : selected);
     customers.reload();
+  }
+}
+
+/// One-tap percentage discount chips (5 / 10 / 15%) for the signed-in
+/// user. Rendered only when the user may legally use them — managers, or
+/// salespeople whose [quickDiscounts] set is non-empty (granted rights and
+/// every chip inside their cap) — so a tap never lands in the manager-PIN
+/// approval flow. Tapping the active chip clears the discount again.
+class _QuickDiscountRow extends StatelessWidget {
+  const _QuickDiscountRow();
+
+  @override
+  Widget build(BuildContext context) {
+    final cart = context.watch<CartProvider>();
+    final settings = context.watch<AppSettings>();
+    final user = context.watch<AuthProvider>().user;
+    final chips = quickDiscounts(
+      subtotal: cart.subtotal,
+      isAdmin: user?.isAdmin ?? false,
+      canDiscount: user?.canDiscount ?? false,
+      discountCap: user?.discountCap ?? 0,
+    );
+    if (chips.isEmpty) return const SizedBox.shrink();
+    return Row(
+      children: [
+        for (var i = 0; i < chips.length; i++) ...[
+          Expanded(
+            child: _QuickChip(
+              label: '${chips[i].percent}%',
+              amountLabel: '−${settings.money(chips[i].amount)}',
+              active: (cart.discount - chips[i].amount).abs() < 0.005,
+              onTap: () {
+                HapticFeedback.selectionClick();
+                final active =
+                    (cart.discount - chips[i].amount).abs() < 0.005;
+                cart.setDiscount(active ? 0 : chips[i].amount);
+              },
+            ),
+          ),
+          if (i < chips.length - 1) const SizedBox(width: AppSpace.s2),
+        ],
+      ],
+    );
+  }
+}
+
+/// One percentage chip: percent on top, the amount it would discount
+/// underneath, brand-filled while active.
+class _QuickChip extends StatelessWidget {
+  final String label;
+  final String amountLabel;
+  final bool active;
+  final VoidCallback onTap;
+
+  const _QuickChip({
+    required this.label,
+    required this.amountLabel,
+    required this.active,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: active ? AppColors.primary : AppColors.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppRadius.sm),
+        side: BorderSide(
+            color: active ? AppColors.primary : AppColors.border),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: Column(
+            children: [
+              Text(label,
+                  style: TextStyle(
+                      fontFamily: 'Carlito',
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w700,
+                      color: active
+                          ? AppColors.onPrimary
+                          : AppColors.ink)),
+              Text(amountLabel,
+                  style: TextStyle(
+                      fontFamily: 'Carlito',
+                      fontSize: 9.5,
+                      fontWeight: FontWeight.w700,
+                      color: active
+                          ? AppColors.onPrimary.withValues(alpha: 0.85)
+                          : AppColors.muted)),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 

@@ -20,6 +20,19 @@
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
   <meta name="description" content="Sami — an offline-first point-of-sale app for clothing shops, synced to every device.">
 
+  <!--
+    Native-app viewport: viewport-fit=cover draws under the status bar when
+    installed as a PWA; pinch/double-tap zoom is switched off — a till is
+    operated with deliberate taps, and zoomable UI is a browser tell.
+  -->
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+
+  <!-- Address-bar / status-bar tint follows the app theme while loading;
+       the running app repaints it via SystemChrome. -->
+  <meta name="theme-color" media="(prefers-color-scheme: light)" content="#ffffff">
+  <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#151924">
+
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
@@ -71,6 +84,31 @@
       0%, 100% { opacity: 0.25; transform: scale(0.85); }
       50%      { opacity: 0.9;  transform: scale(1); }
     }
+
+    /* ---- Native-app feel: strip the web tells ----
+       • tap highlight: the grey/indigo flash on every tap screams browser
+       • text selection callouts on long-press (iOS save-image sheet, etc.)
+       • overscroll: no pull-to-refresh / rubber-band on the document —
+         scrolling belongs to the Flutter view only
+       • touch-action manipulation: kills the ~300ms double-tap-zoom delay
+       • PWA standalone: transparent status bar so the app runs edge-to-edge */
+    html, body {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      overscroll-behavior: none;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
+      user-select: none;
+      background: #ffffff;
+    }
+    @media (prefers-color-scheme: dark) {
+      html, body { background: #151924; }
+    }
+    /* Input text stays selectable — cashiers copy phone numbers / codes. */
+    input, textarea { -webkit-user-select: text; user-select: text; }
   </style>
 </head>
 <body>

@@ -1,6 +1,8 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show defaultTargetPlatform;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -40,6 +42,16 @@ void main() {
 Future<void> _bootstrap() async {
   WidgetsFlutterBinding.ensureInitialized();
   installGlobalErrorHandlers();
+
+  // Android-native chrome: draw behind the status bar and the gesture
+  // navigation bar (edge-to-edge). The matching icon brightness is applied
+  // per theme in [StylePosApp.build] — transparent bars over the app's own
+  // surfaces is what makes the shell read as an app, not a browser page.
+  await SystemChrome.setEnabledSystemUIMode(
+    SystemUiMode.edgeToEdge,
+    overlays: [],
+  );
+  SystemChrome.setSystemUIOverlayStyle(_overlayStyle(Brightness.light));
 
   final settings = AppSettings();
   final auth = AuthProvider();
@@ -171,10 +183,14 @@ class StylePosApp extends StatelessWidget {
         final platformDark = WidgetsBinding
                 .instance.platformDispatcher.platformBrightness ==
             Brightness.dark;
-        AppColors.brightness =
+        final brightness =
             mode == ThemeMode.dark || (mode == ThemeMode.system && platformDark)
                 ? Brightness.dark
                 : Brightness.light;
+        AppColors.brightness = brightness;
+        // Keep the status-bar / nav-bar icon contrast in step with the
+        // theme (transparent bars carry no colour of their own).
+        SystemChrome.setSystemUIOverlayStyle(_overlayStyle(brightness));
         return MaterialApp(
           // Keyed by mode: a switch rebuilds the whole tree atomically
           // (static tokens + theme-dependent paints stay in step).
@@ -187,14 +203,42 @@ class StylePosApp extends StatelessWidget {
           // ErrorToaster sits above the Navigator so every ErrorCenter
           // report surfaces as one consistent floating SnackBar, on every
           // screen, theme switches included.
-          builder: (context, child) =>
-              _ThemeSync(child: ErrorToaster(child: child!)),
+          builder: (context, child) {
+            Widget w = _ThemeSync(child: ErrorToaster(child: child!));
+            // Touch platforms: kill the browser-style long-press
+            // text-selection callouts/handles on labels. A till app never
+            // wants to select "Subtotal" — the handles are the single
+            // strongest "this is a web page" tell. Text fields keep their
+            // own editing behaviour (unaffected by SelectionContainer).
+            if (_touchPlatform) w = SelectionContainer.disabled(child: w);
+            return w;
+          },
           home: const SplashGate(),
         );
       }),
     );
   }
 }
+
+/// True where the primary pointer is a finger on a phone — Android and iOS
+/// (web included: on the PWA the platform probe still reports the device).
+/// Desktop keeps normal text selection for support/copy workflows.
+final bool _touchPlatform = () {
+  final p = defaultTargetPlatform;
+  return p == TargetPlatform.android || p == TargetPlatform.iOS;
+}();
+
+/// Transparent system bars with icons that stay legible on the app's own
+/// surfaces — the edge-to-edge pair for the given brightness.
+SystemUiOverlayStyle _overlayStyle(Brightness brightness) => SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      systemNavigationBarColor: Colors.transparent,
+      systemNavigationBarDividerColor: Colors.transparent,
+      statusBarIconBrightness:
+          brightness == Brightness.dark ? Brightness.light : Brightness.dark,
+      systemNavigationBarIconBrightness:
+          brightness == Brightness.dark ? Brightness.light : Brightness.dark,
+    );
 
 /// Keeps the static [AppColors] token table in step with the effective
 /// Material theme, so brightness-aware getters resolve correctly the moment

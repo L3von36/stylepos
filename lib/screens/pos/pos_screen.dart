@@ -244,7 +244,12 @@ class _PosScreenState extends State<PosScreen> {
       ),
       builder: (_) => SizedBox(
         height: MediaQuery.of(context).size.height * 0.78,
-        child: const CartPanel(scrollable: false),
+        child: Column(
+          children: [
+            const SheetHandle(),
+            const Expanded(child: CartPanel(scrollable: false)),
+          ],
+        ),
       ),
     );
   }
@@ -1071,6 +1076,8 @@ class _MobileCartBar extends StatelessWidget {
 
 /// The salesperson's own dashboard: personal sales totals, commission
 /// progress and the shift clock — everything scoped to THIS user only.
+/// Styled as a proper Android bottom sheet: grabber, hero identity header,
+/// icon stat cards and a single clear shift CTA.
 class _MyDashboardSheet extends StatelessWidget {
   final int userId;
   const _MyDashboardSheet({required this.userId});
@@ -1090,56 +1097,107 @@ class _MyDashboardSheet extends StatelessWidget {
     final commissions = context.read<CommissionsProvider>();
 
     return SafeArea(
-      child: Padding(
+      child: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(
-            AppSpace.s5, AppSpace.s5, AppSpace.s5, AppSpace.s5),
+            AppSpace.s5, AppSpace.s1, AppSpace.s5, AppSpace.s5),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Row(children: [
-              InitialsAvatar(user?.name ?? 'Me', size: 42),
-              const SizedBox(width: AppSpace.s3),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('My dashboard',
-                        style: TextStyle(
-                            fontFamily: 'Carlito',
-                            fontSize: 15,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.ink)),
-                    Text('${user?.name ?? ''} · ${user?.isAdmin == true ? 'Manager' : 'Sales'}',
-                        style: TextStyle(
-                            fontFamily: 'Carlito',
-                            fontSize: 12,
-                            color: AppColors.muted)),
-                  ],
-                ),
-              ),
-              FutureBuilder<Shift?>(
-                future: attendance.openShift(userId),
-                builder: (context, snap) {
-                  final onDuty = snap.data != null;
-                  return Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: AppSpace.s3, vertical: 4),
+            const SheetHandle(),
+
+            // -- hero identity header ------------------------------------------
+            Padding(
+              padding: const EdgeInsets.fromLTRB(0, AppSpace.s3, 0, AppSpace.s4),
+              child: Row(
+                children: [
+                  Container(
+                    width: 48,
+                    height: 48,
                     decoration: BoxDecoration(
-                      color: onDuty ? AppColors.successSoft : AppColors.surfaceTint,
-                      borderRadius: BorderRadius.circular(AppRadius.pill),
+                      gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: AppColors.brandGradient),
+                      borderRadius: BorderRadius.circular(AppRadius.lg),
                     ),
-                    child: Text(onDuty ? 'On duty' : 'Off duty',
-                        style: TextStyle(
-                            fontFamily: 'Carlito',
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            color: onDuty ? AppColors.success : AppColors.muted)),
-                  );
-                },
+                    child: Icon(Icons.badge_rounded,
+                        size: 24, color: AppColors.onBrand),
+                  ),
+                  const SizedBox(width: AppSpace.s3),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('My dashboard',
+                            style: TextStyle(
+                                fontFamily: 'Carlito',
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.ink)),
+                        const SizedBox(height: 2),
+                        Text(
+                            '${user?.name ?? ''} · ${user?.isAdmin == true ? 'Manager' : 'Sales'}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                                fontFamily: 'Carlito',
+                                fontSize: 12,
+                                color: AppColors.muted)),
+                      ],
+                    ),
+                  ),
+                  // Live duty pill: green while the shift is running.
+                  FutureBuilder<Shift?>(
+                    future: attendance.openShift(userId),
+                    builder: (context, snap) {
+                      final onDuty = snap.data != null;
+                      return Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: AppSpace.s3, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: onDuty
+                              ? AppColors.successSoft
+                              : AppColors.surfaceTint,
+                          borderRadius:
+                              BorderRadius.circular(AppRadius.pill),
+                          border: Border.all(
+                              color: onDuty
+                                  ? AppColors.success.withValues(alpha: 0.35)
+                                  : AppColors.borderSoft),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 6,
+                              height: 6,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: onDuty
+                                    ? AppColors.success
+                                    : AppColors.faint,
+                              ),
+                            ),
+                            const SizedBox(width: 5),
+                            Text(onDuty ? 'On duty' : 'Off duty',
+                                style: TextStyle(
+                                    fontFamily: 'Carlito',
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                    color: onDuty
+                                        ? AppColors.success
+                                        : AppColors.muted)),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ],
               ),
-            ]),
-            const SizedBox(height: AppSpace.s4),
+            ),
+
+            // -- sales stats: today / week / month -------------------------------
             FutureBuilder(
               future: Future.wait([
                 sales.summarySinceForUser(userId,
@@ -1166,50 +1224,88 @@ class _MyDashboardSheet extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Row(children: [
-                      _dashCard(context, settings, 'Today',
-                          settings.money(today.revenue), '${today.orders} sales'),
+                      _dashCard(context,
+                          settings: settings,
+                          icon: Icons.receipt_rounded,
+                          label: 'Today',
+                          value: settings.money(today.revenue),
+                          sub:
+                              '${today.orders} sale${today.orders == 1 ? '' : 's'} · ${today.itemsSold} item${today.itemsSold == 1 ? '' : 's'}'),
                       const SizedBox(width: AppSpace.s2),
-                      _dashCard(context, settings, 'This week',
-                          settings.money(week.revenue), '${week.orders} sales'),
+                      _dashCard(context,
+                          settings: settings,
+                          icon: Icons.view_week_outlined,
+                          label: 'Week',
+                          value: settings.money(week.revenue),
+                          sub:
+                              '${week.orders} sale${week.orders == 1 ? '' : 's'} · ${week.itemsSold} item${week.itemsSold == 1 ? '' : 's'}'),
                       const SizedBox(width: AppSpace.s2),
-                      _dashCard(context, settings, 'This month',
-                          settings.money(month.revenue), '${month.orders} sales'),
+                      _dashCard(context,
+                          settings: settings,
+                          icon: Icons.calendar_month_rounded,
+                          label: 'Month',
+                          value: settings.money(month.revenue),
+                          sub:
+                              '${month.orders} sale${month.orders == 1 ? '' : 's'} · ${month.itemsSold} item${month.itemsSold == 1 ? '' : 's'}'),
                     ]),
                     const SizedBox(height: AppSpace.s3),
+
+                    // -- commission ----------------------------------------------------
                     Container(
                       padding: const EdgeInsets.all(AppSpace.s4),
                       decoration: BoxDecoration(
-                        color: AppColors.primarySoft,
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: AppColors.brandGradient,
+                        ),
                         borderRadius: BorderRadius.circular(AppRadius.md),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('COMMISSION THIS MONTH',
-                              style: TextStyle(
-                                  fontFamily: 'Carlito',
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w700,
-                                  letterSpacing: 0.5,
-                                  color: AppColors.primaryDark.withValues(alpha: 0.7))),
+                          Row(
+                            children: [
+                              Icon(Icons.payments_rounded,
+                                  size: 15,
+                                  color: AppColors.onBrand.withValues(alpha: 0.85)),
+                              const SizedBox(width: AppSpace.s1),
+                              Text('COMMISSION THIS MONTH',
+                                  style: TextStyle(
+                                      fontFamily: 'Carlito',
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w700,
+                                      letterSpacing: 0.6,
+                                      color: AppColors.onBrand
+                                          .withValues(alpha: 0.85))),
+                            ],
+                          ),
                           const SizedBox(height: AppSpace.s1),
-                          Row(children: [
-                            Text(settings.money(comm.pending),
-                                style: TextStyle(
-                                    fontFamily: 'Carlito',
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w800,
-                                    color: AppColors.primaryDark)),
-                            const SizedBox(width: AppSpace.s2),
-                            Text(
-                                comm.paid > 0
-                                    ? 'pending · ${settings.money(comm.paid)} already paid'
-                                    : 'pending payout',
-                                style: TextStyle(
-                                    fontFamily: 'Carlito',
-                                    fontSize: 12,
-                                    color: AppColors.primaryDark.withValues(alpha: 0.8))),
-                          ]),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text(settings.money(comm.pending),
+                                  style: TextStyle(
+                                      fontFamily: 'Carlito',
+                                      fontSize: 22,
+                                      height: 26 / 22,
+                                      fontWeight: FontWeight.w700,
+                                      color: AppColors.onBrand)),
+                              const SizedBox(width: AppSpace.s2),
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 2),
+                                child: Text(
+                                    comm.paid > 0
+                                        ? 'pending · ${settings.money(comm.paid)} paid'
+                                        : 'pending payout',
+                                    style: TextStyle(
+                                        fontFamily: 'Carlito',
+                                        fontSize: 12,
+                                        color: AppColors.onBrand
+                                            .withValues(alpha: 0.85))),
+                              ),
+                            ],
+                          ),
                         ],
                       ),
                     ),
@@ -1218,32 +1314,38 @@ class _MyDashboardSheet extends StatelessWidget {
               },
             ),
             const SizedBox(height: AppSpace.s3),
-            Row(children: [
-              FutureBuilder<Shift?>(
-                future: attendance.openShift(userId),
-                builder: (context, snap) {
-                  final shift = snap.data;
-                  final onDuty = shift != null;
-                  return Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: () async {
-                        final att = context.read<AttendanceProvider>();
-                        if (onDuty) {
-                          await att.clockOut(userId);
-                        } else {
-                          await att.clockIn(userId);
-                        }
-                      },
-                      icon: Icon(onDuty ? Icons.logout_rounded : Icons.login_rounded,
-                          size: 17),
-                      label: Text(onDuty
-                          ? 'Clock out (${shift.durationLabel})'
-                          : 'Clock in'),
-                    ),
-                  );
-                },
-              ),
-            ]),
+
+            // -- shift clock -------------------------------------------------------
+            FutureBuilder<Shift?>(
+              future: attendance.openShift(userId),
+              builder: (context, snap) {
+                final shift = snap.data;
+                final onDuty = shift != null;
+                return FilledButton.icon(
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size(0, 48),
+                    backgroundColor:
+                        onDuty ? AppColors.danger : AppColors.primary,
+                    foregroundColor:
+                        onDuty ? AppColors.onError : AppColors.onPrimary,
+                  ),
+                  onPressed: () async {
+                    final att = context.read<AttendanceProvider>();
+                    if (onDuty) {
+                      await att.clockOut(userId);
+                    } else {
+                      await att.clockIn(userId);
+                    }
+                  },
+                  icon: Icon(onDuty ? Icons.logout_rounded : Icons.login_rounded,
+                      size: 18),
+                  label: Text(onDuty
+                      ? 'Clock out · ${shift.durationLabel}'
+                      : 'Clock in — start my shift'),
+                );
+              },
+            ),
+            const SizedBox(height: AppSpace.s2),
             Text(
               'Shift punches are saved to the shop log your manager sees.',
               textAlign: TextAlign.center,
@@ -1256,27 +1358,36 @@ class _MyDashboardSheet extends StatelessWidget {
     );
   }
 
+  /// One period stat card: soft icon tile, label, revenue figure and a
+  /// "N sales · M items" subline.
   Widget _dashCard(
-      BuildContext context, AppSettings settings, String label, String value,
-      String sub) {
+    BuildContext context, {
+    required AppSettings settings,
+    required IconData icon,
+    required String label,
+    required String value,
+    required String sub,
+  }) {
     return Expanded(
       child: Container(
         padding: const EdgeInsets.all(AppSpace.s3),
         decoration: BoxDecoration(
-          color: AppColors.surfaceTint,
+          color: AppColors.surface,
           borderRadius: BorderRadius.circular(AppRadius.md),
           border: Border.all(color: AppColors.borderSoft),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            TintIconBox(icon: icon, color: AppColors.primary, soft: AppColors.primarySoft, size: 28),
+            const SizedBox(height: AppSpace.s2),
             Text(label.toUpperCase(),
                 style: TextStyle(
                     fontFamily: 'Carlito',
-                    fontSize: 10,
+                    fontSize: 9.5,
                     fontWeight: FontWeight.w700,
-                    letterSpacing: 0.4,
-                    color: AppColors.muted)),
+                    letterSpacing: 0.5,
+                    color: AppColors.faint)),
             const SizedBox(height: 2),
             FittedBox(
               fit: BoxFit.scaleDown,
@@ -1284,12 +1395,15 @@ class _MyDashboardSheet extends StatelessWidget {
                   style: TextStyle(
                       fontFamily: 'Carlito',
                       fontSize: 15,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w700,
                       color: AppColors.ink)),
             ),
+            const SizedBox(height: 1),
             Text(sub,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                    fontFamily: 'Carlito', fontSize: 11, color: AppColors.muted)),
+                    fontFamily: 'Carlito', fontSize: 10.5, color: AppColors.muted)),
           ],
         ),
       ),
