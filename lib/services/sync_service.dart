@@ -12,6 +12,27 @@ import 'photo_store.dart';
 
 const _uuid = Uuid();
 
+/// The quota-guard cadence for the keep-alive safety-net tick (pure —
+/// pinned by tests). Given the 45-second tick number, the channel state
+/// and whether the last cycle failed, decides if an automatic sync may
+/// fire. The cadence:
+///  * a FAILED cycle retries on the very next tick (~45-90s) so stuck
+///    rows never wait long;
+///  * with realtime LIVE, one light verify every 20 ticks (~15 min)
+///    guards against silently dropped websocket events — everything else
+///    arrives as realtime events, so the idle cloud cost is ~zero;
+///  * while the channel is DOWN, a catch-up pull every 4 ticks (~3 min)
+///    is the only remaining change detector.
+bool shouldKeepAliveSync({
+  required int tick,
+  required bool hasError,
+  required bool realtimeLive,
+}) {
+  if (hasError) return tick.isEven; // retry failed work sooner
+  if (realtimeLive) return tick % 20 == 0; // ~15 min verify
+  return tick % 4 == 0; // ~3 min catch-up pull
+}
+
 /// The four catalog tables mirrored to the cloud since Phase 1.
 const kSyncTables = ['categories', 'products', 'variants', 'customers'];
 
@@ -375,13 +396,11 @@ class SyncService extends ChangeNotifier {
     _keepAlive ??= Timer.periodic(const Duration(seconds: 45), (_) {
       if (!signedIn) return;
       _keepAliveTicks += 1;
-      if (lastError != null) {
-        // Retry the failed work sooner than the safety nets below.
-        if (_keepAliveTicks.isEven) scheduleSync();
-      } else if (realtimeLive) {
-        if (_keepAliveTicks % 20 == 0) scheduleSync();
-      } else {
-        if (_keepAliveTicks % 4 == 0) scheduleSync();
+      if (shouldKeepAliveSync(
+          tick: _keepAliveTicks,
+          hasError: lastError != null,
+          realtimeLive: realtimeLive)) {
+        scheduleSync();
       }
     });
 
