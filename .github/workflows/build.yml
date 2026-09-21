@@ -1,10 +1,17 @@
 name: Build Sami
 
 # Builds on every push to main, and produces downloadable installers.
-# Pushing a tag like v1.0.0 additionally creates a GitHub Release
+# Pushing a tag like v1.24.1 additionally creates a GitHub Release
 # with the Android APKs and the Windows zip attached.
 # Every main push / tag also redeploys the web app to GitHub Pages:
 # https://l3von36.github.io/stylepos/
+#
+# NOTE on job status: on plain main pushes the release job shows "Skipped"
+# — that is by design, not a failure. Public GitHub Releases are cut only
+# from version tags (vX.Y.Z), so the release page stays clean and every
+# release maps 1:1 to a version. Fresh installers from main pushes live in
+# the run's Artifacts; the run summary (bottom of the Summary page) always
+# explains what ran and what was skipped.
 #
 # APK size strategy (v1.5.0): per-ABI splits (arm64 primary, armv7 fallback,
 # x86_64 emulators skipped), R8 + resource shrinking, and Dart obfuscation
@@ -190,7 +197,7 @@ jobs:
         uses: actions/deploy-pages@v4
 
   release:
-    name: Publish GitHub Release
+    name: Publish GitHub Release (v* tags only — Skipped on main pushes is expected)
     if: startsWith(github.ref, 'refs/tags/v')
     needs: [build-android, build-windows, build-web]
     runs-on: ubuntu-latest
@@ -218,3 +225,44 @@ jobs:
             Sami-windows-x64.zip
             Sami-web.zip
           generate_release_notes: true
+
+  # Always-run summary so nobody has to guess what a run did. Renders a
+  # job-result table on the run's Summary page and, when the release job was
+  # skipped (i.e. this was a main push, not a tag), states exactly why and
+  # how to publish a release. Cost: one 5-second ubuntu job.
+  run-summary:
+    name: Run summary
+    if: always()
+    needs: [build-android, build-windows, build-web, deploy-web, release]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Write run summary
+        env:
+          ANDROID_RESULT: ${{ needs.build-android.result }}
+          WINDOWS_RESULT: ${{ needs.build-windows.result }}
+          WEB_RESULT: ${{ needs.build-web.result }}
+          PAGES_RESULT: ${{ needs.deploy-web.result }}
+          RELEASE_RESULT: ${{ needs.release.result }}
+          RUN_ID: ${{ github.run_id }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          {
+            echo "## Build Sami — $REF_NAME"
+            echo
+            echo "| Job | Result |"
+            echo "|-----|--------|"
+            echo "| Android APK | $ANDROID_RESULT |"
+            echo "| Windows EXE | $WINDOWS_RESULT |"
+            echo "| Web app | $WEB_RESULT |"
+            echo "| Deploy web to GitHub Pages | $PAGES_RESULT |"
+            echo "| Publish GitHub Release | $RELEASE_RESULT |"
+            echo
+            if [ "$RELEASE_RESULT" = "skipped" ]; then
+              echo "> ℹ️ **Release skipped on purpose — nothing is broken.** This run was triggered by a push to \`main\`, and public GitHub Releases are published **only from version tags** (\`vX.Y.Z\`), so every release maps 1:1 to a version."
+              echo ">"
+              echo "> The freshly built installers are on this run under **Artifacts** (Sami-android-apk / Sami-windows-x64 / Sami-web)."
+              echo "> To publish a release, push a version tag: \`git tag vX.Y.Z && git push origin vX.Y.Z\` — the release job then attaches the APKs, Windows zip and web zip to a new GitHub Release automatically."
+            fi
+            echo
+            echo "Live web app: https://l3von36.github.io/stylepos/ · [This run](https://github.com/L3von36/stylepos/actions/runs/$RUN_ID)"
+          } >> "$GITHUB_STEP_SUMMARY"
