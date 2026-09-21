@@ -185,6 +185,24 @@ class _CloudSyncCardState extends State<CloudSyncCard> {
               icon: const Icon(Icons.sync_rounded, size: 18),
               label: const Text('Sync now'),
             ),
+            // Sync health (v1.24.2): today's visible quota usage — the
+            // owner can see what the engine actually spends.
+            if (sync.cyclesToday > 0 || sync.cloudCallsToday > 0) ...[
+              const SizedBox(height: AppSpace.s2),
+              Row(
+                children: [
+                  Icon(Icons.speed_rounded,
+                      size: 14, color: AppColors.faint),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(sync.healthLine,
+                        style: TextStyle(
+                            fontSize: 11.5, color: AppColors.faint,
+                            height: 1.3)),
+                  ),
+                ],
+              ),
+            ],
             const SizedBox(height: AppSpace.s3),
             OutlinedButton.icon(
               style: OutlinedButton.styleFrom(minimumSize: const Size(0, 46)),

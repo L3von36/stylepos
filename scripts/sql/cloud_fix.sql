@@ -1,18 +1,23 @@
 -- ==============================================================
--- StylePOS — Supabase schema PATCH 7  ("Fix cloud sync" one-paste)
--- Supersedes patches 5 and 6 — running this ONE file brings any
+-- StylePOS — Supabase schema PATCH 8  ("Fix cloud sync" one-paste)
+-- Supersedes patches 7, 6 and 5 — running this ONE file brings any
 -- cloud fully up to date.
 -- Where: Supabase Dashboard -> SQL Editor -> New query -> paste -> Run
 -- Safe to run more than once, on any cloud state, and it never
 -- touches your data — only adds what is missing.
 --
+-- v1.24.2 note (section H — stock referee): update ALL devices to
+-- v1.24.2+ BEFORE running this patch. Older app versions push absolute
+-- stock values that fight the new server-side delta rule.
+--
 -- Why: StylePOS v1.16+ pushes a few fields/tables older clouds never
 -- got (stock movement device tags, promo columns, promotions,
--- purchasing, attendance) and v1.22+ reads multi-branch RPCs
--- (branch tree, branch switching, cross-branch sales overview).
--- Without them the app showed "this app is newer than the cloud
--- database — run the latest Supabase schema patch SQL". This file
--- brings ANY cloud fully up to date in one run.
+-- purchasing, attendance), v1.22+ reads multi-branch RPCs
+-- (branch tree, branch switching, cross-branch sales overview) and
+-- v1.24.2+ needs the stock-delta referee (section H). Without them
+-- the app showed "this app is newer than the cloud database — run
+-- the latest Supabase schema patch SQL". This file brings ANY cloud
+-- fully up to date in one run.
 -- ==============================================================
 
 -- ---------- A. columns on the core tables -------------------------------
@@ -403,8 +408,109 @@ end;
 $$;
 grant execute on function public.branch_sales_overview(double precision) to authenticated;
 
+-- ---------- H. stock referee (v1.24.2) -----------------------------------
+-- Stock truth is the MOVEMENT LEDGER. Every inserted stock_movements row
+-- applies its signed delta to variants.stock server-side, so concurrent
+-- sales on two tills converge (deltas commute) instead of colliding as
+-- last-write-wins absolute values. Devices on v1.24.2+ push variant rows
+-- WITHOUT a stock column — the cloud owns the absolute number now.
+--
+-- Ledger positions: stock_movements.ledger_seq numbers the ledger in
+-- application order; variants.stock_upto records how far each variant's
+-- stock has been advanced. Devices store stock_upto when they adopt a
+-- variant snapshot and apply only deltas AFTER it — exactly once, on
+-- every device, regardless of clocks or offline gaps.
+--
+-- Replay safety: INSERT ... ON CONFLICT DO UPDATE (the app's upsert)
+-- fires only the UPDATE triggers, never AFTER INSERT, so re-pushing an
+-- already-stored ledger row cannot double-apply its delta.
+alter table public.variants
+  add column if not exists stock_upto bigint not null default 0;
+alter table public.stock_movements
+  add column if not exists ledger_seq bigint;
+
+-- number the existing ledger (oldest first), then make new rows continue
+-- the same sequence automatically
+update public.stock_movements m
+   set ledger_seq = s.rn
+  from (select id, row_number() over (order by created_at, id) as rn
+          from public.stock_movements) s
+ where s.id = m.id and m.ledger_seq is null;
+create sequence if not exists stock_movements_ledger_seq_seq;
+select setval('stock_movements_ledger_seq_seq',
+              coalesce((select max(ledger_seq) from public.stock_movements), 0) + 1,
+              false);
+alter table public.stock_movements
+  alter column ledger_seq set default nextval('stock_movements_ledger_seq_seq');
+
+create or replace function public.apply_stock_delta()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if new.variant_id is null or new.qty is null then
+    return new;
+  end if;
+  if new.reason = 'seed' then
+    -- the one-time ledger BASE row is bookkeeping, not a stock change;
+    -- it still advances the variant's ledger position
+    update public.variants
+       set stock_upto = new.ledger_seq
+     where id = new.variant_id;
+    return new;
+  end if;
+  if new.qty = 0 then
+    return new;
+  end if;
+  update public.variants
+     set stock = greatest(stock + new.qty, 0),
+         stock_upto = new.ledger_seq,
+         updated_at = now()
+   where id = new.variant_id;
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_apply_stock_delta on public.stock_movements;
+create trigger trg_apply_stock_delta
+  after insert on public.stock_movements
+  for each row execute function public.apply_stock_delta();
+
+-- One-time ledger BASE for variants that predate the ledger: 'seed' rows
+-- hold what the cloud believes the pre-ledger stock was (current stock
+-- minus every recorded movement), so the ledger sums to the stock this
+-- cloud already advertised. A device bootstrapping from zero replays
+-- seed + history and lands on the same number. Idempotent: variants that
+-- already have a seed, or whose ledger already sums to their stock, are
+-- skipped. If a device's local count ever disagrees with the cloud (e.g.
+-- drift from the old protocol), a normal stock adjustment on that device
+-- pushes a delta that re-syncs BOTH sides — no special tooling needed.
+insert into public.stock_movements
+  (id, variant_id, qty, reason, note, created_at, updated_at)
+select
+  gen_random_uuid(),
+  v.id,
+  (v.stock)::integer
+    - coalesce((select sum(m.qty) from public.stock_movements m
+                 where m.variant_id = v.id), 0),
+  'seed',
+  'Ledger base (auto)',
+  now(),
+  now()
+from public.variants v
+where v.stock is not null
+  and not exists (
+    select 1 from public.stock_movements m
+    where m.variant_id = v.id and m.reason = 'seed')
+  and v.stock <> coalesce(
+    (select sum(m.qty) from public.stock_movements m
+      where m.variant_id = v.id), 0);
+
 -- ==============================================================
 -- DONE. Back in StylePOS: open the cloud menu (Sync pill) and tap
 -- "Retry now" — or just wait a minute; the next sync succeeds.
--- Then Reports -> "Branch sales" lights up with every branch's totals.
+-- Then Reports -> "Branch sales" lights up with every branch's totals,
+-- and stock on every device converges through the movement ledger.
 -- ==============================================================

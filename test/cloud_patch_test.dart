@@ -46,4 +46,26 @@ void main() {
     expect(kCloudFixSql,
         contains('grant execute on function public.branch_sales_overview'));
   });
+
+  test('fix SQL covers the v1.24.2 stock referee (patch 8)', () {
+    // server-side delta application on NEW movements only
+    expect(kCloudFixSql,
+        contains('create or replace function public.apply_stock_delta'));
+    expect(kCloudFixSql, contains('trg_apply_stock_delta'));
+    expect(kCloudFixSql,
+        contains('after insert on public.stock_movements'));
+    expect(kCloudFixSql, contains('greatest(stock + new.qty, 0)'));
+    // 'seed' rows are the ledger base — the trigger must skip them
+    expect(kCloudFixSql, contains("if new.reason = 'seed' then"));
+    // one-time base backfill so the ledger sums to the advertised stock
+    expect(kCloudFixSql, contains("'seed',"));
+    expect(kCloudFixSql,
+        contains('where m.variant_id = v.id and m.reason = \'seed\''));
+    // ledger positions: devices apply only deltas after their snapshot
+    expect(kCloudFixSql,
+        contains('add column if not exists stock_upto bigint'));
+    expect(kCloudFixSql,
+        contains('add column if not exists ledger_seq bigint'));
+    expect(kCloudFixSql, contains('stock_upto = new.ledger_seq'));
+  });
 }

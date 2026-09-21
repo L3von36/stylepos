@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
@@ -15,6 +16,14 @@ import 'package:stylepos/state/settings.dart';
 class FakeGateway implements CloudGateway {
   final tables = <String, Map<String, Map<String, dynamic>>>{};
 
+  /// When true (default), mimics the v1.24.2 cloud stock referee: NEW
+  /// stock_movements rows apply their delta to the cloud variant.
+  bool referee = true;
+
+  /// Every table a pull touched since the last clear — scoped-pull tests
+  /// assert against this.
+  final pulledTables = <String>[];
+
   /// Table names -> error message: simulate the cloud rejecting upserts
   /// (e.g. an RLS 42501 on variants for a cashier session).
   Map<String, String>? failUpsertsFor;
@@ -26,6 +35,7 @@ class FakeGateway implements CloudGateway {
   @override
   Future<List<Map<String, dynamic>>> fetchUpdated(
       String table, DateTime since) async {
+    pulledTables.add(table);
     final sinceTs = since.millisecondsSinceEpoch ~/ 1000;
     return _t(table).values
         .where((r) =>
@@ -45,7 +55,27 @@ class FakeGateway implements CloudGateway {
     final err = failUpsertsFor?[table];
     if (err != null) throw Exception(err);
     for (final r in rows) {
-      _t(table)[r['id'] as String] = Map<String, dynamic>.from(r);
+      // real PostgREST upserts MERGE into the stored row — columns absent
+      // from the payload (e.g. the stock-less variant push of v1.24.2)
+      // keep their stored values.
+      final existing = _t(table)[r['id'] as String];
+      final merged = {...?existing, ...r};
+      final isNew = existing == null;
+      _t(table)[r['id'] as String] = merged;
+      // v1.24.2 stock referee: mimic the cloud's AFTER INSERT trigger —
+      // every NEW movement applies its delta to the cloud variant's
+      // stock ('seed' rows are the base and are skipped, exactly like
+      // the patch SQL). Replayed (already-stored) rows are updates and
+      // never re-apply — same guarantee the real trigger gives.
+      if (referee && table == 'stock_movements' && isNew) {
+        if ((r['reason'] as String? ?? '') == 'seed') continue;
+        final qty = (r['qty'] as num?)?.toInt() ?? 0;
+        if (qty == 0) continue;
+        final v = _t('variants')[r['variant_id'] as String];
+        if (v != null) {
+          v['stock'] = math.max(((v['stock'] as num?)?.toInt() ?? 0) + qty, 0);
+        }
+      }
     }
   }
 

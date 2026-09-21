@@ -48,7 +48,7 @@ class DB {
 
     _instance = await openDatabase(
       dbPath,
-      version: 9,
+      version: 10,
       onConfigure: (db) => db.execute('PRAGMA foreign_keys = ON'),
       onUpgrade: (db, oldVersion, newVersion) async {
         // v2: product photos (relative filename inside the app images dir).
@@ -179,6 +179,16 @@ class DB {
         if (oldVersion < 9) {
           await _createReceiptChecksTable(db);
         }
+        // v10: stock referee bookkeeping — variants remember the ledger
+        // position (cloud ledger_seq) their stock snapshot was taken at,
+        // so pulled movement deltas apply exactly once: everything at or
+        // before the base is already inside the snapshot.
+        if (oldVersion < 10) {
+          try {
+            await db.execute(
+                'ALTER TABLE variants ADD COLUMN stock_base_seq INTEGER NOT NULL DEFAULT 0');
+          } catch (_) {}
+        }
       },
       onCreate: (db, version) async {
         await db.execute('''
@@ -240,7 +250,8 @@ class DB {
             dirty INTEGER NOT NULL DEFAULT 0,
             deleted INTEGER NOT NULL DEFAULT 0,
             updated_at INTEGER NOT NULL DEFAULT 0,
-            sync_version INTEGER NOT NULL DEFAULT 0
+            sync_version INTEGER NOT NULL DEFAULT 0,
+            stock_base_seq INTEGER NOT NULL DEFAULT 0
           )
         ''');
         await db.execute('CREATE INDEX idx_variants_product ON variants(product_id)');

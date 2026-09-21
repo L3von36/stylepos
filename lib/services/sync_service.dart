@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart' show AppLifecycleListener;
@@ -31,6 +32,15 @@ bool shouldKeepAliveSync({
   if (hasError) return tick.isEven; // retry failed work sooner
   if (realtimeLive) return tick % 20 == 0; // ~15 min verify
   return tick % 4 == 0; // ~3 min catch-up pull
+}
+
+/// Randomized phase offset (30-60s) before the safety-net timer starts its
+/// 45s drumbeat. Devices powered on together at shop-open would otherwise
+/// tick in lockstep and burst the cloud API at the same second, every
+/// cycle, forever. Pure so tests can pin the bounds.
+Duration keepAlivePhaseOffset([math.Random? rng]) {
+  final r = rng ?? math.Random();
+  return Duration(seconds: 30 + r.nextInt(31));
 }
 
 /// The four catalog tables mirrored to the cloud since Phase 1.
@@ -89,23 +99,45 @@ class SupabaseGateway implements CloudGateway {
   @override
   Future<List<Map<String, dynamic>>> fetchUpdated(
       String table, DateTime since) async {
-    final List<dynamic> rows;
-    try {
-      rows = await _c
-          .from(table)
-          .select()
-          .gt('updated_at', since.toUtc().toIso8601String())
-          .order('updated_at');
-    } catch (e) {
-      // A shop whose cloud was never patched for this table (promotions,
-      // attendance, …) must not flip the whole engine into "error" — the
-      // caller decides (optional tables go on cooldown silently).
-      if (isMissingTableError(e)) throw CloudTableMissingException(table, e);
-      rethrow;
+    // PAGINATED PULL (v1.24.2): PostgREST caps a single response (Supabase
+    // default: 1000 rows). A first sync with a large catalog, or a till
+    // back online after a busy week, can exceed that — pulling only page 1
+    // silently dropped the rest AND the pull cursor advanced past them,
+    // so those rows were never re-fetched. Page through with .range()
+    // until a short page arrives. 'id' is the stable tiebreaker so rows
+    // sharing an updated_at can never be skipped at a page boundary.
+    const pageSize = 1000;
+    final out = <Map<String, dynamic>>[];
+    var from = 0;
+    while (true) {
+      final List<dynamic> rows;
+      try {
+        rows = await _c
+            .from(table)
+            .select()
+            .gt('updated_at', since.toUtc().toIso8601String())
+            .order('updated_at')
+            .order('id')
+            .range(from, from + pageSize - 1);
+      } catch (e) {
+        // A shop whose cloud was never patched for this table (promotions,
+        // attendance, …) must not flip the whole engine into "error" — the
+        // caller decides (optional tables go on cooldown silently).
+        if (isMissingTableError(e)) throw CloudTableMissingException(table, e);
+        rethrow;
+      }
+      out.addAll([
+        for (final r in rows) Map<String, dynamic>.from(r as Map),
+      ]);
+      if (rows.length < pageSize) break;
+      from += pageSize;
+      if (from >= 200000) break; // defensive cap: 200 pages = 200k rows
     }
-    return [
-      for (final r in rows) Map<String, dynamic>.from(r as Map),
-    ];
+    if (from > 0) {
+      AppLog.d('sync/pull',
+          '$table: paged pull — ${out.length} rows across ${from ~/ pageSize + 1} pages');
+    }
+    return out;
   }
 
   @override
@@ -239,6 +271,14 @@ bool isMissingTableError(Object error) {
 ///    so both devices converge on one cloud identity.
 ///  * An empty cloud never triggers a bulk re-push: deletions must stick.
 ///    Only dirty rows (and rows that never matched a cloud row) go up.
+///  * STOCK is delta-based end to end (v1.24.2 referee protocol): every
+///    stock change writes a stock_movements row; variant pushes carry NO
+///    absolute stock; the cloud applies each movement's delta server-side
+///    (trigger), and devices apply pulled deltas of OTHER devices onto
+///    their local stock. Absolute values can no longer collide.
+///  * Remote changes arrive as realtime events that name the changed
+///    table — the next cycle pulls ONLY those tables (a sale on another
+///    till costs 1-3 pull calls instead of re-fetching all 17 tables).
 class SyncService extends ChangeNotifier {
   SyncService({CloudGateway? gateway, this.signedInCheck})
       : _gateway = gateway ?? SupabaseGateway();
@@ -259,6 +299,14 @@ class SyncService extends ChangeNotifier {
   bool _running = false;
   bool _queued = false;
   bool _started = false;
+
+  // ---- scoped remote pulls (P1-3) ---------------------------------------
+  /// Tables reported changed by realtime events since the last cycle.
+  final Set<String> _remoteDirty = {};
+
+  /// True when the pending debounce was armed by a REMOTE event only —
+  /// such a cycle pulls just [_remoteDirty] instead of every table.
+  bool _pendingRemoteOnly = false;
 
   /// Safety-net so a missed realtime event (websocket blip, device asleep)
   /// still converges without waiting for a local edit. The tick is ADAPTIVE
@@ -286,6 +334,82 @@ class SyncService extends ChangeNotifier {
   bool realtimeLive = false;
 
   RealtimeChannel? _channel;
+
+  // ---- sync health (P2-6: visible quota usage) --------------------------
+  // Rolling TODAY counters, persisted in the local settings kv after every
+  // cycle and surfaced by the Settings sync card so the owner can SEE what
+  // the engine spends. Counts REST-shaped calls made by the engine (pulls,
+  // push batches, the settings marker); storage uploads and auth calls are
+  // not part of the drumbeat and are not counted.
+  int cyclesToday = 0;
+  int cloudCallsToday = 0;
+  int rowsPushedToday = 0;
+  int rowsPulledToday = 0;
+  String _statsDay = '';
+  bool _statsLoaded = false;
+
+  /// One-line summary for the Settings card, e.g.
+  /// `Today · 12 syncs · 96 cloud calls · 40 rows up · 18 rows down`.
+  String get healthLine =>
+      'Today · $cyclesToday syncs · $cloudCallsToday cloud calls · '
+      '$rowsPushedToday rows up · $rowsPulledToday rows down';
+
+  void _resetStatsIfNewDay() {
+    final day = DateTime.now().toIso8601String().substring(0, 10);
+    if (day == _statsDay) return;
+    _statsDay = day;
+    cyclesToday = 0;
+    cloudCallsToday = 0;
+    rowsPushedToday = 0;
+    rowsPulledToday = 0;
+  }
+
+  Future<void> _loadStats() async {
+    if (_statsLoaded) return;
+    _statsLoaded = true;
+    try {
+      final db = await _db;
+      final rows = await db.query('settings',
+          where: 'key = ?', whereArgs: ['sync_stats_v1']);
+      final raw = rows.isEmpty ? '' : (rows.first['value'] as String? ?? '');
+      // hand-rolled json: {"day":"2026-09-21","cycles":3,...} — ints only.
+      final day = RegExp('"day":"([0-9-]+)"').firstMatch(raw)?.group(1);
+      int num(String key) => int.tryParse(
+              RegExp('"$key":(-?[0-9]+)').firstMatch(raw)?.group(1) ?? '') ??
+          0;
+      _statsDay = day ?? '';
+      cyclesToday = num('cycles');
+      cloudCallsToday = num('calls');
+      rowsPushedToday = num('pushed');
+      rowsPulledToday = num('pulled');
+    } catch (_) {// counters are cosmetic — never break a cycle over them
+    }
+    _resetStatsIfNewDay();
+  }
+
+  Future<void> _persistStats() async {
+    try {
+      final db = await _db;
+      await db.insert(
+          'settings',
+          {
+            'key': 'sync_stats_v1',
+            'value': '{"day":"$_statsDay","cycles":$cyclesToday,'
+                '"calls":$cloudCallsToday,"pushed":$rowsPushedToday,'
+                '"pulled":$rowsPulledToday}'
+          },
+          conflictAlgorithm: ConflictAlgorithm.replace);
+    } catch (_) {
+      // counters are cosmetic — never break a cycle over them
+    }
+  }
+
+  void _bumpStats({int calls = 0, int pushed = 0, int pulled = 0}) {
+    _resetStatsIfNewDay();
+    cloudCallsToday += calls;
+    rowsPushedToday += pushed;
+    rowsPulledToday += pulled;
+  }
 
   // ------------------------------------------------------------- self-heal
   // Cloud schema drift: a device running a newer app than the shop's cloud
@@ -336,6 +460,9 @@ class SyncService extends ChangeNotifier {
     }
     try {
       await _gateway.upsertRows(table, rows);
+      // health counters: one REST call per 60-row batch
+      _bumpStats(
+          calls: (rows.length / 60).ceil(), pushed: rows.length);
     } catch (e) {
       final col = missingColumnFrom(e);
       if (col == null || !rows.any((r) => r.containsKey(col))) rethrow;
@@ -384,6 +511,7 @@ class SyncService extends ChangeNotifier {
     // sync only happens when there is something to exchange:
     //  * a LOCAL EDIT schedules a sync 4s later (every provider does),
     //  * a REMOTE CHANGE arrives as a realtime event -> sync ~1s later,
+    //    pulling ONLY the table that changed,
     //  * sign-in, app resume and manual taps sync immediately.
     // The old behaviour re-ran a full push+pull cycle every 45s even when
     // nothing had changed for hours — thousands of wasted REST calls per
@@ -393,15 +521,19 @@ class SyncService extends ChangeNotifier {
     //  * with realtime confirmed live, one light verify every ~15 min
     //    guards against silently dropped websocket events,
     //  * while the channel is down, a catch-up pull runs every ~3 min.
-    _keepAlive ??= Timer.periodic(const Duration(seconds: 45), (_) {
-      if (!signedIn) return;
-      _keepAliveTicks += 1;
-      if (shouldKeepAliveSync(
-          tick: _keepAliveTicks,
-          hasError: lastError != null,
-          realtimeLive: realtimeLive)) {
-        scheduleSync();
-      }
+    // The drumbeat starts after a randomized 30-60s phase offset so tills
+    // powered on together never verify in lockstep.
+    _keepAlive ??= Timer(keepAlivePhaseOffset(), () {
+      _keepAlive = Timer.periodic(const Duration(seconds: 45), (_) {
+        if (!signedIn) return;
+        _keepAliveTicks += 1;
+        if (shouldKeepAliveSync(
+            tick: _keepAliveTicks,
+            hasError: lastError != null,
+            realtimeLive: realtimeLive)) {
+          scheduleSync();
+        }
+      });
     });
 
     // Coming back to the foreground (phone app switch / browser tab):
@@ -447,7 +579,9 @@ class SyncService extends ChangeNotifier {
           event: PostgresChangeEvent.all,
           schema: 'public',
           table: table,
-          callback: (_) => scheduleSync(const Duration(seconds: 1)),
+          // The payload names the table that changed — the next cycle
+          // pulls ONLY that table (scoped pulls, v1.24.2).
+          callback: (payload) => scheduleRemoteSync(payload.table),
         );
       }
       ch.subscribe((status, [error]) {
@@ -541,9 +675,25 @@ class SyncService extends ChangeNotifier {
     super.dispose();
   }
 
-  /// Coalesces bursts of local edits into one sync ~4s later.
+  /// Coalesces bursts of local edits into one sync ~4s later. A local edit
+  /// always promotes the pending cycle to a FULL pull (the remote-scoped
+  /// flag is cleared) — only purely-remote events stay scoped.
   void scheduleSync([Duration delay = const Duration(seconds: 4)]) {
     if (!signedIn) return;
+    _pendingRemoteOnly = false;
+    _debounce?.cancel();
+    _debounce = Timer(delay, () => run());
+  }
+
+  /// A REMOTE change (realtime event naming the changed [table]).
+  /// Coalesces the changed tables and runs a cycle that pulls only them —
+  /// one sale on another device re-fetches sales/sale_items/movements
+  /// (1-3 calls) instead of every table (~10-14 calls per device).
+  void scheduleRemoteSync(String table,
+      [Duration delay = const Duration(seconds: 1)]) {
+    if (!signedIn) return;
+    _remoteDirty.add(table);
+    _pendingRemoteOnly = true;
     _debounce?.cancel();
     _debounce = Timer(delay, () => run());
   }
@@ -595,7 +745,7 @@ class SyncService extends ChangeNotifier {
     return '$step: ${raw.split('\n').first}';
   }
 
-  /// Runs a full push+pull cycle now (no-op when signed out).
+  /// Runs a push+pull cycle now (no-op when signed out).
   ///
   /// Every step is isolated: one failing table (a row the cloud's RLS
   /// rejected, a transient network blip) must never starve the others.
@@ -604,14 +754,32 @@ class SyncService extends ChangeNotifier {
   /// stopped pulling, so sales made elsewhere never appeared.
   ///
   /// [manual] (Sync-now button / pill tap) re-probes tables that went on
-  /// cooldown for missing from the cloud schema.
-  Future<void> run({bool manual = false}) async {
+  /// cooldown for missing from the cloud schema, and always pulls EVERY
+  /// table. A cycle armed purely by remote realtime events instead pulls
+  /// only the tables the events named ([_remoteDirty]) — the scoped pull
+  /// that keeps a multi-device shop cheap. Local edits always promote the
+  /// cycle back to a full pull.
+  Future<void> run({bool manual = false, Set<String>? pullTables}) async {
     if (!signedIn) return;
     if (_running) {
       _queued = true;
       return;
     }
     if (manual) forgetSchemaGaps();
+    await _loadStats();
+    _resetStatsIfNewDay();
+
+    // Which tables should this cycle pull? `null` means ALL.
+    final remoteOnly = _pendingRemoteOnly && !manual;
+    _pendingRemoteOnly = false;
+    final requested = pullTables ??
+        (remoteOnly ? Set<String>.of(_remoteDirty) : null);
+    _remoteDirty.clear();
+    final Set<String>? scope =
+        requested?.intersection({...kSyncTables, ...kSalesTables,
+              ...kOpsTables, ...kAttendanceTables, ...kPromoTables}).toSet();
+    bool want(String t) => scope == null || scope.contains(t);
+
     _running = true;
     phase = SyncPhase.syncing;
     lastError = null;
@@ -650,6 +818,8 @@ class SyncService extends ChangeNotifier {
     // before anything else so old sales never resurrect here.
     await step('sales clear marker', _applySalesClearMarker);
     // Push order respects foreign keys: parents before children.
+    // (Pushes always run: a scoped cycle still flushes local dirty rows,
+    // and a push with nothing dirty makes zero REST calls.)
     await step('push categories', _pushCategories);
     await step('push products', _pushProducts);
     await step('push variants', _pushVariants);
@@ -663,20 +833,33 @@ class SyncService extends ChangeNotifier {
     await opt('commissions', 'push commissions', _pushCommissions);
     await opt('promotions', 'push promotions', _pushPromotions);
     await opt('attendance', 'push attendance', _pushAttendance);
-    // Pull order likewise: parents first so ids resolve.
-    await step('pull categories', _pullCategories);
-    await step('pull products', _pullProducts);
-    await step('pull variants', _pullVariants);
-    await step('pull customers', _pullCustomers);
-    await step('pull sales', _pullSales);
-    await step('pull sale items', _pullSaleItems);
-    await step('pull movements', _pullMovements);
-    await opt('suppliers', 'pull suppliers', _pullSuppliers);
-    await opt('purchase_orders', 'pull purchase orders', _pullPOs);
-    await opt('purchase_order_items', 'pull PO items', _pullPOItems);
-    await opt('commissions', 'pull commissions', _pullCommissions);
-    await opt('promotions', 'pull promotions', _pullPromotions);
-    await opt('attendance', 'pull attendance', _pullAttendance);
+    // Pull order likewise: parents first so ids resolve. Scoped cycles
+    // (remote-event triggered) fetch only the tables that changed.
+    if (want('categories')) await step('pull categories', _pullCategories);
+    if (want('products')) await step('pull products', _pullProducts);
+    if (want('variants')) await step('pull variants', _pullVariants);
+    if (want('customers')) await step('pull customers', _pullCustomers);
+    if (want('sales')) await step('pull sales', _pullSales);
+    if (want('sale_items')) await step('pull sale items', _pullSaleItems);
+    if (want('stock_movements')) await step('pull movements', _pullMovements);
+    if (want('suppliers')) {
+      await opt('suppliers', 'pull suppliers', _pullSuppliers);
+    }
+    if (want('purchase_orders')) {
+      await opt('purchase_orders', 'pull purchase orders', _pullPOs);
+    }
+    if (want('purchase_order_items')) {
+      await opt('purchase_order_items', 'pull PO items', _pullPOItems);
+    }
+    if (want('commissions')) {
+      await opt('commissions', 'pull commissions', _pullCommissions);
+    }
+    if (want('promotions')) {
+      await opt('promotions', 'pull promotions', _pullPromotions);
+    }
+    if (want('attendance')) {
+      await opt('attendance', 'pull attendance', _pullAttendance);
+    }
 
     // Rows that never matched anything in the cloud (created before this
     // device first synced, e.g. seed catalog) get pushed as new rows.
@@ -720,6 +903,8 @@ class SyncService extends ChangeNotifier {
       phase = SyncPhase.idle;
       lastSyncAt = DateTime.now();
     }
+    cyclesToday += 1;
+    await _persistStats();
     // Refresh the UI with whatever landed locally — even when a push
     // failed, pulled rows are already in SQLite and must be visible.
     try {
@@ -805,6 +990,7 @@ class SyncService extends ChangeNotifier {
   /// local sales tables too (otherwise this device would keep — and later
   /// re-push — the old receipts the Manager just purged).
   Future<void> _applySalesClearMarker() async {
+    _bumpStats(calls: 1); // the settings read below
     final marker = await _salesClearedMarker();
     if (marker == null || marker.isEmpty) return;
     final db = await _db;
@@ -944,7 +1130,10 @@ class SyncService extends ChangeNotifier {
         'barcode': r['barcode'],
         'price': (r['price'] as num? ?? 0).toDouble(),
         'cost': (r['cost'] as num? ?? 0).toDouble(),
-        'stock': r['stock'],
+        // NOTE: no 'stock' here. Stock is delta-synced through the
+        // stock_movements ledger (the cloud trigger applies each delta
+        // server-side); pushing absolute values from concurrent tills is
+        // exactly the lost-update race this protocol removed.
         'archived': (r['archived'] as int? ?? 0) == 1,
         'deleted': (r['deleted'] as int? ?? 0) == 1,
         'updated_at': _iso(r['updated_at'] as int? ?? 0),
@@ -1349,6 +1538,9 @@ class SyncService extends ChangeNotifier {
     final since = await _getLastPull(table);
     final rows = await _gateway.fetchUpdated(
         table, DateTime.fromMillisecondsSinceEpoch(since * 1000, isUtc: true));
+    // health counters: the paginated gateway counts as one logical read;
+    // pages beyond the first are invisible here by design.
+    _bumpStats(calls: 1, pulled: rows.length);
     var maxTs = since;
     for (final r in rows) {
       final ts = _epoch(r['updated_at']);
@@ -1570,6 +1762,9 @@ class SyncService extends ChangeNotifier {
         'dirty': 0,
         'deleted': _b(r['deleted']) ? 1 : 0,
         'updated_at': cloudTs,
+        // ledger position of this cloud snapshot: every movement at or
+        // before it is already inside the seeded stock value
+        'stock_base_seq': (r['stock_upto'] as num?)?.toInt() ?? 0,
       });
       return;
     }
@@ -1584,7 +1779,10 @@ class SyncService extends ChangeNotifier {
       'barcode': r['barcode'],
       'price': (r['price'] as num? ?? 0).toDouble(),
       'cost': (r['cost'] as num? ?? 0).toDouble(),
-      'stock': r['stock'] as int? ?? 0,
+      // NOTE: 'stock' is deliberately NOT updated here. The local stock
+      // count is maintained by deltas (own actions + pulled movements of
+      // other devices); the cloud variant row's stock column is owned by
+      // the server-side referee trigger and must never overwrite it.
       'archived': _b(r['archived']) ? 1 : 0,
       'deleted': _b(r['deleted']) ? 1 : 0,
       'updated_at': cloudTs,
@@ -1787,16 +1985,36 @@ class SyncService extends ChangeNotifier {
       'dirty': 0,
       'updated_at': cloudTs,
     });
-    // Delta-based stock synchronization: apply this movement's delta to
-    // the local variant so multi-device concurrent sales properly decrement
-    // stock without losing deltas to last-write-wins collisions.
-    if (delta != 0) {
-      await db.rawUpdate('''
+
+    // ---- delta application (v1.24.2 stock referee protocol) -------------
+    // Stock truth is the movement ledger: the cloud trigger applies every
+    // movement's delta to the cloud variant, and THIS device applies the
+    // deltas of OTHER devices to its local variant. A pulled delta is
+    // applied exactly once:
+    if (delta == 0) return;
+    //  * 'seed' rows are the ledger BASE recorded by the patch SQL — they
+    //    are bookkeeping, never a stock change on any device.
+    if ((r['reason'] as String? ?? '') == 'seed') return;
+    //  * this device's own movements were applied to local stock the
+    //    moment they were created (also covers a movement that failed to
+    //    push and then came back down with our own device tag).
+    final device = await _deviceCode();
+    final remoteDevice = r['device_id'] as String? ?? '';
+    if (remoteDevice.isNotEmpty && remoteDevice == device) return;
+    //  * the local stock is the cloud snapshot taken at ledger position
+    //    stock_base_seq plus every applied delta after it — a movement at
+    //    or before the base is already inside the snapshot. A legacy
+    //    cloud (no ledger_seq yet) has no positions: apply, matching the
+    //    old engine exactly.
+    final local = v.first;
+    final seq = (r['ledger_seq'] as num?)?.toInt();
+    final base = local['stock_base_seq'] as int? ?? 0;
+    if (seq != null && seq <= base) return;
+    await db.rawUpdate('''
         UPDATE variants
         SET stock = MAX(stock + ?, 0), sync_version = sync_version + 1, updated_at = ?
         WHERE id = ?
       ''', [delta, cloudTs, variantId]);
-    }
   }
 
   Future<void> _mergeAttendance(Map<String, dynamic> r, int cloudTs) async {
