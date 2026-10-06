@@ -27,7 +27,18 @@ void main() {
     } catch (_) {}
   });
 
+  /// Builds a legacy database as it really looked at [version]. For version
+  /// >= 4 the v4-era sync columns (cloud_id/dirty/updated_at) are part of
+  /// the schema already — the `oldVersion < 4` ALTERs never re-run for such
+  /// a database, so opening a bare pre-v1 schema labelled v4 would describe
+  /// a state the app could never produce (and would break the v11 index
+  /// migration for the wrong reason).
   Future<Database> createLegacySchemaDb(String dir, int version) async {
+    final hasV4Sync = version >= 4;
+    final userSyncCols = hasV4Sync ? ',\n            cloud_id TEXT' : '';
+    final syncCols = hasV4Sync
+        ? ',\n            cloud_id TEXT,\n            dirty INTEGER NOT NULL DEFAULT 0,\n            updated_at INTEGER NOT NULL DEFAULT 0'
+        : '';
     final db = await databaseFactory.openDatabase(
       p.join(dir, 'stylepos.db'),
       options: OpenDatabaseOptions(version: version, onCreate: (db, _) async {
@@ -83,7 +94,7 @@ void main() {
             salt TEXT NOT NULL,
             role TEXT NOT NULL DEFAULT 'cashier',
             active INTEGER NOT NULL DEFAULT 1,
-            created_at INTEGER NOT NULL
+            created_at INTEGER NOT NULL$userSyncCols
           )
         ''');
         await db.execute('''
@@ -100,7 +111,7 @@ void main() {
             amount_paid REAL NOT NULL DEFAULT 0,
             change_due REAL NOT NULL DEFAULT 0,
             status TEXT NOT NULL DEFAULT 'completed',
-            created_at INTEGER NOT NULL
+            created_at INTEGER NOT NULL$syncCols
           )
         ''');
         await db.execute('''
@@ -112,7 +123,7 @@ void main() {
             variant_desc TEXT NOT NULL,
             unit_price REAL NOT NULL DEFAULT 0,
             qty INTEGER NOT NULL DEFAULT 0,
-            line_total REAL NOT NULL DEFAULT 0
+            line_total REAL NOT NULL DEFAULT 0$syncCols
           )
         ''');
         await db.execute('''
@@ -123,7 +134,7 @@ void main() {
             reason TEXT NOT NULL,
             note TEXT,
             user_id INTEGER,
-            created_at INTEGER NOT NULL
+            created_at INTEGER NOT NULL$syncCols
           )
         ''');
         await db.execute('''
@@ -156,7 +167,7 @@ void main() {
     final colNames = cols.map((c) => c['name']).toSet();
 
     // -- assert --
-    expect(version, 10);
+    expect(version, 11);
     expect(colNames, containsAll(['image', 'cloud_id', 'dirty', 'deleted']));
     // v4: sales tables gained their sync bookkeeping too
     final saleCols = (await db.rawQuery('PRAGMA table_info(sales)'))
@@ -167,6 +178,23 @@ void main() {
         .map((c) => c['name'] as String)
         .toSet();
     expect(userCols, contains('cloud_id'));
+    // v11: sync hot-path indexes exist on the append-only tables (both the
+    // partial dirty indexes and the variant ledger index survive every
+    // future upgrade because they are recreated idempotently).
+    final indexNames = (await db.rawQuery(
+            "SELECT name FROM sqlite_master "
+            "WHERE type = 'index' AND name IS NOT NULL"))
+        .map((r) => r['name'] as String)
+        .toSet();
+    expect(
+        indexNames,
+        containsAll([
+          'idx_sales_dirty',
+          'idx_sale_items_dirty',
+          'idx_stock_movements_dirty',
+          'idx_stock_movements_variant',
+        ]));
+
     // v5 purge: the demo catalog is gone, the walk-in customer stays.
     final products = await db.query('products');
     expect(products, isEmpty);
@@ -262,9 +290,9 @@ void main() {
     await v4.insert('settings', {'key': 'sync_last_pull_sales', 'value': '99'});
     await v4.close();
 
-    // -- act: open through the app (triggers onUpgrade 4 -> 7) --
+    // -- act: open through the app (triggers onUpgrade 4 -> 11) --
     final db = await DB.instance();
-    expect(await db.getVersion(), 10);
+    expect(await db.getVersion(), 11);
 
     // -- assert: catalog + history wiped, cursors forgotten --
     for (final t in [

@@ -48,7 +48,7 @@ class DB {
 
     _instance = await openDatabase(
       dbPath,
-      version: 10,
+      version: 11,
       onConfigure: (db) => db.execute('PRAGMA foreign_keys = ON'),
       onUpgrade: (db, oldVersion, newVersion) async {
         // v2: product photos (relative filename inside the app images dir).
@@ -188,6 +188,19 @@ class DB {
             await db.execute(
                 'ALTER TABLE variants ADD COLUMN stock_base_seq INTEGER NOT NULL DEFAULT 0');
           } catch (_) {}
+        }
+        // v11: sync hot-path indexes (handover hardening pass). The three
+        // append-only tables grow without bound, and every sync cycle
+        // full-scanned them for rows still pending push (`WHERE dirty = 1`)
+        // — a cost that scaled with the shop's whole sales history. Partial
+        // indexes hold only the pending rows, so a quiet day scans nothing
+        // and a busy day scans only what it just wrote. Variant-level ledger
+        // lookups on stock_movements get a plain index. Cloud-id merge
+        // probes stay un-indexed on purpose: the planned batched-merge fix
+        // (post-acceptance backlog) replaces those per-row lookups wholesale
+        // and will bring the access pattern that actually needs them.
+        if (oldVersion < 11) {
+          await _createSyncHotPathIndexes(db);
         }
       },
       onCreate: (db, version) async {
@@ -509,6 +522,25 @@ class DB {
     ''');
     await db.execute(
         'CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_log(created_at)');
+    await _createSyncHotPathIndexes(db);
+  }
+
+  /// v11: hot-path indexes for the sync engine (shared by onCreate and the
+  /// v11 upgrade so fresh installs and upgraded devices never drift). The
+  /// dirty indexes are PARTIAL (`WHERE dirty = 1`): they contain only rows
+  /// still waiting to be pushed, stay near-empty forever, and turn the sync
+  /// cycle's push scans from "walk the whole sales history" into "walk the
+  /// handful of rows written since the last cycle". IF NOT EXISTS keeps the
+  /// onCreate path idempotent.
+  static Future<void> _createSyncHotPathIndexes(Database db) async {
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_sales_dirty '
+        'ON sales(dirty) WHERE dirty = 1');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_sale_items_dirty '
+        'ON sale_items(dirty) WHERE dirty = 1');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_stock_movements_dirty '
+        'ON stock_movements(dirty) WHERE dirty = 1');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_stock_movements_variant '
+        'ON stock_movements(variant_id)');
   }
 
   /// One-time (DB v5) purge of the demo catalog and demo sales history.

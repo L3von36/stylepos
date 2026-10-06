@@ -161,7 +161,9 @@ class SupabaseGateway implements CloudGateway {
           );
       return object;
     } catch (e) {
-      debugPrint('photo upload failed: $e');
+      // Release devices stay quiet on logcat; SyncService notifies the UI
+      // through the error pill, so this print is a debug aid only.
+      if (kDebugMode) debugPrint('photo upload failed: $e');
       return null;
     }
   }
@@ -585,7 +587,11 @@ class SyncService extends ChangeNotifier {
         );
       }
       ch.subscribe((status, [error]) {
-        debugPrint('realtime $status${error == null ? '' : ' ($error)'}');
+        // Realtime reconnect chatter is routine on flaky shop Wi-Fi; keep
+        // it out of release logcat (state changes surface in the UI pill).
+        if (kDebugMode) {
+          debugPrint('realtime $status${error == null ? '' : ' ($error)'}');
+        }
         if (status == RealtimeSubscribeStatus.subscribed) {
           _reconnectAttempt = 0;
           _reconnectTimer?.cancel();
@@ -792,7 +798,9 @@ class SyncService extends ChangeNotifier {
       } catch (e) {
         firstError ??= e;
         firstErrorStep ??= name;
-        debugPrint('sync step $name failed: $e');
+        // The failure is user-visible via the sync error pill; this print
+        // is for developer diagnosis only.
+        if (kDebugMode) debugPrint('sync step $name failed: $e');
       }
     }
 
@@ -910,7 +918,7 @@ class SyncService extends ChangeNotifier {
     try {
       await onSynced?.call();
     } catch (e) {
-      debugPrint('onSynced listener failed: $e');
+      if (kDebugMode) debugPrint('onSynced listener failed: $e');
     }
     _running = false;
     notifyListeners();
@@ -1002,7 +1010,9 @@ class SyncService extends ChangeNotifier {
     await db.insert('settings',
         {'key': 'sales_cleared_ack', 'value': marker},
         conflictAlgorithm: ConflictAlgorithm.replace);
-    debugPrint('sales history cleared in the cloud — local copy wiped');
+    if (kDebugMode) {
+      debugPrint('sales history cleared in the cloud — local copy wiped');
+    }
   }
 
   /// Deletes all local sales history (children first). Cloud deletion is
@@ -1549,7 +1559,9 @@ class SyncService extends ChangeNotifier {
       try {
         await merge(r, ts);
       } catch (e) {
-        debugPrint('merge $table failed: $e');
+        // A skipped row is logged + surfaced by the per-table error path;
+        // keep release logcat free of per-row noise.
+        if (kDebugMode) debugPrint('merge $table failed: $e');
       }
     }
     // Small rewind so border rows are re-fetched next time (merge is

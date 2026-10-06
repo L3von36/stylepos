@@ -1,6 +1,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <!-- Camera access for in-app barcode scanning at the POS -->
     <uses-permission android:name="android.permission.CAMERA" />
+    <!-- Cloud sync (Supabase). Declared explicitly so a dependency upgrade
+         can never silently drop the previously-transitive permission and
+         take offline-first sync down with it. -->
+    <uses-permission android:name="android.permission.INTERNET" />
     <application
         android:label="Sami"
         android:name="${applicationName}"
